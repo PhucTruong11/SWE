@@ -1,0 +1,26 @@
+# PostgreSQL Development Environment
+# Chỉ dùng cho giai đoạn phát triển, KHÔNG dùng cho production
+# Chạy: docker compose -f docker/docker-compose.dev.yml up -d
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: brewlite-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: brewlite
+      POSTGRES_PASSWORD: brewlite
+      POSTGRES_DB: brewlite
+    ports:
+      - "5433:5432"
+    volumes:
+      - brewlite_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U brewlite"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  brewlite_pgdata:
+    driver: local

@@ -46,8 +46,8 @@ brewlite/
 ### 1. Clone repository
 
 ```bash
-git clone <repository-url>
-cd brewlite
+git clone https://github.com/PhucTruong11/SWE.git
+cd SWE
 ```
 
 ### 2. Tạo file environment
@@ -65,7 +65,10 @@ cp frontend/.env.example frontend/.env.local
 
 ### 3. Khởi động Database (PostgreSQL via Docker)
 
+> **⚠️ Lưu ý:** Bắt buộc phải mở ứng dụng **Docker Desktop** lên trước (chờ icon chuyển sang xanh lá).
+
 ```bash
+# Đứng ở thư mục gốc (SWE)
 docker compose -f docker/docker-compose.dev.yml up -d
 ```
 
@@ -74,38 +77,39 @@ Kiểm tra DB đã chạy:
 docker compose -f docker/docker-compose.dev.yml ps
 ```
 
-### 4. Khởi động Backend
+### 4. Khởi động Backend (NestJS)
 
+Mở **Terminal 1**:
 ```bash
 cd backend
 
-# Cài dependencies (nếu chưa)
+# Cài dependencies
 npm install
 
-# Đồng bộ Prisma schema với DB
+# Đồng bộ Prisma schema với DB và tạo file client
 npx prisma db push
+npx prisma generate
 
-# Seed dữ liệu mẫu (nếu có)
+# Seed dữ liệu mẫu (23 đồ uống, 15 toppings)
 npx prisma db seed
 
 # Chạy dev server
 npm run start:dev
 ```
+Backend sẽ chạy tại: **http://localhost:3001/api**
 
-Backend sẽ chạy tại: **http://localhost:3001**
+### 5. Khởi động Frontend (Next.js)
 
-### 5. Khởi động Frontend
-
+Mở **Terminal 2** (Tạo tab terminal mới):
 ```bash
 cd frontend
 
-# Cài dependencies (nếu chưa)
+# Cài dependencies
 npm install
 
 # Chạy dev server
 npm run dev
 ```
-
 Frontend sẽ chạy tại: **http://localhost:3000**
 
 ## 🐳 Chạy toàn bộ bằng Docker (Sprint 3)

@@ -17,10 +17,10 @@ BrewLite giúp khách hàng đặt và thanh toán đồ uống không dùng ti�
 ## 🛠 Tech Stack
 
 | Layer | Công nghệ |
-|-------|-----------| 
-| Frontend | Next.js 16 (App Router), TypeScript, Tailwind CSS, Zustand, React Query |
-| Backend | NestJS 12, TypeScript, Prisma 6, Passport JWT |
-| Database | PostgreSQL 16 (Docker) |
+|-------|-----------|
+| Frontend | Next.js 15 (App Router), TypeScript, Tailwind CSS, Zustand, React Query |
+| Backend | NestJS, TypeScript, Prisma ORM, Passport JWT |
+| Database | PostgreSQL 16 |
 | DevOps | Docker Compose, Git |
 
 ## 📁 Cấu trúc dự án
@@ -29,204 +29,99 @@ BrewLite giúp khách hàng đặt và thanh toán đồ uống không dùng ti�
 brewlite/
 ├── frontend/          # Next.js application (Port 3000)
 ├── backend/           # NestJS application (Port 3001)
-│   └── prisma/        # Schema + Seed data (23 sản phẩm, 15 toppings)
 ├── docker/            # Docker configurations
-├── PROJECT_FLOW.md    # Kiến trúc, ERD (7 bảng), API, State Machine, Sprint Planning
-├── TEAM_WORKFLOW.md   # Hướng dẫn Git workflow & phân chia task nhóm
+├── PROJECT_FLOW.md    # Tài liệu kiến trúc & flow dự án
 └── README.md          # File này
 ```
 
-## 🗄 Database (7 bảng)
+## 🚀 Hướng dẫn cài đặt & chạy
 
-| Bảng | Mô tả |
-|------|-------|
-| `users` | Thông tin khách hàng |
-| `products` | Danh mục đồ uống (23 sản phẩm, 6 danh mục) |
-| `product_prices` | Giá theo từng size S/M/L (68 mức giá) |
-| `toppings` | Danh sách topping (15 loại, giá 9k–15k) |
-| `orders` | Đơn hàng |
-| `order_items` | Chi tiết từng món trong đơn |
-| `payments` | Lịch sử thanh toán |
-
----
-
-## 🚀 Hướng dẫn cài đặt & chạy (Step-by-step)
-
-### ⚙️ Yêu cầu hệ thống
+### Prerequisites
 
 - [Node.js](https://nodejs.org/) >= 20.x
 - [npm](https://www.npmjs.com/) >= 10.x
-- [Docker Desktop](https://www.docker.com/) (bật Docker Engine)
+- [Docker](https://www.docker.com/) & Docker Compose
 - [Git](https://git-scm.com/)
 
-### Bước 1: Clone repository
+### 1. Clone repository
 
 ```bash
-git clone https://github.com/PhucTruong11/SWE.git
+git clone <repository-url>
 cd brewlite
 ```
 
-### Bước 2: Tạo file environment
+### 2. Cấu hình biến môi trường (.env)
 
 ```bash
-# Copy .env cho backend
-cp backend/.env.example backend/.env
+# 1. Copy file .env.example ở root (nếu có)
+cp .env.example .env
 
-# Copy .env cho frontend
-cp frontend/.env.example frontend/.env.local
+# 2. Copy .env cho backend
+cp backend/.env.example backend/.env
 ```
 
-> **Lưu ý:** File `.env` chứa thông tin nhạy cảm (password DB, JWT secret), đã được `.gitignore` nên **không** được push lên Git.
+**Đối với Frontend:** (Do GitHub có thể không push file .env)
+Bạn cần tạo mới một file tên là `.env.local` nằm trong thư mục `frontend/` và thêm nội dung sau vào file:
+```env
+NEXT_PUBLIC_API_URL=http://localhost:3001/api
+```
 
-### Bước 3: 🐳 Khởi động Database (PostgreSQL qua Docker)
+### 3. Khởi động Database (PostgreSQL via Docker)
 
-**Mở Docker Desktop** trước, chờ biểu tượng cá voi hiện xanh lá (Engine running), rồi chạy:
+> **⚠️ QUAN TRỌNG:** Bạn **BẮT BUỘC** phải cài đặt phần mềm [Docker Desktop](https://www.docker.com/) và **mở nó lên trước** (chờ biểu tượng Engine chạy xanh lá) thì các lệnh bên dưới mới hoạt động. Nếu không sẽ báo lỗi không kết nối được Docker API!
 
 ```bash
 docker compose -f docker/docker-compose.dev.yml up -d
 ```
 
-Kiểm tra container đang chạy:
+Kiểm tra DB đã chạy:
 ```bash
 docker compose -f docker/docker-compose.dev.yml ps
 ```
 
-Kết quả mong đợi:
-```
-NAME          IMAGE                STATUS              PORTS
-brewlite-db   postgres:16-alpine   Up (healthy)        0.0.0.0:5433->5432/tcp
-```
-
-> **⚠️ Port:** Database chạy trên port **5433** (không phải 5432 mặc định) để tránh xung đột nếu máy đã cài PostgreSQL sẵn.
-
-### Bước 4: 🖥 Khởi động Backend (NestJS)
-
-Mở **Terminal 1**:
+### 4. Khởi động Backend
 
 ```bash
 cd backend
 
-# Cài thư viện
+# Cài dependencies (nếu chưa)
 npm install
 
-# Đồng bộ schema lên Database (tạo các bảng)
+# Đồng bộ Prisma schema với DB
 npx prisma db push
 
-# Seed dữ liệu mẫu (23 đồ uống + 15 toppings)
+# Seed dữ liệu mẫu (nếu có)
 npx prisma db seed
 
-# Khởi chạy Backend (tự động reload khi code thay đổi)
+# Chạy dev server
 npm run start:dev
 ```
 
-Kết quả mong đợi:
-```
-[NestApplication] Nest application successfully started
-🚀 BrewLite API is running on: http://localhost:3001/api
-```
+Backend sẽ chạy tại: **http://localhost:3001**
 
-### Bước 5: 🎨 Khởi động Frontend (Next.js)
-
-Mở **Terminal 2** (bấm nút `+` trong VS Code terminal):
+### 5. Khởi động Frontend
 
 ```bash
 cd frontend
 
-# Cài thư viện
+# Cài dependencies (nếu chưa)
 npm install
 
-# Khởi chạy Frontend
+# Chạy dev server
 npm run dev
 ```
 
-Kết quả mong đợi:
-```
-▲ Next.js 16.x
-- Local: http://localhost:3000
-```
+Frontend sẽ chạy tại: **http://localhost:3000**
 
----
-
-## ✅ Kiểm tra hệ thống hoạt động
-
-Sau khi cả 3 service (Docker DB + Backend + Frontend) đều chạy, mở trình duyệt:
-
-| URL | Kỳ vọng |
-|-----|---------|
-| `http://localhost:3001/api` | Hiện "Hello World!" |
-| `http://localhost:3001/api/products` | JSON danh sách 23 sản phẩm (kèm prices) |
-| `http://localhost:3001/api/products?category=phin` | JSON chỉ lọc Cà Phê Phin (3 món) |
-| `http://localhost:3001/api/products/toppings` | JSON 15 loại topping |
-| `http://localhost:3000` | Trang Next.js (Frontend) |
-
----
-
-## 🔧 Các lệnh thường dùng
-
-### Backend
+## 🐳 Chạy toàn bộ bằng Docker (Sprint 3)
 
 ```bash
-cd backend
-
-npm run start:dev       # Chạy dev (auto-reload)
-npm run build           # Build production
-npm run start           # Chạy production build
-npx prisma studio       # Mở Prisma Studio (xem DB trên web)
-npx prisma db push      # Đẩy schema thay đổi lên DB
-npx prisma db seed      # Seed lại dữ liệu mẫu
-npx prisma generate     # Regenerate Prisma Client (sau khi đổi schema)
+docker compose -f docker/docker-compose.yml up -d
 ```
 
-### Frontend
+## 📖 Tài liệu
 
-```bash
-cd frontend
-
-npm run dev             # Chạy dev (Turbopack)
-npm run build           # Build production (kiểm tra TypeScript)
-npm run lint            # Kiểm tra ESLint
-```
-
-### Docker
-
-```bash
-# Khởi động Database
-docker compose -f docker/docker-compose.dev.yml up -d
-
-# Tắt Database
-docker compose -f docker/docker-compose.dev.yml down
-
-# Xem logs Database
-docker compose -f docker/docker-compose.dev.yml logs -f
-
-# Reset Database hoàn toàn (xóa sạch data)
-docker compose -f docker/docker-compose.dev.yml down -v
-cd backend && npx prisma db push --force-reset && npx prisma db seed
-```
-
----
-
-## 🗃 Kết nối Database bằng DataGrip / DBeaver
-
-Nếu muốn xem và quản lý Database trực quan:
-
-| Thông tin | Giá trị |
-|-----------|---------|
-| Host | `localhost` |
-| Port | `5433` |
-| User | `brewlite` |
-| Password | `brewlite` |
-| Database | `brewlite` |
-| URL | `jdbc:postgresql://localhost:5433/brewlite` |
-
----
-
-## 📖 Tài liệu dự án
-
-| File | Nội dung |
-|------|----------|
-| [PROJECT_FLOW.md](./PROJECT_FLOW.md) | Kiến trúc, ERD (7 bảng), API Spec, State Machine, Sprint Planning, Non-functional |
-| [TEAM_WORKFLOW.md](./TEAM_WORKFLOW.md) | Hướng dẫn Git workflow, phân chia 7 nhánh cho 7 thành viên |
+- [PROJECT_FLOW.md](./PROJECT_FLOW.md) – Kiến trúc, ERD, API, State Machine, Sprint Planning
 
 ## 👥 Nhóm phát triển
 
@@ -237,10 +132,27 @@ Nếu muốn xem và quản lý Database trực quan:
 | 3 | | | Developer |
 | 4 | | | Developer |
 | 5 | | | Developer |
-| 6 | | | Developer |
-| 7 | | | Developer |
+
+## 🛠 Troubleshooting (Khắc phục lỗi môi trường thường gặp)
+
+**1. Lỗi `fatal: not a git repository` khi chạy lệnh git**
+- **Nguyên nhân:** Bạn đang đứng ở ngoài thư mục dự án.
+- **Khắc phục:** Chạy lệnh `cd brewlite` trước khi thao tác Git.
+
+**2. Lỗi `Connection to localhost:5433 refused` trên DataGrip/Backend**
+- **Nguyên nhân:** Docker chưa chạy hoặc container Database đang tắt.
+- **Khắc phục:** Mở ứng dụng Docker Desktop trên máy tính, sau đó chạy lại lệnh `docker compose -f docker/docker-compose.dev.yml up -d`.
+
+**3. Lỗi `PrismaClientInitializationError` hoặc thiếu module Prisma**
+- **Nguyên nhân:** Chưa generate file client của Prisma sau khi pull code mới.
+- **Khắc phục:** Đi vào thư mục backend (`cd backend`) và chạy lệnh `npx prisma generate`.
+
+**4. Cảnh báo `npm warn EBADENGINE` khi chạy npm install**
+- **Nguyên nhân:** Phiên bản Node.js/npm của bạn hơi khác so với thư viện Angular/NestJS yêu cầu.
+- **Khắc phục:** Đây chỉ là cảnh báo (Warning), không ảnh hưởng đến code. Bạn cứ để nó chạy bình thường, hoặc cài lại Node.js bản LTS mới nhất (v20+).
+
+---
 
 ## 📝 License
 
 Bài tập lớn môn Công nghệ Phần mềm – Trường Đại học Sài Gòn – HK1 2026-2027
-

@@ -17,9 +17,9 @@ BrewLite giúp khách hàng đặt và thanh toán đồ uống không dùng ti�
 ## 🛠 Tech Stack
 
 | Layer | Công nghệ |
-|-------|-----------|
+|-------|-----------| 
 | Frontend | Next.js 16 (App Router), TypeScript, Tailwind CSS, Zustand, React Query |
-| Backend | NestJS 12, TypeScript, Prisma ORM 6, Passport JWT |
+| Backend | NestJS 12, TypeScript, Prisma 6, Passport JWT |
 | Database | PostgreSQL 16 (Docker) |
 | DevOps | Docker Compose, Git |
 
@@ -29,28 +29,35 @@ BrewLite giúp khách hàng đặt và thanh toán đồ uống không dùng ti�
 brewlite/
 ├── frontend/          # Next.js application (Port 3000)
 ├── backend/           # NestJS application (Port 3001)
+│   └── prisma/        # Schema + Seed data (23 sản phẩm, 15 toppings)
 ├── docker/            # Docker configurations
-├── PROJECT_FLOW.md    # Tài liệu kiến trúc & flow dự án
-├── TEAM_WORKFLOW.md   # Phân chia nhánh Git & quy trình làm việc nhóm
+├── PROJECT_FLOW.md    # Kiến trúc, ERD (7 bảng), API, State Machine, Sprint Planning
+├── TEAM_WORKFLOW.md   # Hướng dẫn Git workflow & phân chia task nhóm
 └── README.md          # File này
 ```
 
----
+## 🗄 Database (7 bảng)
 
-## 🚀 Hướng dẫn Cài đặt & Chạy chương trình
-
-### Yêu cầu phần mềm (Prerequisites)
-
-Đảm bảo máy tính của bạn đã cài đặt các phần mềm sau:
-
-| Phần mềm | Phiên bản tối thiểu | Kiểm tra bằng lệnh |
-|-----------|---------------------|---------------------|
-| [Node.js](https://nodejs.org/) | >= 20.x | `node -v` |
-| [npm](https://www.npmjs.com/) | >= 10.x | `npm -v` |
-| [Docker Desktop](https://www.docker.com/) | Latest | `docker --version` |
-| [Git](https://git-scm.com/) | Latest | `git --version` |
+| Bảng | Mô tả |
+|------|-------|
+| `users` | Thông tin khách hàng |
+| `products` | Danh mục đồ uống (23 sản phẩm, 6 danh mục) |
+| `product_prices` | Giá theo từng size S/M/L (68 mức giá) |
+| `toppings` | Danh sách topping (15 loại, giá 9k–15k) |
+| `orders` | Đơn hàng |
+| `order_items` | Chi tiết từng món trong đơn |
+| `payments` | Lịch sử thanh toán |
 
 ---
+
+## 🚀 Hướng dẫn cài đặt & chạy (Step-by-step)
+
+### ⚙️ Yêu cầu hệ thống
+
+- [Node.js](https://nodejs.org/) >= 20.x
+- [npm](https://www.npmjs.com/) >= 10.x
+- [Docker Desktop](https://www.docker.com/) (bật Docker Engine)
+- [Git](https://git-scm.com/)
 
 ### Bước 1: Clone repository
 
@@ -59,179 +66,167 @@ git clone https://github.com/PhucTruong11/SWE.git
 cd brewlite
 ```
 
-> **Lưu ý:** Nếu bạn đã có code ở máy, chỉ cần `git pull origin main` để lấy bản mới nhất.
+### Bước 2: Tạo file environment
 
----
-
-### Bước 2: Tạo file Environment
-
-File `.env` chứa thông tin cấu hình (DB, JWT, Port). **Không được commit file này lên Git.**
-
-**Trên Windows (PowerShell):**
-```powershell
+```bash
 # Copy .env cho backend
-Copy-Item backend\.env.example -Destination backend\.env
+cp backend/.env.example backend/.env
 
 # Copy .env cho frontend
-Copy-Item frontend\.env.example -Destination frontend\.env.local
-```
-
-**Trên macOS / Linux:**
-```bash
-cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env.local
 ```
 
-> **Nội dung mặc định `.env` backend:**
-> ```
-> DATABASE_URL=postgresql://brewlite:brewlite@localhost:5433/brewlite
-> JWT_SECRET=brewlite-dev-jwt-secret-change-in-production
-> JWT_EXPIRES_IN=7d
-> PORT=3001
-> FRONTEND_URL=http://localhost:3000
-> ```
+> **Lưu ý:** File `.env` chứa thông tin nhạy cảm (password DB, JWT secret), đã được `.gitignore` nên **không** được push lên Git.
 
----
+### Bước 3: 🐳 Khởi động Database (PostgreSQL qua Docker)
 
-### Bước 3: Khởi động Database (PostgreSQL qua Docker)
-
-**Mở Docker Desktop trước**, đợi nó hiện "Engine running", rồi chạy:
+**Mở Docker Desktop** trước, chờ biểu tượng cá voi hiện xanh lá (Engine running), rồi chạy:
 
 ```bash
 docker compose -f docker/docker-compose.dev.yml up -d
 ```
 
-Kiểm tra DB đã chạy thành công:
+Kiểm tra container đang chạy:
 ```bash
 docker compose -f docker/docker-compose.dev.yml ps
 ```
 
 Kết quả mong đợi:
 ```
-NAME           IMAGE                STATUS              PORTS
-brewlite-db    postgres:16-alpine   Up X seconds        0.0.0.0:5433->5432/tcp
+NAME          IMAGE                STATUS              PORTS
+brewlite-db   postgres:16-alpine   Up (healthy)        0.0.0.0:5433->5432/tcp
 ```
 
-> **Thông tin kết nối DB** (dùng cho DataGrip / DBeaver / pgAdmin):
-> | Thuộc tính | Giá trị |
-> |------------|---------|
-> | Host | `localhost` |
-> | Port | `5433` |
-> | User | `brewlite` |
-> | Password | `brewlite` |
-> | Database | `brewlite` |
+> **⚠️ Port:** Database chạy trên port **5433** (không phải 5432 mặc định) để tránh xung đột nếu máy đã cài PostgreSQL sẵn.
 
----
+### Bước 4: 🖥 Khởi động Backend (NestJS)
 
-### Bước 4: Khởi động Backend (NestJS)
-
-Mở **Terminal 1** trong VS Code:
+Mở **Terminal 1**:
 
 ```bash
 cd backend
 
-# Cài dependencies (chạy lần đầu hoặc khi có thay đổi package.json)
+# Cài thư viện
 npm install
 
-# Đồng bộ Prisma Schema vào Database
+# Đồng bộ schema lên Database (tạo các bảng)
 npx prisma db push
 
-# Seed dữ liệu mẫu (23 sản phẩm + 15 toppings)
+# Seed dữ liệu mẫu (23 đồ uống + 15 toppings)
 npx prisma db seed
 
-# Khởi động server (tự động reload khi code thay đổi)
+# Khởi chạy Backend (tự động reload khi code thay đổi)
 npm run start:dev
 ```
 
-✅ **Thành công khi thấy:**
+Kết quả mong đợi:
 ```
 [NestApplication] Nest application successfully started
 🚀 BrewLite API is running on: http://localhost:3001/api
 ```
 
----
+### Bước 5: 🎨 Khởi động Frontend (Next.js)
 
-### Bước 5: Khởi động Frontend (Next.js)
-
-Mở **Terminal 2** trong VS Code (bấm nút `+`):
+Mở **Terminal 2** (bấm nút `+` trong VS Code terminal):
 
 ```bash
 cd frontend
 
-# Cài dependencies (chạy lần đầu hoặc khi có thay đổi package.json)
+# Cài thư viện
 npm install
 
-# Khởi động giao diện
+# Khởi chạy Frontend
 npm run dev
 ```
 
-✅ **Thành công khi thấy:**
+Kết quả mong đợi:
 ```
-▲ Next.js 16.x.x
+▲ Next.js 16.x
 - Local: http://localhost:3000
 ```
 
 ---
 
-### Bước 6: Kiểm tra hệ thống hoạt động
+## ✅ Kiểm tra hệ thống hoạt động
 
-Mở trình duyệt và truy cập các URL sau:
+Sau khi cả 3 service (Docker DB + Backend + Frontend) đều chạy, mở trình duyệt:
 
-| URL | Kết quả mong đợi |
-|-----|-------------------|
-| `http://localhost:3000` | Giao diện trang chủ Next.js |
+| URL | Kỳ vọng |
+|-----|---------|
 | `http://localhost:3001/api` | Hiện "Hello World!" |
-| `http://localhost:3001/api/products` | JSON danh sách 23 sản phẩm kèm giá theo size |
-| `http://localhost:3001/api/products?category=phin` | Chỉ hiện 3 sản phẩm Cà Phê Phin |
-| `http://localhost:3001/api/products/toppings` | JSON danh sách 15 toppings |
+| `http://localhost:3001/api/products` | JSON danh sách 23 sản phẩm (kèm prices) |
+| `http://localhost:3001/api/products?category=phin` | JSON chỉ lọc Cà Phê Phin (3 món) |
+| `http://localhost:3001/api/products/toppings` | JSON 15 loại topping |
+| `http://localhost:3000` | Trang Next.js (Frontend) |
 
 ---
 
-## 🔄 Hướng dẫn Chạy lại (Các lần tiếp theo)
+## 🔧 Các lệnh thường dùng
 
-Khi đã setup xong lần đầu, từ lần sau bạn chỉ cần **3 bước**:
+### Backend
 
 ```bash
-# 1. Bật Docker Desktop (nếu chưa mở)
+cd backend
 
-# 2. Khởi động Database
+npm run start:dev       # Chạy dev (auto-reload)
+npm run build           # Build production
+npm run start           # Chạy production build
+npx prisma studio       # Mở Prisma Studio (xem DB trên web)
+npx prisma db push      # Đẩy schema thay đổi lên DB
+npx prisma db seed      # Seed lại dữ liệu mẫu
+npx prisma generate     # Regenerate Prisma Client (sau khi đổi schema)
+```
+
+### Frontend
+
+```bash
+cd frontend
+
+npm run dev             # Chạy dev (Turbopack)
+npm run build           # Build production (kiểm tra TypeScript)
+npm run lint            # Kiểm tra ESLint
+```
+
+### Docker
+
+```bash
+# Khởi động Database
 docker compose -f docker/docker-compose.dev.yml up -d
 
-# 3. Chạy Backend (Terminal 1)
-cd backend && npm run start:dev
+# Tắt Database
+docker compose -f docker/docker-compose.dev.yml down
 
-# 4. Chạy Frontend (Terminal 2)
-cd frontend && npm run dev
+# Xem logs Database
+docker compose -f docker/docker-compose.dev.yml logs -f
+
+# Reset Database hoàn toàn (xóa sạch data)
+docker compose -f docker/docker-compose.dev.yml down -v
+cd backend && npx prisma db push --force-reset && npx prisma db seed
 ```
-
-> **Không cần** chạy lại `npm install`, `prisma db push`, hay `prisma db seed` nếu không có ai thay đổi schema hoặc package.json.
 
 ---
 
-## ⚠️ Xử lý lỗi thường gặp
+## 🗃 Kết nối Database bằng DataGrip / DBeaver
 
-| Lỗi | Nguyên nhân | Cách khắc phục |
-|-----|-------------|----------------|
-| `Error: P1000: Authentication failed` | Docker chưa chạy hoặc port bị chiếm | Mở Docker Desktop, kiểm tra `docker ps` |
-| `Cannot find module` | Chưa cài dependencies | Chạy `npm install` trong thư mục tương ứng |
-| `EADDRINUSE: port 3001` | Backend đang chạy ở terminal khác | Tắt terminal cũ hoặc đổi PORT trong `.env` |
-| `cd backend` báo lỗi "not exist" | Đang đứng sai thư mục | Kiểm tra bạn đang ở thư mục `brewlite/` |
-| Prisma báo lỗi `P1001: Can't reach database` | DB container chưa sẵn sàng | Đợi 5 giây rồi thử lại |
+Nếu muốn xem và quản lý Database trực quan:
+
+| Thông tin | Giá trị |
+|-----------|---------|
+| Host | `localhost` |
+| Port | `5433` |
+| User | `brewlite` |
+| Password | `brewlite` |
+| Database | `brewlite` |
+| URL | `jdbc:postgresql://localhost:5433/brewlite` |
 
 ---
-
-## 🐳 Chạy toàn bộ bằng Docker (Sprint 3)
-
-```bash
-docker compose -f docker/docker-compose.yml up -d
-```
 
 ## 📖 Tài liệu dự án
 
-| Tài liệu | Nội dung |
-|-----------|----------|
+| File | Nội dung |
+|------|----------|
 | [PROJECT_FLOW.md](./PROJECT_FLOW.md) | Kiến trúc, ERD (7 bảng), API Spec, State Machine, Sprint Planning, Non-functional |
-| [TEAM_WORKFLOW.md](./TEAM_WORKFLOW.md) | Phân chia 7 nhánh Git cho 7 thành viên, quy trình làm việc hàng ngày |
+| [TEAM_WORKFLOW.md](./TEAM_WORKFLOW.md) | Hướng dẫn Git workflow, phân chia 7 nhánh cho 7 thành viên |
 
 ## 👥 Nhóm phát triển
 
@@ -248,3 +243,4 @@ docker compose -f docker/docker-compose.yml up -d
 ## 📝 License
 
 Bài tập lớn môn Công nghệ Phần mềm – Trường Đại học Sài Gòn – HK1 2026-2027
+

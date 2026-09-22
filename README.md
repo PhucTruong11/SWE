@@ -46,31 +46,29 @@ brewlite/
 ### 1. Clone repository
 
 ```bash
-git clone <repository-url>
-cd brewlite
+git clone https://github.com/PhucTruong11/SWE.git
+cd SWE
 ```
 
-### 2. Cấu hình biến môi trường (.env)
+### 2. Tạo file environment
 
 ```bash
-# 1. Copy file .env.example ở root (nếu có)
+# Copy file .env.example ở root
 cp .env.example .env
 
-# 2. Copy .env cho backend
+# Copy .env cho backend
 cp backend/.env.example backend/.env
-```
 
-**Đối với Frontend:** (Do GitHub có thể không push file .env)
-Bạn cần tạo mới một file tên là `.env.local` nằm trong thư mục `frontend/` và thêm nội dung sau vào file:
-```env
-NEXT_PUBLIC_API_URL=http://localhost:3001/api
+# Copy .env cho frontend
+cp frontend/.env.example frontend/.env.local
 ```
 
 ### 3. Khởi động Database (PostgreSQL via Docker)
 
-> **⚠️ QUAN TRỌNG:** Bạn **BẮT BUỘC** phải cài đặt phần mềm [Docker Desktop](https://www.docker.com/) và **mở nó lên trước** (chờ biểu tượng Engine chạy xanh lá) thì các lệnh bên dưới mới hoạt động. Nếu không sẽ báo lỗi không kết nối được Docker API!
+> **⚠️ Lưu ý:** Bắt buộc phải mở ứng dụng **Docker Desktop** lên trước (chờ icon chuyển sang xanh lá).
 
 ```bash
+# Đứng ở thư mục gốc (SWE)
 docker compose -f docker/docker-compose.dev.yml up -d
 ```
 
@@ -79,38 +77,39 @@ Kiểm tra DB đã chạy:
 docker compose -f docker/docker-compose.dev.yml ps
 ```
 
-### 4. Khởi động Backend
+### 4. Khởi động Backend (NestJS)
 
+Mở **Terminal 1**:
 ```bash
 cd backend
 
-# Cài dependencies (nếu chưa)
+# Cài dependencies
 npm install
 
-# Đồng bộ Prisma schema với DB
+# Đồng bộ Prisma schema với DB và tạo file client
 npx prisma db push
+npx prisma generate
 
-# Seed dữ liệu mẫu (nếu có)
+# Seed dữ liệu mẫu (23 đồ uống, 15 toppings)
 npx prisma db seed
 
 # Chạy dev server
 npm run start:dev
 ```
+Backend sẽ chạy tại: **http://localhost:3001/api**
 
-Backend sẽ chạy tại: **http://localhost:3001**
+### 5. Khởi động Frontend (Next.js)
 
-### 5. Khởi động Frontend
-
+Mở **Terminal 2** (Tạo tab terminal mới):
 ```bash
 cd frontend
 
-# Cài dependencies (nếu chưa)
+# Cài dependencies
 npm install
 
 # Chạy dev server
 npm run dev
 ```
-
 Frontend sẽ chạy tại: **http://localhost:3000**
 
 ## 🐳 Chạy toàn bộ bằng Docker (Sprint 3)
@@ -132,26 +131,6 @@ docker compose -f docker/docker-compose.yml up -d
 | 3 | | | Developer |
 | 4 | | | Developer |
 | 5 | | | Developer |
-
-## 🛠 Troubleshooting (Khắc phục lỗi môi trường thường gặp)
-
-**1. Lỗi `fatal: not a git repository` khi chạy lệnh git**
-- **Nguyên nhân:** Bạn đang đứng ở ngoài thư mục dự án.
-- **Khắc phục:** Chạy lệnh `cd brewlite` trước khi thao tác Git.
-
-**2. Lỗi `Connection to localhost:5433 refused` trên DataGrip/Backend**
-- **Nguyên nhân:** Docker chưa chạy hoặc container Database đang tắt.
-- **Khắc phục:** Mở ứng dụng Docker Desktop trên máy tính, sau đó chạy lại lệnh `docker compose -f docker/docker-compose.dev.yml up -d`.
-
-**3. Lỗi `PrismaClientInitializationError` hoặc thiếu module Prisma**
-- **Nguyên nhân:** Chưa generate file client của Prisma sau khi pull code mới.
-- **Khắc phục:** Đi vào thư mục backend (`cd backend`) và chạy lệnh `npx prisma generate`.
-
-**4. Cảnh báo `npm warn EBADENGINE` khi chạy npm install**
-- **Nguyên nhân:** Phiên bản Node.js/npm của bạn hơi khác so với thư viện Angular/NestJS yêu cầu.
-- **Khắc phục:** Đây chỉ là cảnh báo (Warning), không ảnh hưởng đến code. Bạn cứ để nó chạy bình thường, hoặc cài lại Node.js bản LTS mới nhất (v20+).
-
----
 
 ## 📝 License
 

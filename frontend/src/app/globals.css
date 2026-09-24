@@ -1,21 +1,33 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #FAF9F6;
+  --foreground: #1E3932;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  
+  /* Màu chủ đạo (Starbucks) */
+  --color-primary: #006241;
+  --color-primary-hover: #004d33;
+  
+  /* Nền và chữ */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: #FFFFFF;
+  --color-text: #1E3932;
+  
+  /* Bo góc */
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #111111;
+    --foreground: #E0E0E0;
   }
 }
 

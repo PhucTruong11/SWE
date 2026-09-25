@@ -1,8 +1,3 @@
-// File CHUNG (thuộc Task Auth) — đây là bản MOCK tạm thời để Sidebar chạy được
-// ngay bây giờ. Khi người làm Auth code xong, họ chỉ cần thay nội dung hàm bên
-// trong, giữ nguyên tên export + shape trả về (user, isLoading, login, logout)
-// để Sidebar không phải sửa gì cả.
-
 import type { User } from '@/types';
 
 interface UseAuthReturn {

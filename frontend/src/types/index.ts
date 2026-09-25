@@ -8,6 +8,7 @@ export interface Product {
   stock: number;
   isAvailable: boolean;
   category: string | null;
+  isBestSeller: boolean; //Mới
 }
 
 export interface ProductDetail extends Product {

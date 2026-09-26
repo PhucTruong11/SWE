@@ -364,6 +364,17 @@ async function main() {
   await prisma.topping.deleteMany();
   await prisma.user.deleteMany();
 
+  // ── Bước 2: Tạo User mẫu để test Payment ──
+  console.log('👤 Đang tạo Users mẫu...');
+  const testUser = await prisma.user.create({
+    data: {
+      email: 'test@brewlite.com',
+      passwordHash: '$2b$10$placeholder_hash_for_testing_only',
+      loyaltyPoints: 0,
+    },
+  });
+  console.log(`   ✅ Đã tạo user: ${testUser.email} (id: ${testUser.id})`);
+
   // ── Bước 2: Tạo Toppings ──
   console.log('🍡 Đang tạo Toppings...');
   const toppings = await Promise.all(
@@ -402,14 +413,81 @@ async function main() {
 
   console.log(`   ✅ Đã tạo ${productCount} sản phẩm với ${priceCount} mức giá`);
 
+  // ── Bước 4: Tạo Order mẫu để test Payment ──
+  console.log('🧾 Đang tạo Orders mẫu (PENDING) để test Payment...');
+
+  // Lấy sản phẩm đầu tiên để gắn vào order item
+  const firstProduct = await prisma.product.findFirst({
+    include: { prices: true },
+  });
+
+  const orders = await Promise.all([
+    // Order 1: Phin Sữa Đá size M - 39,000đ
+    prisma.order.create({
+      data: {
+        userId: testUser.id,
+        status: 'PENDING',
+        total: 39000,
+        items: {
+          create: firstProduct ? [{
+            productId: firstProduct.id,
+            size: 'M',
+            toppings: [],
+            qty: 1,
+            lineTotal: 39000,
+          }] : [],
+        },
+      },
+    }),
+    // Order 2: 2 món - 78,000đ
+    prisma.order.create({
+      data: {
+        userId: testUser.id,
+        status: 'PENDING',
+        total: 78000,
+        items: {
+          create: firstProduct ? [{
+            productId: firstProduct.id,
+            size: 'L',
+            toppings: [],
+            qty: 2,
+            lineTotal: 78000,
+          }] : [],
+        },
+      },
+    }),
+    // Order 3: Đã PAID (để test chặn thanh toán lại)
+    prisma.order.create({
+      data: {
+        userId: testUser.id,
+        status: 'PAID',
+        total: 45000,
+        loyaltyPointsEarned: 4,
+      },
+    }),
+  ]);
+
+  console.log(`   ✅ Đã tạo ${orders.length} orders mẫu`);
+  console.log(`   📋 Order PENDING 1 (39k): ${orders[0].id}`);
+  console.log(`   📋 Order PENDING 2 (78k): ${orders[1].id}`);
+  console.log(`   📋 Order PAID     (45k): ${orders[2].id}`);
+
   // ── Tổng kết ──
   console.log('\n🎉 Seeding hoàn tất!');
   console.log('────────────────────────────────────────');
   console.log(`   Toppings:       ${toppings.length}`);
   console.log(`   Products:       ${productCount}`);
   console.log(`   Product Prices: ${priceCount}`);
+  console.log(`   Users:          1 (test@brewlite.com)`);
+  console.log(`   Orders:         ${orders.length} (2 PENDING, 1 PAID)`);
+  console.log('────────────────────────────────────────');
+  console.log('\n💡 Test Payment API:');
+  console.log(`   POST http://localhost:3001/api/payments`);
+  console.log(`   Body: { "orderId": "${orders[0].id}", "method": "EWALLET" }`);
+  console.log(`   Header: Idempotency-Key: <random-uuid>`);
   console.log('────────────────────────────────────────');
 }
+
 
 main()
   .catch((e) => {

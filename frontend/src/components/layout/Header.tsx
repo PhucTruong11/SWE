@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from './Sidebar';
@@ -20,17 +20,52 @@ const SearchIcon = () => (
     </svg>
 );
 
-const NAV_LINKS = [
-    { href: '/', label: 'Trang chủ' },
-    { href: '/orders', label: 'Lịch sử' },
+// Icon mũi tên nhỏ, xoay khi dropdown mở
+const ChevronIcon = ({ open }: { open: boolean }) => (
+    <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        className={`transition-transform ${open ? 'rotate-180' : ''}`}
+    >
+        <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+);
+
+// TODO(BE): thay bằng data thật khi có endpoint GET /categories.
+// Hiện Product.category là string tự do, chưa có danh sách chuẩn hoá.
+export const CATEGORIES = [
+    { slug: 'ca-phe', label: 'Cà phê' },
+    { slug: 'tra', label: 'Trà' },
+    { slug: 'da-xay', label: 'Đá xay' },
+    { slug: 'banh', label: 'Bánh ngọt' },
+    { slug: 'topping', label: 'Topping thêm' },
 ];
 
 export function Header() {
     const [isSidebarOpen, setSidebarOpen] = useState(false);
+    const [isMenuOpen, setMenuOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const { user } = useAuth();
     const cartCount = useCartStore((s) => s.totalItems());
     const router = useRouter();
+
+    // Ref bọc quanh nút "Menu" + dropdown, để biết click có nằm trong hay ngoài khu vực này
+    const menuRef = useRef<HTMLDivElement>(null);
+
+    // Tự đóng dropdown khi người dùng click ra ngoài khu vực Menu
+    useEffect(() => {
+        function handleClickOutside(e: MouseEvent) {
+            if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+                setMenuOpen(false);
+            }
+        }
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     const handleSearchSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -48,11 +83,39 @@ export function Header() {
 
                 <div className="hidden flex-1 items-center justify-center gap-6 lg:flex">
                     <nav className="flex items-center gap-6 text-base font-semibold text-text">
-                        {NAV_LINKS.map((item) => (
-                            <Link key={item.href} href={item.href} className="whitespace-nowrap hover:text-primary">
-                                {item.label}
-                            </Link>
-                        ))}
+                        <Link href="/" className="whitespace-nowrap hover:text-primary">
+                            Trang chủ
+                        </Link>
+
+                        <div ref={menuRef} className="relative">
+                            <button
+                                onClick={() => setMenuOpen((v) => !v)}
+                                className="flex items-center gap-1 whitespace-nowrap hover:text-primary"
+                                aria-expanded={isMenuOpen}
+                            >
+                                Menu
+                                <ChevronIcon open={isMenuOpen} />
+                            </button>
+
+                            {isMenuOpen && (
+                                <div className="absolute left-1/2 top-full z-40 mt-2 w-56 -translate-x-1/2 rounded-xl border border-primary/10 bg-surface p-2 shadow-lg">
+                                    {CATEGORIES.map((cat) => (
+                                        <Link
+                                            key={cat.slug}
+                                            href={`/menu?category=${cat.slug}`}
+                                            onClick={() => setMenuOpen(false)}
+                                            className="block rounded-lg px-3 py-2 text-sm font-medium text-text hover:bg-background hover:text-primary"
+                                        >
+                                            {cat.label}
+                                        </Link>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <Link href="/orders" className="whitespace-nowrap hover:text-primary">
+                            Lịch sử
+                        </Link>
                     </nav>
 
                     <form onSubmit={handleSearchSubmit} className="relative w-full max-w-xs">
@@ -74,15 +137,15 @@ export function Header() {
                         href="/cart"
                         className="flex items-center gap-1.5 text-base font-semibold text-text hover:text-primary"
                     >
-                        <span className="relative">
+                        {/* <span className="relative">
                             🛒
                             {cartCount > 0 && (
                                 <span className="absolute -right-2 -top-2 flex h-4 w-4 items-center justify-center rounded-full bg-orange-600 text-[10px] font-bold text-white">
                                     {cartCount}
                                 </span>
                             )}
-                        </span>
-                        <span>Giỏ hàng</span>
+                        </span> */}
+                        <span>Giỏ hàng ({cartCount})</span>
                     </Link>
 
                     {user ? (

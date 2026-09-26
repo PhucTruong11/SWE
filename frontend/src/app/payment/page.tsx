@@ -38,22 +38,23 @@ const DEFAULT_DEMO_ITEMS: CartItem[] = [
   },
 ];
 
+function generatePaymentIds(method: 'EWALLET' | 'CARD', now: Date) {
+  const datePrefix = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}`;
+  const uniqueSuffix = now.getTime().toString().slice(-6);
+
+  return {
+    invoiceNo: `BL-${datePrefix}-${uniqueSuffix}`,
+    paymentRef: `GW-${method}-${uniqueSuffix}`,
+    orderId: `ORD-${uniqueSuffix}`,
+  };
+}
+
 export default function PaymentPage() {
   const { items: cartItems, clearCart } = useCartStore();
 
   // Sử dụng items từ giỏ hàng hoặc fallback sang items demo
-  const [items, setItems] = useState<CartItem[]>(DEFAULT_DEMO_ITEMS);
-  const [isUsingDemo, setIsUsingDemo] = useState(false);
-
-  useEffect(() => {
-    if (cartItems.length > 0) {
-      setItems(cartItems);
-      setIsUsingDemo(false);
-    } else {
-      setItems(DEFAULT_DEMO_ITEMS);
-      setIsUsingDemo(true);
-    }
-  }, [cartItems]);
+  const items = cartItems.length > 0 ? cartItems : DEFAULT_DEMO_ITEMS;
+  const isUsingDemo = cartItems.length === 0;
 
   // Phương thức thanh toán: EWALLET (MoMo) | CARD (Thẻ ngân hàng)
   const [method, setMethod] = useState<'EWALLET' | 'CARD'>('EWALLET');
@@ -77,7 +78,7 @@ export default function PaymentPage() {
 
   // Đồng hồ đếm ngược 3 phút (180 giây)
   const [timeLeft, setTimeLeft] = useState(180);
-  const [isExpired, setIsExpired] = useState(false);
+  const isExpired = timeLeft <= 0;
 
   // Trạng thái xử lý thanh toán
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -88,15 +89,14 @@ export default function PaymentPage() {
 
   // Bộ đếm thời gian
   useEffect(() => {
-    if (timeLeft <= 0) {
-      setIsExpired(true);
+    if (isExpired) {
       return;
     }
     const timer = setInterval(() => {
-      setTimeLeft((prev) => prev - 1);
+      setTimeLeft((prev) => (prev <= 1 ? 0 : prev - 1));
     }, 1000);
     return () => clearInterval(timer);
-  }, [timeLeft]);
+  }, [isExpired]);
 
   // Tính toán số tiền
   const subtotal = items.reduce((sum, item) => sum + item.lineTotal, 0);
@@ -173,12 +173,11 @@ export default function PaymentPage() {
       await new Promise((r) => setTimeout(r, 700));
 
       const now = new Date();
-      const invoiceNo = `BL-${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}-${Math.floor(1000 + Math.random() * 9000)}`;
-      const paymentRef = `GW-${method}-${Date.now().toString().slice(-6)}`;
+      const { invoiceNo, paymentRef, orderId } = generatePaymentIds(method, now);
 
       // Xuất hóa đơn ra màn hình
       setReceiptData({
-        orderId: `ORD-${Date.now().toString().slice(-6)}`,
+        orderId,
         invoiceNo,
         paymentId: paymentRef,
         paidAt: now.toLocaleString('vi-VN', {
@@ -200,8 +199,22 @@ export default function PaymentPage() {
 
       // Clear giỏ hàng sau khi hoàn tất
       clearCart();
-    } catch (err: any) {
-      setErrorMessage(err?.response?.data?.message || 'Có lỗi xảy ra khi thanh toán. Vui lòng thử lại!');
+    } catch (err: unknown) {
+      const message =
+        typeof err === 'object' &&
+        err !== null &&
+        'response' in err &&
+        typeof err.response === 'object' &&
+        err.response !== null &&
+        'data' in err.response &&
+        typeof err.response.data === 'object' &&
+        err.response.data !== null &&
+        'message' in err.response.data &&
+        typeof err.response.data.message === 'string'
+          ? err.response.data.message
+          : 'Có lỗi xảy ra khi thanh toán. Vui lòng thử lại!';
+
+      setErrorMessage(message);
     } finally {
       setIsSubmitting(false);
     }

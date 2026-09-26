@@ -365,10 +365,6 @@ export default function PaymentPage() {
                 `Xác nhận trả ${formatVND(finalTotal)}`
               )}
             </button>
-
-            <p className="mt-3 text-center text-[11px] text-gray-500">
-              🔒 Giao dịch được bảo mật bởi Mock Payment Gateway & ACID Transaction
-            </p>
           </div>
         </div>
       </div>

@@ -70,6 +70,7 @@ export function PaymentMethods({
           </p>
 
           <div className="relative rounded-2xl bg-white p-4 shadow-md border-2 border-primary/20">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={qrUrl}
               alt="Mã QR thanh toán BrewLite"

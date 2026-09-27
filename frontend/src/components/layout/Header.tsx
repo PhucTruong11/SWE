@@ -89,6 +89,17 @@ export function Header() {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    // FIX: vì không có/không tìm thấy file layout.tsx, gắn thẳng bộ lắng nghe sự kiện
+    // "unauthorized" (được api.ts bắn ra khi gặp lỗi 401) ngay trong Header - vì Header
+    // đã hiển thị ở mọi trang, nên chỗ này chạy tương đương như đặt ở layout gốc.
+    useEffect(() => {
+        function handleUnauthorized() {
+            router.push('/auth/login');
+        }
+        window.addEventListener('unauthorized', handleUnauthorized);
+        return () => window.removeEventListener('unauthorized', handleUnauthorized);
+    }, [router]);
+
     const handleSearchSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         const q = searchQuery.trim();

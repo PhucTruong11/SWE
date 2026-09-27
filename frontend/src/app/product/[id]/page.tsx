@@ -128,8 +128,9 @@ export default function ProductDetailPage() {
 
     // Thêm vào giỏ hàng
     const handleAddToCart = () => {
+        // FIX: bỏ hẳn tên biến key không dùng tới (thay vì đặt tên "_") để ESLint hết cảnh báo unused var
         const selectedToppingsSummary = Object.entries(toppingQuantities)
-            .filter(([_, qty]) => qty > 0)
+            .filter(([, qty]) => qty > 0)
             .map(([topId, qty]) => {
                 const item = toppingsList.find((t) => t.id === topId);
                 return {

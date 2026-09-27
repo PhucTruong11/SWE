@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { formatVND } from '@/lib/utils';
 import type { Product } from '@/types';
-import { useCartStore } from '@/stores/cart.store';
+import { useCartStore, type CartItem } from '@/stores/cart.store';
 
 interface ProductCardProps {
     product: Product & {
@@ -54,7 +54,8 @@ export function ProductCard({ product, variant = 'bestseller' }: ProductCardProp
         const defaultSize = (product.prices && product.prices.length > 0 ? product.prices[0].size : 'S') as 'S' | 'M' | 'L';
         const validPrice = Number(rawPrice) || 0;
 
-        addItemToCart({
+        // FIX: dùng đúng kiểu CartItem thay vì "any" để ESLint/TypeScript không báo lỗi
+        const newItem: CartItem = {
             productId: product.id,
             name: product.name,
             size: defaultSize,
@@ -64,8 +65,12 @@ export function ProductCard({ product, variant = 'bestseller' }: ProductCardProp
             unitPrice: validPrice,
             quantity: 1,
             lineTotal: validPrice,
-            imageUrl: product.imageUrl,
-        } as any);
+            // FIX: product.imageUrl có thể là "null" (chưa có ảnh) nhưng CartItem chỉ nhận
+            // "string | undefined", nên chuyển null -> undefined bằng toán tử ??
+            imageUrl: product.imageUrl ?? undefined,
+        };
+
+        addItemToCart(newItem);
 
         // FIX: bật thông báo đã thêm vào giỏ hàng
         setShowAddedToast(true);

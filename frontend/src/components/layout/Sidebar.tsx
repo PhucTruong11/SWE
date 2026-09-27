@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
-import { useCartStore } from '@/stores/cart.store';
+import { useCartStore, useHasCartHydrated } from '@/stores/cart.store';
 import { CATEGORIES } from './Header';
 
 interface SidebarProps {
@@ -58,6 +58,8 @@ const NAV_ITEMS = [
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
     const { user } = useAuth();
     const cartCount = useCartStore((s) => s.totalItems());
+    // FIX HYDRATION: chỉ hiển thị số thật sau khi store đã đọc xong localStorage
+    const hasHydrated = useHasCartHydrated();
     const router = useRouter();
 
     const [isCategoryOpen, setCategoryOpen] = useState(false);
@@ -174,7 +176,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                 <div className="mt-auto p-2">
                     <div className="overflow-hidden rounded-xl bg-background text-primary shadow-lg">
                         <div className="flex items-center justify-center gap-2 px-4 py-3">
-                            <p className="text-base font-bold">Giỏ hàng ({cartCount})</p>
+                            <p className="text-base font-bold">Giỏ hàng ({hasHydrated ? cartCount : 0})</p>
                         </div>
 
                         <Link

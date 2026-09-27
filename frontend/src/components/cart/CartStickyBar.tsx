@@ -1,13 +1,18 @@
 'use client';
 
 import Link from 'next/link';
-import { useCartStore } from '@/stores/cart.store';
+import { useCartStore, useHasCartHydrated } from '@/stores/cart.store';
 
 export function CartStickyBar() {
     const count = useCartStore((s) => s.totalItems());
+    // FIX HYDRATION: server luôn coi giỏ hàng rỗng (không render thanh này).
+    // Nếu chưa đọc xong localStorage mà đã hiển thị thanh dựa trên count thật,
+    // client sẽ render khác với server -> lỗi "Hydration failed".
+    const hasHydrated = useHasCartHydrated();
 
     // Ẩn hẳn khi giỏ hàng trống, tránh chiếm chỗ vô ích ở đáy màn hình
-    if (count === 0) return null;
+    // Đồng thời ẩn cho tới khi store hydrate xong để khớp với server
+    if (!hasHydrated || count === 0) return null;
 
     return (
         <Link

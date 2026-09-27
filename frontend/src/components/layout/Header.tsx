@@ -5,7 +5,19 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from './Sidebar';
 import { useAuth } from '@/hooks/useAuth';
-import { useCartStore } from '@/stores/cart.store';
+import { useCartStore, useHasCartHydrated } from '@/stores/cart.store';
+
+// Kiểu dữ liệu tối thiểu cho 1 dòng sản phẩm trong popup giỏ hàng
+// FIX: dùng interface thay cho "any" để hết báo đỏ lỗi TypeScript (no-explicit-any)
+interface CartPreviewItem {
+    name: string;
+    size: string;
+    quantity: number;
+    imageUrl?: string;
+    toppings?: (string | { name: string })[];
+    lineTotal?: number;
+    unitPrice?: number;
+}
 
 const MenuIcon = () => (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -20,7 +32,6 @@ const SearchIcon = () => (
     </svg>
 );
 
-// Icon mũi tên nhỏ, xoay khi dropdown mở
 const ChevronIcon = ({ open }: { open: boolean }) => (
     <svg
         width="14"
@@ -35,28 +46,39 @@ const ChevronIcon = ({ open }: { open: boolean }) => (
     </svg>
 );
 
-// TODO(BE): thay bằng data thật khi có endpoint GET /categories.
-// Hiện Product.category là string tự do, chưa có danh sách chuẩn hoá.
 export const CATEGORIES = [
-    { slug: 'ca-phe', label: 'Cà phê' },
+    { slug: 'phin', label: 'Cà phê Phin' },
+    { slug: 'phindi', label: 'PhinDi' },
+    { slug: 'espresso', label: 'Cà phê Espresso' },
     { slug: 'tra', label: 'Trà' },
-    { slug: 'da-xay', label: 'Đá xay' },
-    { slug: 'banh', label: 'Bánh ngọt' },
-    { slug: 'topping', label: 'Topping thêm' },
+    { slug: 'freeze', label: 'Đá xay (Freeze)' },
+    { slug: 'other', label: 'Khác' },
 ];
 
 export function Header() {
     const [isSidebarOpen, setSidebarOpen] = useState(false);
     const [isMenuOpen, setMenuOpen] = useState(false);
+    const [isCartHovered, setIsCartHovered] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+
+    // FIX HYDRATION: dùng cờ hydrate thật của store (bật lên đúng lúc localStorage đọc xong)
+    // thay vì tự đoán bằng "mounted", để tránh trường hợp mount xong nhưng store
+    // vẫn chưa kịp đọc localStorage.
+    const hasHydrated = useHasCartHydrated();
+
     const { user } = useAuth();
-    const cartCount = useCartStore((s) => s.totalItems());
     const router = useRouter();
 
-    // Ref bọc quanh nút "Menu" + dropdown, để biết click có nằm trong hay ngoài khu vực này
+    // Lấy dữ liệu từ Cart Store
+    const cartItems = useCartStore((s) => s.items) as CartPreviewItem[];
+    const cartCount = useCartStore((s) => s.totalItems());
+    const cartTotalPrice = useCartStore((s) => s.totalPrice());
+    // FIX: lấy action xóa sản phẩm để dùng cho nút "x"
+    // Nếu store của bạn đặt tên khác (vd removeFromCart), đổi lại đúng tên ở đây
+    const removeItem = useCartStore((s) => s.removeItem);
+
     const menuRef = useRef<HTMLDivElement>(null);
 
-    // Tự đóng dropdown khi người dùng click ra ngoài khu vực Menu
     useEffect(() => {
         function handleClickOutside(e: MouseEvent) {
             if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
@@ -66,6 +88,17 @@ export function Header() {
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    // FIX: vì không có/không tìm thấy file layout.tsx, gắn thẳng bộ lắng nghe sự kiện
+    // "unauthorized" (được api.ts bắn ra khi gặp lỗi 401) ngay trong Header - vì Header
+    // đã hiển thị ở mọi trang, nên chỗ này chạy tương đương như đặt ở layout gốc.
+    useEffect(() => {
+        function handleUnauthorized() {
+            router.push('/auth/login');
+        }
+        window.addEventListener('unauthorized', handleUnauthorized);
+        return () => window.removeEventListener('unauthorized', handleUnauthorized);
+    }, [router]);
 
     const handleSearchSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -102,7 +135,7 @@ export function Header() {
                                     {CATEGORIES.map((cat) => (
                                         <Link
                                             key={cat.slug}
-                                            href={`/menu?category=${cat.slug}`}
+                                            href={`/?category=${encodeURIComponent(cat.slug)}`}
                                             onClick={() => setMenuOpen(false)}
                                             className="block rounded-lg px-3 py-2 text-sm font-medium text-text hover:bg-background hover:text-primary"
                                         >
@@ -133,20 +166,110 @@ export function Header() {
                 </div>
 
                 <div className="hidden shrink-0 items-center gap-5 lg:flex">
-                    <Link
-                        href="/cart"
-                        className="flex items-center gap-1.5 text-base font-semibold text-text hover:text-primary"
+                    {/* POPUP NÚT GIỎ HÀNG KHI HOVER */}
+                    <div
+                        className="relative py-2"
+                        onMouseEnter={() => setIsCartHovered(true)}
+                        onMouseLeave={() => setIsCartHovered(false)}
                     >
-                        {/* <span className="relative">
-                            🛒
-                            {cartCount > 0 && (
-                                <span className="absolute -right-2 -top-2 flex h-4 w-4 items-center justify-center rounded-full bg-orange-600 text-[10px] font-bold text-white">
-                                    {cartCount}
-                                </span>
-                            )}
-                        </span> */}
-                        <span>Giỏ hàng ({cartCount})</span>
-                    </Link>
+                        <Link
+                            href="/cart"
+                            className="flex items-center gap-1.5 text-base font-semibold text-text hover:text-primary"
+                        >
+                            <span>Giỏ hàng ({hasHydrated ? cartCount : 0})</span>
+                        </Link>
+
+                        {/* Dropdown Khung preview giỏ hàng */}
+                        {isCartHovered && (
+                            <div className="absolute right-0 top-full z-50 w-80 rounded-2xl border border-primary/15 bg-surface p-4 shadow-xl transition-all">
+                                <h4 className="border-b border-primary/10 pb-2.5 text-sm font-bold text-text">
+                                    Sản phẩm đã chọn
+                                </h4>
+
+                                {cartItems.length === 0 ? (
+                                    <div className="py-8 text-center text-xs font-medium text-text/60">
+                                        Giỏ hàng của bạn đang trống
+                                    </div>
+                                ) : (
+                                    <>
+                                        {/* Danh sách hiển thị tối đa 3 khung món */}
+                                        <div className="my-2 flex max-h-72 flex-col divide-y divide-primary/10 overflow-y-auto pr-1">
+                                            {cartItems.map((item, idx) => (
+                                                <div key={idx} className="group/item relative flex items-center gap-3 py-2.5 pr-5">
+                                                    <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-primary/10 bg-background">
+                                                        {item.imageUrl ? (
+                                                            // eslint-disable-next-line @next/next/no-img-element
+                                                            <img
+                                                                src={item.imageUrl}
+                                                                alt={item.name}
+                                                                className="h-full w-full object-cover"
+                                                            />
+                                                        ) : (
+                                                            <span className="text-xl">☕</span>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="flex-1 overflow-hidden">
+                                                        <h5 className="truncate text-xs font-bold text-text">
+                                                            {item.name}
+                                                        </h5>
+                                                        <p className="text-[11px] font-semibold text-text/60">
+                                                            Size {item.size} × {item.quantity}
+                                                        </p>
+
+                                                        {/* Hiển thị Topping nếu có */}
+                                                        {item.toppings && item.toppings.length > 0 && (
+                                                            <p className="truncate text-[10px] text-text/50">
+                                                                + {item.toppings.map((t) => (typeof t === 'string' ? t : t.name)).join(', ')}
+                                                            </p>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Tổng giá riêng cho từng dòng nhóm món */}
+                                                    <div className="text-right">
+                                                        <span className="text-xs font-black text-primary">
+                                                            {(item.lineTotal || (item.unitPrice ?? 0) * item.quantity || 0).toLocaleString('vi-VN')}đ
+                                                        </span>
+                                                    </div>
+
+                                                    {/* FIX: nút "x" xóa sản phẩm khỏi giỏ hàng */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            e.stopPropagation();
+                                                            removeItem(idx);
+                                                        }}
+                                                        aria-label="Xóa sản phẩm"
+                                                        className="absolute right-0 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full text-text/40 transition-colors hover:bg-red-50 hover:text-red-500"
+                                                    >
+                                                        ×
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {/* Phần chân Popover: Tổng tiền & Nút thanh toán */}
+                                        <div className="border-t border-primary/10 pt-3">
+                                            <div className="flex items-center justify-between text-xs font-bold text-text mb-3">
+                                                <span>Tổng tiền:</span>
+                                                <span className="text-sm font-black text-primary">
+                                                    {cartTotalPrice.toLocaleString('vi-VN')}đ
+                                                </span>
+                                            </div>
+
+                                            <button
+                                                onClick={() => router.push('/cart')}
+                                                className="w-full rounded-full bg-primary py-2 text-center text-xs font-bold text-white shadow-sm transition-colors hover:bg-primary-hover"
+                                            >
+                                                Thanh toán
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        )}
+                    </div>
 
                     {user ? (
                         <span className="text-base font-semibold text-text">{user.email}</span>

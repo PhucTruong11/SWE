@@ -6,14 +6,15 @@ import { ProductCard } from '@/components/product/ProductCard';
 import { CATEGORIES } from '@/components/layout/Header'; // sửa lại đúng đường dẫn nếu khác
 
 export function AllDrinksScroll() {
-    const { data: products, isLoading, isError } = useProducts();
     const searchParams = useSearchParams();
     const categorySlug = searchParams.get('category');
 
-    // Lọc sản phẩm theo đúng field "category" trong schema.prisma (phin, tra, freeze, phindi, espresso, other)
-    const filteredProducts = categorySlug
-        ? products?.filter((p) => p.category === categorySlug)
-        : products;
+    // FIX: để backend lọc sẵn qua GET /products?category=... (controller đã hỗ trợ),
+    // không tải hết sản phẩm về rồi lọc ở client nữa. queryKey trong useProducts có chứa params
+    // nên mỗi category được cache riêng.
+    const { data: filteredProducts, isLoading, isError } = useProducts({
+        category: categorySlug ?? undefined,
+    });
 
     const activeLabel = CATEGORIES.find((c) => c.slug === categorySlug)?.label;
 

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { formatVND } from '@/lib/utils';
 import type { Product } from '@/types';
 import { useCartStore, type CartItem } from '@/stores/cart.store';
@@ -12,6 +13,7 @@ interface ProductCardProps {
         price?: number;
     };
     variant?: 'bestseller' | 'compact';
+    priority?: boolean; // Thuộc tính ưu tiên tải ảnh nhanh nếu nằm ở màn hình đầu
 }
 
 function getDisplayPrice(product: ProductCardProps['product']): { rawPrice: number; formattedPrice: string } {
@@ -31,13 +33,11 @@ function getDisplayPrice(product: ProductCardProps['product']): { rawPrice: numb
     return { rawPrice, formattedPrice };
 }
 
-export function ProductCard({ product, variant = 'bestseller' }: ProductCardProps) {
+export function ProductCard({ product, variant = 'bestseller', priority = false }: ProductCardProps) {
     const href = `/product/${product.id}`;
     const { rawPrice, formattedPrice } = getDisplayPrice(product);
 
     const addItemToCart = useCartStore((s) => s.addItem);
-
-    // FIX: state hiển thị thông báo nhỏ "Đã thêm vào giỏ hàng" sau khi bấm nút
     const [showAddedToast, setShowAddedToast] = useState(false);
 
     useEffect(() => {
@@ -46,7 +46,6 @@ export function ProductCard({ product, variant = 'bestseller' }: ProductCardProp
         return () => clearTimeout(timer);
     }, [showAddedToast]);
 
-    // Xử lý thêm nhanh món mặc định vào giỏ hàng khi click nút
     const handleQuickAdd = (e: React.MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
@@ -54,7 +53,6 @@ export function ProductCard({ product, variant = 'bestseller' }: ProductCardProp
         const defaultSize = (product.prices && product.prices.length > 0 ? product.prices[0].size : 'S') as 'S' | 'M' | 'L';
         const validPrice = Number(rawPrice) || 0;
 
-        // FIX: dùng đúng kiểu CartItem thay vì "any" để ESLint/TypeScript không báo lỗi
         const newItem: CartItem = {
             productId: product.id,
             name: product.name,
@@ -65,14 +63,10 @@ export function ProductCard({ product, variant = 'bestseller' }: ProductCardProp
             unitPrice: validPrice,
             quantity: 1,
             lineTotal: validPrice,
-            // FIX: product.imageUrl có thể là "null" (chưa có ảnh) nhưng CartItem chỉ nhận
-            // "string | undefined", nên chuyển null -> undefined bằng toán tử ??
             imageUrl: product.imageUrl ?? undefined,
         };
 
         addItemToCart(newItem);
-
-        // FIX: bật thông báo đã thêm vào giỏ hàng
         setShowAddedToast(true);
     };
 
@@ -84,8 +78,14 @@ export function ProductCard({ product, variant = 'bestseller' }: ProductCardProp
             >
                 <div className="relative h-20 w-20 overflow-hidden rounded-2xl bg-surface shadow-sm transition-all duration-300 group-hover:scale-105 group-hover:shadow-md">
                     {product.imageUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
+                        <Image
+                            src={product.imageUrl}
+                            alt={product.name}
+                            fill
+                            sizes="80px"
+                            priority={priority}
+                            className="object-cover transition-opacity duration-300"
+                        />
                     ) : (
                         <div className="flex h-full w-full items-center justify-center text-2xl">☕</div>
                     )}
@@ -111,24 +111,29 @@ export function ProductCard({ product, variant = 'bestseller' }: ProductCardProp
                 </span>
             )}
 
-            {/* FIX: thông báo nổi khi bấm "Thêm vào giỏ hàng" */}
             {showAddedToast && (
                 <span className="absolute left-1/2 top-2 z-20 -translate-x-1/2 whitespace-nowrap rounded-full bg-green-600 px-3 py-1 text-[11px] font-bold text-white shadow-md animate-in fade-in">
                     ✓ Đã thêm vào giỏ hàng
                 </span>
             )}
 
-            {/* Khung ảnh */}
+            {/* Khung ảnh cố định với Next Image */}
             <div className="relative h-28 w-28 overflow-hidden rounded-full bg-background shadow-inner transition-transform duration-300 ease-in-out group-hover:scale-105">
                 {product.imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
+                    <Image
+                        src={product.imageUrl}
+                        alt={product.name}
+                        fill
+                        sizes="112px"
+                        priority={priority}
+                        loading={priority ? 'eager' : undefined}
+                        className="object-cover transition-opacity duration-300"
+                    />
                 ) : (
                     <div className="flex h-full w-full items-center justify-center text-3xl">☕</div>
                 )}
             </div>
 
-            {/* Thông tin Tên & Giá */}
             <div className="flex w-full flex-col items-center gap-1">
                 <p className="line-clamp-1 text-base font-semibold text-text transition-colors group-hover:text-primary">
                     {product.name}
@@ -136,7 +141,6 @@ export function ProductCard({ product, variant = 'bestseller' }: ProductCardProp
                 <p className="text-sm font-bold text-primary">{formattedPrice}</p>
             </div>
 
-            {/* Nút hành động thêm vào giỏ hàng */}
             <button
                 type="button"
                 onClick={handleQuickAdd}

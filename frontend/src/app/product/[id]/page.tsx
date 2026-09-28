@@ -3,7 +3,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useCartStore } from '@/stores/cart.store';
+import api from '@/lib/api';
+import type { ApiResponse } from '@/types';
 
 interface ProductPrice {
     id: string;
@@ -38,12 +41,9 @@ export default function ProductDetailPage() {
     const [toppingsList, setToppingsList] = useState<Topping[]>([]);
     const [loading, setLoading] = useState(true);
 
-    // State lựa chọn
     const [selectedSize, setSelectedSize] = useState<'S' | 'M' | 'L'>('S');
     const [toppingQuantities, setToppingQuantities] = useState<{ [toppingId: string]: number }>({});
     const [quantity, setQuantity] = useState<number>(1);
-
-    // Modal trạng thái
     const [showSuccessModal, setShowSuccessModal] = useState(false);
 
     useEffect(() => {
@@ -52,28 +52,26 @@ export default function ProductDetailPage() {
         async function fetchData() {
             try {
                 setLoading(true);
-                const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+                // FIX: dùng axios instance `api` (đã có baseURL, withCredentials, xử lý 401)
+                // thay cho fetch() + URL tự ghép (fallback cũ localhost:3000 còn sai port backend).
+                // Gọi song song sản phẩm và topping để giảm thời gian chờ (thay vì chờ lần lượt).
+                const toppingsPromise = api
+                    .get<ApiResponse<Topping[]>>('/products/toppings')
+                    .then((res) => res.data.data)
+                    .catch(() => [] as Topping[]); // lỗi topping không được làm hỏng cả trang
 
-                // Fetch sản phẩm từ Backend NestJS
-                const resProd = await fetch(`${backendUrl}/products/${productId}`);
-                if (!resProd.ok) throw new Error('Không tìm thấy sản phẩm');
-                const jsonProd = await resProd.json();
-                
-                const dataProd: Product = jsonProd.data;
+                const resProd = await api.get<ApiResponse<Product>>(`/products/${productId}`);
+                const dataProd: Product = resProd.data.data;
                 setProduct(dataProd);
 
                 if (dataProd?.prices && dataProd.prices.length > 0) {
                     setSelectedSize(dataProd.prices[0].size);
                 }
 
-                // Fetch toppings nếu sản phẩm cho phép
                 if (dataProd?.allowToppings) {
-                    const resTop = await fetch(`${backendUrl}/products/toppings`);
-                    if (resTop.ok) {
-                        const jsonTop = await resTop.json();
-                        if (Array.isArray(jsonTop.data)) {
-                            setToppingsList(jsonTop.data);
-                        }
+                    const toppings = await toppingsPromise;
+                    if (Array.isArray(toppings)) {
+                        setToppingsList(toppings);
                     }
                 }
             } catch (err) {
@@ -105,7 +103,6 @@ export default function ProductDetailPage() {
         );
     }
 
-    // TÍNH TOÁN GIÁ TẠM TÍNH AN TOÀN
     const currentPriceObj = product.prices?.find((p) => p.size === selectedSize) || product.prices?.[0];
     const basePrice = currentPriceObj ? Number(currentPriceObj.price) || 0 : 0;
 
@@ -117,7 +114,6 @@ export default function ProductDetailPage() {
     const singleUnitPrice = basePrice + totalToppingPrice;
     const grandTotal = singleUnitPrice * (quantity || 1);
 
-    // Xử lý nút bấm tăng/giảm Topping
     const handleToppingQtyChange = (topId: string, delta: number) => {
         setToppingQuantities((prev) => {
             const current = prev[topId] || 0;
@@ -126,9 +122,7 @@ export default function ProductDetailPage() {
         });
     };
 
-    // Thêm vào giỏ hàng
     const handleAddToCart = () => {
-        // FIX: bỏ hẳn tên biến key không dùng tới (thay vì đặt tên "_") để ESLint hết cảnh báo unused var
         const selectedToppingsSummary = Object.entries(toppingQuantities)
             .filter(([, qty]) => qty > 0)
             .map(([topId, qty]) => {
@@ -163,7 +157,6 @@ export default function ProductDetailPage() {
 
     return (
         <main className="container mx-auto max-w-5xl px-4 py-8">
-            {/* Breadcrumb */}
             <nav className="mb-6 flex items-center gap-2 text-base text-text/60">
                 <Link href="/" className="transition-colors hover:text-primary">
                     Trang chủ
@@ -180,19 +173,24 @@ export default function ProductDetailPage() {
             </nav>
 
             <div className="grid grid-cols-1 items-start gap-10 md:grid-cols-2">
-                {/* Ảnh sản phẩm */}
+                {/* Ảnh sản phẩm chính */}
                 <div className="flex justify-center rounded-3xl border border-primary/15 bg-surface p-8 shadow-sm">
                     <div className="relative flex h-80 w-80 items-center justify-center overflow-hidden rounded-full bg-background shadow-inner">
                         {product.imageUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
+                            <Image
+                                src={product.imageUrl}
+                                alt={product.name}
+                                fill
+                                priority
+                                sizes="320px"
+                                className="object-cover"
+                            />
                         ) : (
                             <span className="text-7xl">☕</span>
                         )}
                     </div>
                 </div>
 
-                {/* Thông tin & Tùy chọn */}
                 <div className="flex flex-col gap-5">
                     <div>
                         <h1 className="text-3xl font-extrabold text-text">{product.name}</h1>
@@ -334,7 +332,6 @@ export default function ProductDetailPage() {
                         )
                     )}
 
-                    {/* Số lượng ly */}
                     <div className="flex items-center justify-between py-1">
                         <span className="text-sm font-bold text-text">Số lượng ly:</span>
                         <div className="flex items-center gap-3 rounded-2xl border border-primary/20 bg-surface p-1.5 shadow-sm">
@@ -377,7 +374,6 @@ export default function ProductDetailPage() {
                         </div>
                     </div>
 
-                    {/* Tổng tiền & Nút Thêm vào giỏ */}
                     <div className="flex items-center justify-between gap-4 rounded-2xl border border-primary/20 bg-primary/10 p-5">
                         <div>
                             <p className="text-xs font-semibold text-text/70">Tổng tiền tạm tính:</p>
@@ -397,7 +393,7 @@ export default function ProductDetailPage() {
                 </div>
             </div>
 
-            {/* MINI MODAL THÔNG BÁO THÊM GIỎ HÀNG THÀNH CÔNG */}
+            {/* Modal thông báo */}
             {showSuccessModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
                     <div className="w-full max-w-md overflow-hidden rounded-2xl bg-surface shadow-2xl border border-primary/20 transition-all">
@@ -416,10 +412,15 @@ export default function ProductDetailPage() {
 
                         <div className="p-5">
                             <div className="flex items-center gap-4 pb-4 border-b border-primary/10">
-                                <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl bg-background border border-primary/15 flex items-center justify-center">
+                                <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl bg-background border border-primary/15 flex items-center justify-center">
                                     {product.imageUrl ? (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
+                                        <Image
+                                            src={product.imageUrl}
+                                            alt={product.name}
+                                            fill
+                                            sizes="64px"
+                                            className="object-cover"
+                                        />
                                     ) : (
                                         <span className="text-2xl">☕</span>
                                     )}

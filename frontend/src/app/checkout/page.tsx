@@ -1,41 +1,33 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useCartStore } from '@/stores/cart.store';
+import api from '@/lib/api';
 import {
   ReceiptInvoice,
   CountdownTimer,
-  PaymentMethods,
+  CheckoutMethods,
   OrderSummary,
   EmptyCheckout,
   type ReceiptData,
   type CardFormData,
-} from '@/components/payment';
-
-function generatePaymentIds(method: 'EWALLET' | 'CARD', now: Date) {
-  const datePrefix = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}`;
-  const uniqueSuffix = now.getTime().toString().slice(-6);
-
-  return {
-    invoiceNo: `BL-${datePrefix}-${uniqueSuffix}`,
-    paymentRef: `GW-${method}-${uniqueSuffix}`,
-    orderId: `ORD-${uniqueSuffix}`,
-  };
-}
+  type CardFormErrors,
+} from '@/components/checkout';
 
 export default function CheckoutPage() {
-  const { items, clearCart } = useCartStore();
+  const { items, clearCart, appliedPromo } = useCartStore();
 
   // Phương thức thanh toán: EWALLET (MoMo) | CARD (Thẻ ngân hàng)
   const [method, setMethod] = useState<'EWALLET' | 'CARD'>('EWALLET');
 
-  // Thông tin form thẻ ngân hàng
+  // Thông tin form thẻ ngân hàng (bắt đầu trống, dùng nút "Điền thẻ mẫu" khi cần test)
   const [cardInfo, setCardInfo] = useState<CardFormData>({
-    cardNumber: '9704 2200 8888 6666',
-    cardHolder: 'NGUYEN VAN A',
-    expiry: '12/28',
-    cvv: '888',
+    cardNumber: '',
+    cardHolder: '',
+    expiry: '',
+    cvv: '',
   });
+  const [cardErrors, setCardErrors] = useState<CardFormErrors>({});
 
   // Đồng hồ đếm ngược 3 phút (180 giây)
   const [timeLeft, setTimeLeft] = useState(180);
@@ -57,14 +49,87 @@ export default function CheckoutPage() {
     return () => clearInterval(timer);
   }, [isExpired]);
 
-  // Tính toán số tiền thực tế từ giỏ hàng
-  const finalTotal = items.reduce((sum, item) => sum + item.lineTotal, 0);
+  // Tính toán số tiền thực tế từ giỏ hàng kèm giảm giá Voucher
+  const subtotal = items.reduce((sum, item) => sum + item.lineTotal, 0);
+  const discountAmount = appliedPromo ? appliedPromo.discount : 0;
+  const finalTotal = Math.max(0, subtotal - discountAmount);
   const pointsEarned = Math.floor(finalTotal / 1000); // 1.000đ = 1 điểm
 
-  // Xử lý thanh toán và Xuất Hóa Đơn
-  const handlePayment = async () => {
+  // Kiểm tra tính hợp lệ của Form thẻ ngân hàng
+  const validateCardForm = (): boolean => {
+    const errors: CardFormErrors = {};
+    const cleanNumber = cardInfo.cardNumber.replace(/\s+/g, '');
+
+    if (!cleanNumber) {
+      errors.cardNumber = 'Vui lòng nhập số thẻ ngân hàng.';
+    } else if (cleanNumber.length !== 16) {
+      errors.cardNumber = 'Số thẻ không hợp lệ (cần đúng 16 chữ số).';
+    }
+
+    if (!cardInfo.cardHolder.trim()) {
+      errors.cardHolder = 'Vui lòng nhập họ tên chủ thẻ.';
+    }
+
+    if (!cardInfo.expiry.trim()) {
+      errors.expiry = 'Vui lòng nhập ngày hết hạn.';
+    } else if (!/^(0[1-9]|1[0-2])\/\d{2}$/.test(cardInfo.expiry.trim())) {
+      errors.expiry = 'Định dạng MM/YY không đúng (Ví dụ: 12/28).';
+    }
+
+    if (!cardInfo.cvv.trim()) {
+      errors.cvv = 'Vui lòng nhập mã bảo mật CVV.';
+    } else if (cardInfo.cvv.trim().length < 3) {
+      errors.cvv = 'Mã CVV phải có từ 3 đến 4 chữ số.';
+    }
+
+    setCardErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // Làm mới đơn hàng khi hết hạn (Gia hạn thêm 3 phút)
+  const handleRenewOrder = () => {
+    setTimeLeft(180);
+    setErrorMessage(null);
+  };
+
+  // Điền thẻ mẫu Demo
+  const handleFillDemoCard = () => {
+    setCardInfo({
+      cardNumber: '9704 2200 8888 6666',
+      cardHolder: 'NGUYEN VAN A',
+      expiry: '12/28',
+      cvv: '888',
+    });
+    setCardErrors({});
+    setErrorMessage(null);
+  };
+
+  // Xóa trắng form thẻ
+  const handleClearCard = () => {
+    setCardInfo({
+      cardNumber: '',
+      cardHolder: '',
+      expiry: '',
+      cvv: '',
+    });
+    setCardErrors({});
+  };
+
+  // Cập nhật thông tin thẻ
+  const handleCardInfoChange = (data: CardFormData) => {
+    setCardInfo(data);
+    if (Object.keys(cardErrors).length > 0) {
+      setCardErrors({});
+    }
+    if (errorMessage) {
+      setErrorMessage(null);
+    }
+  };
+
+  // Xử lý tạo đơn hàng và thanh toán (Checkout Flow)
+  const handleCheckout = async () => {
     if (isExpired) {
-      setErrorMessage('Đơn hàng đã quá hạn thanh toán (quá 3 phút). Vui lòng đặt lại đơn mới.');
+      setErrorMessage('Đơn hàng đã quá hạn thanh toán. Vui lòng bấm "Làm mới đơn hàng" để tiếp tục.');
       return;
     }
 
@@ -73,22 +138,73 @@ export default function CheckoutPage() {
       return;
     }
 
+    // Nếu chọn thanh toán bằng thẻ, kiểm tra thông tin thẻ trước
+    if (method === 'CARD') {
+      const isValid = validateCardForm();
+      if (!isValid) {
+        setErrorMessage('Thông tin thẻ chưa hợp lệ. Vui lòng kiểm tra các trường màu đỏ bên dưới.');
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     setErrorMessage(null);
 
     try {
-      // Giả lập độ trễ giao dịch ngân hàng
-      await new Promise((r) => setTimeout(r, 700));
+      // 1. Gửi request tạo Order lên Backend: POST /api/orders
+      const orderPayload = {
+        items: items.map((item) => ({
+          productId: item.productId,
+          size: item.size,
+          qty: item.quantity,
+          toppings: item.toppings?.map((t) => t.name) || [],
+          lineTotal: item.lineTotal,
+        })),
+        promoCode: appliedPromo?.code,
+      };
+
+      const orderRes = await api.post('/orders', orderPayload);
+      const createdOrder = orderRes.data.data;
+
+      if (!createdOrder?.id) {
+        throw new Error('Không thể khởi tạo đơn hàng từ máy chủ.');
+      }
+
+      // 2. Tạo Idempotency-Key chống thanh toán trùng lặp
+      const idempotencyKey =
+        typeof crypto !== 'undefined' && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `checkout-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+
+      // 3. Gửi request xử lý thanh toán: POST /api/checkout
+      const paymentRes = await api.post(
+        '/checkout',
+        {
+          orderId: createdOrder.id,
+          method,
+          promoCode: appliedPromo?.code,
+        },
+        {
+          headers: {
+            'idempotency-key': idempotencyKey,
+          },
+        },
+      );
+
+      const paymentData = paymentRes.data;
+      if (!paymentData.success && !paymentData.isDuplicate) {
+        throw new Error(paymentData.message || 'Giao dịch thanh toán không thành công.');
+      }
 
       const now = new Date();
-      const { invoiceNo, paymentRef, orderId } = generatePaymentIds(method, now);
+      const datePrefix = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}`;
 
-      // Xuất hóa đơn ra màn hình
+      // 4. Xuất hóa đơn điện tử thực tế từ dữ liệu trả về của Server
       setReceiptData({
-        orderId,
-        invoiceNo,
-        paymentId: paymentRef,
-        paidAt: now.toLocaleString('vi-VN', {
+        orderId: createdOrder.id,
+        invoiceNo: `BL-${datePrefix}-${createdOrder.id.slice(-6).toUpperCase()}`,
+        paymentId: paymentData.payment?.id || `PAY-${createdOrder.id.slice(-6).toUpperCase()}`,
+        paidAt: new Date(paymentData.payment?.createdAt || now).toLocaleString('vi-VN', {
           hour: '2-digit',
           minute: '2-digit',
           second: '2-digit',
@@ -97,15 +213,15 @@ export default function CheckoutPage() {
           year: 'numeric',
         }),
         items,
-        subtotal: finalTotal,
-        discount: 0,
-        promoCode: null,
-        finalTotal,
-        pointsEarned,
+        subtotal,
+        discount: discountAmount,
+        promoCode: appliedPromo?.code || createdOrder.promoCode || null,
+        finalTotal: paymentData.payment?.amount ?? finalTotal,
+        pointsEarned: paymentData.pointsEarned ?? Math.floor(finalTotal / 1000),
         method,
       });
 
-      // Clear giỏ hàng sau khi hoàn tất
+      // 5. Dọn dẹp giỏ hàng sau khi hoàn tất
       clearCart();
     } catch (err: unknown) {
       const message =
@@ -120,7 +236,9 @@ export default function CheckoutPage() {
         'message' in err.response.data &&
         typeof err.response.data.message === 'string'
           ? err.response.data.message
-          : 'Có lỗi xảy ra khi thanh toán. Vui lòng thử lại!';
+          : err instanceof Error
+          ? err.message
+          : 'Có lỗi xảy ra trong quá trình thanh toán đơn hàng. Vui lòng thử lại!';
 
       setErrorMessage(message);
     } finally {
@@ -151,11 +269,15 @@ export default function CheckoutPage() {
     return <EmptyCheckout />;
   }
 
-  // 3. GIAO DIỆN THANH TOÁN CHÍNH (CHECKOUT & PAYMENT)
+  // 3. GIAO DIỆN CHECKOUT CHÍNH
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 px-4 py-6 pb-20 lg:px-8">
-      {/* Đồng hồ đếm ngược 3 phút */}
-      <CountdownTimer timeLeft={timeLeft} isExpired={isExpired} />
+      {/* Đồng hồ đếm ngược 3 phút kèm nút Gia hạn khi hết hạn */}
+      <CountdownTimer
+        timeLeft={timeLeft}
+        isExpired={isExpired}
+        onRenew={handleRenewOrder}
+      />
 
       {errorMessage && (
         <div className="rounded-xl bg-red-50 p-4 text-sm font-medium text-red-700 border border-red-200">
@@ -166,13 +288,16 @@ export default function CheckoutPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         {/* CỘT TRÁI: Phương thức thanh toán (7 cols) */}
         <div className="flex flex-col gap-6 lg:col-span-7">
-          <PaymentMethods
+          <CheckoutMethods
             method={method}
             onMethodChange={setMethod}
             finalTotal={finalTotal}
             qrUrl={vietQrUrl}
             cardInfo={cardInfo}
-            onCardInfoChange={setCardInfo}
+            onCardInfoChange={handleCardInfoChange}
+            cardErrors={cardErrors}
+            onFillDemoCard={handleFillDemoCard}
+            onClearCard={handleClearCard}
           />
         </div>
 
@@ -180,11 +305,14 @@ export default function CheckoutPage() {
         <div className="flex flex-col gap-6 lg:col-span-5">
           <OrderSummary
             items={items}
+            subtotal={subtotal}
             finalTotal={finalTotal}
             pointsEarned={pointsEarned}
             isSubmitting={isSubmitting}
             isExpired={isExpired}
-            onPayment={handlePayment}
+            onCheckout={handleCheckout}
+            onPayment={handleCheckout}
+            onRenew={handleRenewOrder}
           />
         </div>
       </div>

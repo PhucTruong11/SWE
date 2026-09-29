@@ -7,7 +7,7 @@ import { PrismaModule } from './modules/prisma/prisma.module.js';
 import { ProductsModule } from './modules/products/products.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { OrdersModule } from './modules/orders/orders.module.js';
-import { PaymentsModule } from './modules/payments/payments.module.js';
+import { CheckoutModule } from './modules/checkout/checkout.module.js';
 
 @Module({
   imports: [
@@ -20,7 +20,7 @@ import { PaymentsModule } from './modules/payments/payments.module.js';
     ProductsModule,
     AuthModule,
     OrdersModule,
-    PaymentsModule,
+    CheckoutModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -12,6 +12,14 @@ export class OrdersService {
             throw new BadRequestException('Giỏ hàng không được rỗng');
         }
 
+        // Tự động gán user hợp lệ trong DB nếu là khách chưa đăng nhập (guest)
+        if (userId === 'guest-user-placeholder') {
+            const defaultUser = await this.prisma.user.findFirst();
+            if (defaultUser) {
+                userId = defaultUser.id;
+            }
+        }
+
         // Bước 1: Lấy thông tin + giá thực tế của từng sản phẩm từ Database
         // (Mục đích: Không tin giá Frontend gửi lên, phải tự tính lại để chống gian lận)
         const productIds = dto.items.map((item) => item.productId);

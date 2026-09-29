@@ -21,8 +21,85 @@ export interface CartItem {
     imageUrl?: string;
 }
 
+export interface AppliedPromo {
+    code: string;
+    discount: number;
+    description: string;
+}
+
+// Hàm kiểm tra và tính toán giảm giá voucher chuẩn theo backend
+export function calculateVoucherDiscount(code: string, subtotal: number): {
+    valid: boolean;
+    discount: number;
+    message: string;
+    description: string;
+} {
+    const clean = code.trim().toUpperCase();
+    if (!clean) {
+        return { valid: false, discount: 0, message: 'Vui lòng nhập mã giảm giá', description: '' };
+    }
+    if (clean === 'CHAOBAN') {
+        if (subtotal < 40000) {
+            return {
+                valid: false,
+                discount: 0,
+                message: 'Mã CHAOBAN yêu cầu đơn hàng từ 40.000đ trở lên.',
+                description: 'Giảm 15.000đ cho đơn từ 40.000đ',
+            };
+        }
+        return {
+            valid: true,
+            discount: 15000,
+            message: 'Áp dụng mã CHAOBAN thành công (-15.000đ)',
+            description: 'Giảm 15.000đ cho đơn từ 40.000đ',
+        };
+    }
+    if (clean === 'BREW10') {
+        const disc = Math.min(25000, Math.floor(subtotal * 0.1));
+        return {
+            valid: true,
+            discount: disc,
+            message: `Áp dụng mã BREW10 thành công (-${disc.toLocaleString('vi-VN')}đ)`,
+            description: 'Giảm 10% (tối đa 25.000đ)',
+        };
+    }
+    if (clean === 'FREESHIP') {
+        if (subtotal < 30000) {
+            return {
+                valid: false,
+                discount: 0,
+                message: 'Mã FREESHIP yêu cầu đơn hàng từ 30.000đ trở lên.',
+                description: 'Giảm 10.000đ',
+            };
+        }
+        return {
+            valid: true,
+            discount: 10000,
+            message: 'Áp dụng mã FREESHIP thành công (-10.000đ)',
+            description: 'Giảm 10.000đ cho đơn từ 30.000đ',
+        };
+    }
+    if (clean === 'TRIAN') {
+        return {
+            valid: true,
+            discount: subtotal,
+            message: 'Áp dụng mã TRIAN thành công (Miễn phí 100%)',
+            description: 'Tặng 1 ly nước miễn phí (100%)',
+        };
+    }
+    return {
+        valid: false,
+        discount: 0,
+        message: `Mã giảm giá "${clean}" không tồn tại hoặc đã hết hạn.`,
+        description: '',
+    };
+}
+
 interface CartState {
     items: CartItem[];
+    appliedPromo: AppliedPromo | null;
+    applyPromo: (promo: AppliedPromo) => void;
+    removePromo: () => void;
     addItem: (item: CartItem) => void;
     removeItem: (index: number) => void;
     updateQuantity: (index: number, quantity: number) => void;
@@ -41,6 +118,9 @@ export const useCartStore = create<CartState>()(
     persist(
         (set, get) => ({
             items: [],
+            appliedPromo: null,
+            applyPromo: (promo: AppliedPromo) => set({ appliedPromo: promo }),
+            removePromo: () => set({ appliedPromo: null }),
 
             addItem: (newItem: CartItem) => {
                 const currentItems = get().items;
@@ -119,7 +199,7 @@ export const useCartStore = create<CartState>()(
                 });
             },
 
-            clearCart: () => set({ items: [] }),
+            clearCart: () => set({ items: [], appliedPromo: null }),
 
             totalItems: () =>
                 get().items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0),

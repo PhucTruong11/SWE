@@ -77,11 +77,11 @@ async function callMockGateway(
 }
 
 // ============================================================
-// PaymentsService - Toàn bộ logic nghiệp vụ thanh toán
+// CheckoutService - Toàn bộ logic nghiệp vụ thanh toán
 // ============================================================
 @Injectable()
-export class PaymentsService {
-  private readonly logger = new Logger(PaymentsService.name);
+export class CheckoutService {
+  private readonly logger = new Logger(CheckoutService.name);
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -157,9 +157,9 @@ export class PaymentsService {
   }
 
   // ----------------------------------------------------------
-  // processPayment: Hàm chính xử lý thanh toán
+  // processCheckout: Hàm chính xử lý thanh toán
   // ----------------------------------------------------------
-  async processPayment(
+  async processCheckout(
     orderId: string,
     method: PaymentMethod,
     idempotencyKey: string,
@@ -349,9 +349,9 @@ export class PaymentsService {
   }
 
   // ----------------------------------------------------------
-  // getPaymentsByOrder: Lấy lịch sử thanh toán của 1 đơn hàng
+  // getCheckoutsByOrder: Lấy lịch sử thanh toán của 1 đơn hàng
   // ----------------------------------------------------------
-  async getPaymentsByOrder(orderId: string) {
+  async getCheckoutsByOrder(orderId: string) {
     return this.prisma.payment.findMany({
       where: { orderId },
       orderBy: { createdAt: 'desc' },
@@ -359,9 +359,9 @@ export class PaymentsService {
   }
 
   // ----------------------------------------------------------
-  // getOrderPaymentStatus: Lấy thông tin thanh toán & đếm ngược thời gian còn lại (GUI cần)
+  // getOrderCheckoutStatus: Lấy thông tin thanh toán & đếm ngược thời gian còn lại (GUI cần)
   // ----------------------------------------------------------
-  async getOrderPaymentStatus(orderId: string) {
+  async getOrderCheckoutStatus(orderId: string) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
       include: { payments: true },

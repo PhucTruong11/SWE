@@ -9,32 +9,32 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { PaymentsService } from './payments.service.js';
-import { CreatePaymentDto } from './dto/create-payment.dto.js';
+import { CheckoutService } from './checkout.service.js';
+import { CreateCheckoutDto } from './dto/create-checkout.dto.js';
 import { ApplyVoucherDto } from './dto/apply-voucher.dto.js';
 
-@Controller('payments')
-export class PaymentsController {
-  constructor(private readonly paymentsService: PaymentsService) {}
+@Controller(['checkout', 'payments'])
+export class CheckoutController {
+  constructor(private readonly checkoutService: CheckoutService) {}
 
   // ----------------------------------------------------------
-  // POST /api/payments/apply-voucher
+  // POST /api/checkout/apply-voucher
   // Áp dụng mã giảm giá cho đơn hàng (cho GUI gọi kiểm tra trước)
   // ----------------------------------------------------------
   @Post('apply-voucher')
   @HttpCode(HttpStatus.OK)
   async applyVoucher(@Body() dto: ApplyVoucherDto) {
-    return this.paymentsService.applyVoucher(dto.orderId, dto.promoCode);
+    return this.checkoutService.applyVoucher(dto.orderId, dto.promoCode);
   }
 
   // ----------------------------------------------------------
-  // POST /api/payments
+  // POST /api/checkout
   // Xử lý thanh toán đơn hàng
   // ----------------------------------------------------------
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  async processPayment(
-    @Body() dto: CreatePaymentDto,
+  async processCheckout(
+    @Body() dto: CreateCheckoutDto,
     @Headers('idempotency-key') idempotencyKey: string,
   ) {
     // Bắt buộc phải có Idempotency-Key để chống thanh toán trùng lặp
@@ -45,7 +45,7 @@ export class PaymentsController {
       );
     }
 
-    return this.paymentsService.processPayment(
+    return this.checkoutService.processCheckout(
       dto.orderId,
       dto.method,
       idempotencyKey,
@@ -54,20 +54,20 @@ export class PaymentsController {
   }
 
   // ----------------------------------------------------------
-  // GET /api/payments/order/:orderId
+  // GET /api/checkout/order/:orderId
   // Lấy lịch sử thanh toán của 1 đơn hàng
   // ----------------------------------------------------------
   @Get('order/:orderId')
-  async getPaymentsByOrder(@Param('orderId') orderId: string) {
-    return this.paymentsService.getPaymentsByOrder(orderId);
+  async getCheckoutsByOrder(@Param('orderId') orderId: string) {
+    return this.checkoutService.getCheckoutsByOrder(orderId);
   }
 
   // ----------------------------------------------------------
-  // GET /api/payments/status/:orderId
+  // GET /api/checkout/status/:orderId
   // Lấy trạng thái đơn hàng & đếm ngược số giây còn lại trước khi hết hạn (cho GUI)
   // ----------------------------------------------------------
   @Get('status/:orderId')
-  async getOrderPaymentStatus(@Param('orderId') orderId: string) {
-    return this.paymentsService.getOrderPaymentStatus(orderId);
+  async getOrderCheckoutStatus(@Param('orderId') orderId: string) {
+    return this.checkoutService.getOrderCheckoutStatus(orderId);
   }
 }

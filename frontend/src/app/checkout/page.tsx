@@ -4,39 +4,13 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useCartStore } from '@/stores/cart.store';
 import { formatVND } from '@/lib/utils';
-import type { CartItem } from '@/types';
 import {
   ReceiptInvoice,
   CountdownTimer,
   PaymentMethods,
-  VoucherSection,
   type ReceiptData,
   type CardFormData,
 } from '@/components/payment';
-
-// Món demo nếu người dùng truy cập trực tiếp trang thanh toán khi giỏ rỗng
-const DEFAULT_DEMO_ITEMS: CartItem[] = [
-  {
-    productId: 'demo-1',
-    name: 'Phin Sữa Đá Đậm Đà',
-    size: 'M',
-    basePrice: 45000,
-    toppings: [{ id: 'top-1', name: 'Trân châu hoàng kim', price: 0, quantity: 1 }],
-    unitPrice: 45000,
-    quantity: 1,
-    lineTotal: 45000,
-  },
-  {
-    productId: 'demo-2',
-    name: 'Trà Sen Vàng Hạt Sen',
-    size: 'L',
-    basePrice: 55000,
-    toppings: [{ id: 'top-2', name: 'Thạch củ năng', price: 0, quantity: 1 }],
-    unitPrice: 55000,
-    quantity: 1,
-    lineTotal: 55000,
-  },
-];
 
 function generatePaymentIds(method: 'EWALLET' | 'CARD', now: Date) {
   const datePrefix = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}`;
@@ -50,23 +24,10 @@ function generatePaymentIds(method: 'EWALLET' | 'CARD', now: Date) {
 }
 
 export default function CheckoutPage() {
-  const { items: cartItems, clearCart } = useCartStore();
-
-  // Sử dụng items từ giỏ hàng hoặc fallback sang items demo
-  const items = cartItems.length > 0 ? cartItems : DEFAULT_DEMO_ITEMS;
-  const isUsingDemo = cartItems.length === 0;
+  const { items, clearCart } = useCartStore();
 
   // Phương thức thanh toán: EWALLET (MoMo) | CARD (Thẻ ngân hàng)
   const [method, setMethod] = useState<'EWALLET' | 'CARD'>('EWALLET');
-
-  // Trạng thái Voucher
-  const [voucherInput, setVoucherInput] = useState('');
-  const [appliedVoucher, setAppliedVoucher] = useState<{
-    code: string;
-    discount: number;
-    message: string;
-  } | null>(null);
-  const [voucherError, setVoucherError] = useState<string | null>(null);
 
   // Thông tin form thẻ ngân hàng
   const [cardInfo, setCardInfo] = useState<CardFormData>({
@@ -98,70 +59,19 @@ export default function CheckoutPage() {
     return () => clearInterval(timer);
   }, [isExpired]);
 
-  // Tính toán số tiền
-  const subtotal = items.reduce((sum, item) => sum + item.lineTotal, 0);
-  const discountAmount = appliedVoucher ? appliedVoucher.discount : 0;
-  const finalTotal = Math.max(0, subtotal - discountAmount);
+  // Tính toán số tiền thực tế từ giỏ hàng
+  const finalTotal = items.reduce((sum, item) => sum + item.lineTotal, 0);
   const pointsEarned = Math.floor(finalTotal / 1000); // 1.000đ = 1 điểm
-
-  // Áp dụng voucher
-  const handleApplyVoucher = (codeToApply?: string) => {
-    const code = (codeToApply || voucherInput).trim().toUpperCase();
-    setVoucherError(null);
-
-    if (!code) {
-      setVoucherError('Vui lòng nhập mã giảm giá');
-      return;
-    }
-
-    if (code === 'CHAOBAN') {
-      if (subtotal < 40000) {
-        setVoucherError('Mã CHAOBAN yêu cầu đơn hàng từ 40.000đ trở lên');
-        return;
-      }
-      setAppliedVoucher({
-        code: 'CHAOBAN',
-        discount: 15000,
-        message: 'Đã giảm 15.000đ từ mã CHAOBAN',
-      });
-      setVoucherInput('CHAOBAN');
-    } else if (code === 'BREW10') {
-      const disc = Math.min(25000, Math.floor(subtotal * 0.1));
-      setAppliedVoucher({
-        code: 'BREW10',
-        discount: disc,
-        message: `Đã giảm 10% (${formatVND(disc)}) từ mã BREW10`,
-      });
-      setVoucherInput('BREW10');
-    } else if (code === 'FREESHIP') {
-      setAppliedVoucher({
-        code: 'FREESHIP',
-        discount: 10000,
-        message: 'Đã giảm 10.000đ từ mã FREESHIP',
-      });
-      setVoucherInput('FREESHIP');
-    } else if (code === 'TRIAN') {
-      setAppliedVoucher({
-        code: 'TRIAN',
-        discount: subtotal,
-        message: 'Đã áp mã tri ân giảm 100% (Miễn phí)',
-      });
-      setVoucherInput('TRIAN');
-    } else {
-      setVoucherError(`Mã giảm giá "${code}" không tồn tại hoặc đã hết hạn`);
-    }
-  };
-
-  const handleRemoveVoucher = () => {
-    setAppliedVoucher(null);
-    setVoucherInput('');
-    setVoucherError(null);
-  };
 
   // Xử lý thanh toán và Xuất Hóa Đơn
   const handlePayment = async () => {
     if (isExpired) {
       setErrorMessage('Đơn hàng đã quá hạn thanh toán (quá 3 phút). Vui lòng đặt lại đơn mới.');
+      return;
+    }
+
+    if (items.length === 0) {
+      setErrorMessage('Giỏ hàng trống. Vui lòng chọn món trước khi thanh toán.');
       return;
     }
 
@@ -189,9 +99,9 @@ export default function CheckoutPage() {
           year: 'numeric',
         }),
         items,
-        subtotal,
-        discount: discountAmount,
-        promoCode: appliedVoucher ? appliedVoucher.code : null,
+        subtotal: finalTotal,
+        discount: 0,
+        promoCode: null,
         finalTotal,
         pointsEarned,
         method,
@@ -238,23 +148,34 @@ export default function CheckoutPage() {
     );
   }
 
+  // NẾU GIỎ HÀNG TRỐNG → HIỂN THỊ THÔNG BÁO VỀ MENU
+  if (items.length === 0) {
+    return (
+      <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center px-4 py-16 text-center">
+        <div className="rounded-full bg-emerald-50 p-6 text-primary mb-4 text-4xl">
+          ☕
+        </div>
+        <h2 className="text-xl font-bold text-[#1E3932] mb-2">
+          Chưa có món nào để thanh toán
+        </h2>
+        <p className="text-sm text-gray-500 mb-6">
+          Giỏ hàng của bạn đang trống. Vui lòng chọn những thức uống tuyệt ngon từ menu trước khi tiến hành thanh toán nhé!
+        </p>
+        <Link
+          href="/"
+          className="rounded-full bg-primary hover:bg-primary-hover px-6 py-3 font-bold text-white transition-all shadow-md active:scale-95"
+        >
+          Khám phá thực đơn
+        </Link>
+      </main>
+    );
+  }
+
   // GIAO DIỆN THANH TOÁN (CHECKOUT & PAYMENT)
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 px-4 py-6 pb-20 lg:px-8">
       {/* 1. Component Đồng hồ đếm ngược 3 phút */}
       <CountdownTimer timeLeft={timeLeft} isExpired={isExpired} />
-
-      {/* Thông báo nếu đang dùng món mẫu */}
-      {isUsingDemo && (
-        <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-800 border border-amber-200 flex items-center justify-between">
-          <span>
-            💡 <strong>Chế độ thử nghiệm:</strong> Giỏ hàng hiện tại đang trống, hệ thống đang dùng 2 món mẫu để bạn kiểm tra giao diện và tính năng thanh toán.
-          </span>
-          <Link href="/" className="font-bold underline ml-2 shrink-0">
-            Xem Menu
-          </Link>
-        </div>
-      )}
 
       {errorMessage && (
         <div className="rounded-xl bg-red-50 p-4 text-sm font-medium text-red-700 border border-red-200">
@@ -275,7 +196,7 @@ export default function CheckoutPage() {
           />
         </div>
 
-        {/* CỘT PHẢI: Tóm tắt đơn hàng + 3. Component Voucher + Nút xác nhận (5 cols) */}
+        {/* CỘT PHẢI: Tóm tắt đơn hàng + Nút xác nhận (5 cols) */}
         <div className="flex flex-col gap-6 lg:col-span-5">
           <div className="rounded-2xl bg-white p-6 shadow-sm border border-emerald-900/10">
             <h2 className="text-lg font-bold text-[#1E3932] mb-4">
@@ -301,32 +222,15 @@ export default function CheckoutPage() {
               ))}
             </div>
 
-            {/* 3. Component Nhập mã giảm giá Voucher */}
-            <VoucherSection
-              voucherInput={voucherInput}
-              onVoucherInputChange={setVoucherInput}
-              onApplyVoucher={handleApplyVoucher}
-              onRemoveVoucher={handleRemoveVoucher}
-              appliedVoucher={appliedVoucher}
-              voucherError={voucherError}
-            />
-
             {/* Bảng tính tiền chi tiết */}
             <div className="mt-5 space-y-2 border-t border-gray-100 pt-4 text-xs">
               <div className="flex justify-between text-gray-600">
                 <span>Tạm tính:</span>
-                <span className="font-semibold text-gray-900">{formatVND(subtotal)}</span>
+                <span className="font-semibold text-gray-900">{formatVND(finalTotal)}</span>
               </div>
 
-              {discountAmount > 0 && (
-                <div className="flex justify-between text-emerald-700 font-medium">
-                  <span>Mã giảm giá ({appliedVoucher?.code}):</span>
-                  <span>-{formatVND(discountAmount)}</span>
-                </div>
-              )}
-
               <div className="flex justify-between text-emerald-900 pt-1">
-                <span>Tích lũy điểm (1.000đ = 1đ):</span>
+                <span>Tích lũy điểm (1.000đ = 1 điểm):</span>
                 <span className="font-bold">+{pointsEarned} điểm</span>
               </div>
 

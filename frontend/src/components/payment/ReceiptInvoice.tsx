@@ -78,15 +78,17 @@ export function ReceiptInvoice({ data, onReset }: ReceiptInvoiceProps) {
             {data.items.map((item, idx) => (
               <div key={idx} className="py-3 flex items-start justify-between gap-2">
                 <div className="flex-1">
-                  <p className="font-semibold text-[#1E3932]">{item.productName}</p>
+                  <p className="font-semibold text-[#1E3932]">{item.name}</p>
                   <div className="text-xs text-gray-500 mt-0.5">
                     <span className="inline-block rounded bg-emerald-50 px-1.5 py-0.5 font-medium text-emerald-800 mr-2">
                       Size {item.size}
                     </span>
-                    {item.toppings.length > 0 && <span>+ {item.toppings.join(', ')}</span>}
+                    {item.toppings && item.toppings.length > 0 && (
+                      <span>+ {item.toppings.map((t) => (typeof t === 'string' ? t : t.name)).join(', ')}</span>
+                    )}
                   </div>
                 </div>
-                <div className="w-12 text-center text-gray-700 font-medium">x{item.qty}</div>
+                <div className="w-12 text-center text-gray-700 font-medium">x{item.quantity}</div>
                 <div className="w-24 text-right font-semibold text-[#1E3932]">
                   {formatVND(item.lineTotal)}
                 </div>

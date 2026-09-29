@@ -18,22 +18,22 @@ import {
 const DEFAULT_DEMO_ITEMS: CartItem[] = [
   {
     productId: 'demo-1',
-    productName: 'Phin Sữa Đá Đậm Đà',
-    productImage: null,
+    name: 'Phin Sữa Đá Đậm Đà',
     size: 'M',
-    toppings: ['Trân châu hoàng kim'],
-    qty: 1,
+    basePrice: 45000,
+    toppings: [{ id: 'top-1', name: 'Trân châu hoàng kim', price: 0, quantity: 1 }],
     unitPrice: 45000,
+    quantity: 1,
     lineTotal: 45000,
   },
   {
     productId: 'demo-2',
-    productName: 'Trà Sen Vàng Hạt Sen',
-    productImage: null,
+    name: 'Trà Sen Vàng Hạt Sen',
     size: 'L',
-    toppings: ['Thạch củ năng'],
-    qty: 1,
+    basePrice: 55000,
+    toppings: [{ id: 'top-2', name: 'Thạch củ năng', price: 0, quantity: 1 }],
     unitPrice: 55000,
+    quantity: 1,
     lineTotal: 55000,
   },
 ];
@@ -279,7 +279,7 @@ export default function PaymentPage() {
         <div className="flex flex-col gap-6 lg:col-span-5">
           <div className="rounded-2xl bg-white p-6 shadow-sm border border-emerald-900/10">
             <h2 className="text-lg font-bold text-[#1E3932] mb-4">
-              Chi tiết đơn hàng ({items.reduce((s, i) => s + i.qty, 0)} món)
+              Chi tiết đơn hàng ({items.reduce((s, i) => s + (Number(i.quantity) || 1), 0)} món)
             </h2>
 
             {/* Danh sách món tóm tắt */}
@@ -288,10 +288,10 @@ export default function PaymentPage() {
                 <div key={idx} className="py-2.5 flex items-start justify-between text-xs">
                   <div>
                     <span className="font-bold text-[#1E3932]">
-                      {item.qty}x {item.productName}
+                      {item.quantity}x {item.name}
                     </span>
                     <p className="text-gray-500 mt-0.5">
-                      Size {item.size} {item.toppings.length > 0 ? `• ${item.toppings.join(', ')}` : ''}
+                      Size {item.size} {item.toppings && item.toppings.length > 0 ? `• ${item.toppings.map((t) => t.name).join(', ')}` : ''}
                     </p>
                   </div>
                   <span className="font-semibold text-[#1E3932]">

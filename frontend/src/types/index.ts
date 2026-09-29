@@ -26,16 +26,7 @@ export interface ToppingOption {
   price: number; // VND
 }
 
-export interface CartItem {
-  productId: string;
-  productName: string;
-  productImage: string | null;
-  size: 'S' | 'M' | 'L';
-  toppings: string[];
-  qty: number;
-  unitPrice: number; // VND - price after size + toppings
-  lineTotal: number; // VND - unitPrice * qty
-}
+export type { CartItem, CartTopping } from '@/stores/cart.store';
 
 export interface User {
   id: string;

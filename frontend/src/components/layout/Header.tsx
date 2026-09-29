@@ -77,6 +77,7 @@ export function Header() {
     // Nếu store của bạn đặt tên khác (vd removeFromCart), đổi lại đúng tên ở đây
     const removeItem = useCartStore((s) => s.removeItem);
 
+    // Ref bọc quanh nút "Menu" + dropdown, để biết click có nằm trong hay ngoài khu vực này
     const menuRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {

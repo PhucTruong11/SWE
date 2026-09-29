@@ -11,7 +11,6 @@ export function BestSellers() {
             <h2 className="mb-3 text-lg font-bold text-text">Món Bán Chạy</h2>
 
             {isLoading && (
-                // Skeleton loading
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                     {Array.from({ length: 4 }).map((_, i) => (
                         <div key={i} className="h-36 animate-pulse rounded-xl bg-surface" />
@@ -33,8 +32,13 @@ export function BestSellers() {
 
             {products && products.length > 0 && (
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                    {products.map((product) => (
-                        <ProductCard key={product.id} product={product} variant="bestseller" />
+                    {products.map((product, index) => (
+                        <ProductCard
+                            key={product.id}
+                            product={product}
+                            variant="bestseller"
+                            priority={index < 4} // 4 ảnh đầu nằm ở màn hình đầu nên tải ưu tiên
+                        />
                     ))}
                 </div>
             )}

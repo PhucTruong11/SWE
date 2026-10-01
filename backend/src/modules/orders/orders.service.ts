@@ -12,20 +12,29 @@ export class OrdersService {
             throw new BadRequestException('Giỏ hàng không được rỗng');
         }
 
-        // Bước 1: Lấy thông tin + giá thực tế của từng sản phẩm từ Database
-        // (Mục đích: Không tin giá Frontend gửi lên, phải tự tính lại để chống gian lận)
+        // Lấy thông tin + giá thực tế của từng sản phẩm từ Database
         const productIds = dto.items.map((item) => item.productId);
         const products = await this.prisma.product.findMany({
             where: { id: { in: productIds }, isAvailable: true },
             include: { prices: true },
         });
 
-        // Bước 2: Kiểm tra xem tất cả sản phẩm có còn hoạt động không
+        // Kiểm tra xem tất cả sản phẩm có còn hoạt động không
         if (products.length !== productIds.length) {
             throw new BadRequestException('Một số sản phẩm không tồn tại hoặc đã ngừng kinh doanh');
         }
 
-        // Bước 3: Tính lại tổng tiền từng dòng và tổng đơn hàng
+        // Kiểm tra tồn kho đủ số lượng không
+        for (const item of dto.items) {
+            const product = products.find((p) => p.id === item.productId);
+            if (product!.stock < item.qty) {
+                throw new BadRequestException(
+                    `Sản phẩm "${product!.name}" chỉ còn ${product!.stock} phần, không đủ ${item.qty} phần yêu cầu`,
+                );
+            }
+        }
+
+        // Tính lại tổng tiền từng dòng và tổng đơn hàng
         let calculatedTotal = 0;
         const orderItemsData = dto.items.map((item) => {
             const product = products.find((p) => p.id === item.productId);
@@ -37,7 +46,7 @@ export class OrdersService {
                 );
             }
 
-            // Tính thành tiền dòng này: giá size * số lượng
+            // Tính thành tiền
             // Topping giá tính theo snapshot từ Frontend
             const lineTotalFromDb = priceObj.price * item.qty;
             calculatedTotal += lineTotalFromDb;
@@ -51,7 +60,7 @@ export class OrdersService {
             };
         });
 
-        // Bước 4: Lưu đơn hàng vào Database bằng Prisma Transaction
+        // Lưu đơn hàng vào Database bằng Prisma Transaction
         // (Transaction = "làm tất cả hoặc không làm gì" - nếu lỡ lỗi giữa chừng thì hoàn tác hết)
         const order = await this.prisma.$transaction(async (tx) => {
             const newOrder = await tx.order.create({

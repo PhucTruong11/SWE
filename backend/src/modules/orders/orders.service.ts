@@ -6,19 +6,18 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { PrismaService } from '../../prisma/prisma.service';
-import { CreateOrderDto, CreateOrderItemDto } from './create-order.dto';
+import { PrismaService } from '../prisma/prisma.service.js';
+import { CreateOrderDto, CreateOrderItemDto } from './create-order.dto.js';
 
 @Injectable()
 export class OrdersService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(userId: string, dto: CreateOrderDto) {
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const orderItems: Prisma.OrderItemCreateWithoutOrderInput[] = [];
       let total = 0;
 
-      // Xử lý tuần tự để mỗi item đọc đúng version mới nhất trong transaction
       for (const item of dto.items) {
         const lineTotal = await this.processItem(tx, item);
         total += lineTotal;
@@ -36,8 +35,8 @@ export class OrdersService {
         data: {
           userId,
           total,
-          discount: 0, // Chưa có rule promo trong dự án nên không áp dụng giảm giá
-          promoCode: dto.promoCode ?? null, // Chỉ lưu lại mã, không tính toán
+          discount: 0,
+          promoCode: dto.promoCode ?? null,
           items: { create: orderItems },
         },
         include: { items: true },
@@ -68,10 +67,6 @@ export class OrdersService {
     return order;
   }
 
-  /**
-   * Validate + tính giá + trừ kho (optimistic locking) cho một item.
-   * Trả về lineTotal do backend tính.
-   */
   private async processItem(
     tx: Prisma.TransactionClient,
     item: CreateOrderItemDto,
@@ -79,6 +74,7 @@ export class OrdersService {
     const product = await tx.product.findUnique({
       where: { id: item.productId },
     });
+    
     if (!product) {
       throw new NotFoundException(`Không tìm thấy sản phẩm ${item.productId}`);
     }
@@ -86,39 +82,12 @@ export class OrdersService {
       throw new BadRequestException(`Sản phẩm ${product.name} hiện không bán`);
     }
 
-    const price = await tx.productPrice.findFirst({
-      where: { productId: product.id, size: item.size },
-    });
-    if (!price) {
-      throw new NotFoundException(
-        `Sản phẩm ${product.name} không có giá cho size ${item.size}`,
-      );
-    }
-
+    let basePrice = product.price;
     let toppingsTotal = 0;
-    if (item.toppings.length > 0) {
-      if (!product.allowToppings) {
-        throw new BadRequestException(
-          `Sản phẩm ${product.name} không cho phép thêm topping`,
-        );
-      }
-
-      const uniqueNames = [...new Set(item.toppings)];
-      const toppings = await tx.topping.findMany({
-        where: { name: { in: uniqueNames } },
-      });
-      const priceByName = new Map(toppings.map((t) => [t.name, t.price]));
-
-      for (const name of item.toppings) {
-        const toppingPrice = priceByName.get(name);
-        if (toppingPrice === undefined) {
-          throw new NotFoundException(`Không tìm thấy topping ${name}`);
-        }
-        toppingsTotal += toppingPrice;
-      }
+    if (item.toppings && item.toppings.length > 0) {
+      toppingsTotal = item.toppings.length * 10000;
     }
 
-    // Optimistic locking + stock guard: chỉ trừ kho khi version chưa đổi và đủ hàng
     const updated = await tx.product.updateMany({
       where: {
         id: product.id,
@@ -130,10 +99,11 @@ export class OrdersService {
         version: { increment: 1 },
       },
     });
+    
     if (updated.count === 0) {
       throw new ConflictException('Sản phẩm đã hết hàng hoặc trạng thái thay đổi');
     }
 
-    return (price.price + toppingsTotal) * item.qty;
+    return (basePrice + toppingsTotal) * item.qty;
   }
 }

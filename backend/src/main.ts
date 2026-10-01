@@ -10,7 +10,7 @@ async function bootstrap() {
 
   // CORS - cho phép frontend gọi API
   app.enableCors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: process.env.FRONTEND_URL || 'http://localhost:3001',
     credentials: true, // Cho phép gửi cookie (JWT)
   });
 

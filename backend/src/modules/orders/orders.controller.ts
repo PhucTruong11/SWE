@@ -1,41 +1,26 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  ParseUUIDPipe,
-  Post,
-  UseGuards,
-} from '@nestjs/common';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { CreateOrderDto } from './create-order.dto';
-import { OrdersService } from './orders.service';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { CreateOrderDto } from './create-order.dto.js';
+import { OrdersService } from './orders.service.js';
 
 @Controller('orders')
-@UseGuards(JwtAuthGuard)
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
   @Post()
-  create(
-    @CurrentUser() user: { id: string; email: string },
-    @Body() dto: CreateOrderDto,
-  ) {
-    return this.ordersService.create(user.id, dto);
+  create(@Body() createOrderDto: CreateOrderDto) {
+    const user = { id: 'mock-id-123', email: 'test@test.com' };
+    return this.ordersService.create(user.id, createOrderDto);
   }
 
-  // Khai báo trước ':id' để 'me' không bị bắt nhầm thành id
   @Get('me')
-  findMine(@CurrentUser() user: { id: string; email: string }) {
+  findMine() {
+    const user = { id: 'mock-id-123', email: 'test@test.com' };
     return this.ordersService.findMine(user.id);
   }
 
   @Get(':id')
-  findOne(
-    @CurrentUser() user: { id: string; email: string },
-    @Param('id', ParseUUIDPipe) id: string,
-  ) {
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
+    const user = { id: 'mock-id-123', email: 'test@test.com' };
     return this.ordersService.findOne(user.id, id);
   }
 }

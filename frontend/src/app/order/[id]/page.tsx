@@ -10,7 +10,22 @@ const formatCurrency = (amount: number) => amount.toLocaleString('vi-VN') + 'đ'
 const cn = (...classes: (string | boolean | undefined)[]) => classes.filter(Boolean).join(' ');
 
 import { useCartStore } from '@/stores/cart.store';
-import type { Order, OrderItem } from '@/types';
+import type { Order } from '@/types';
+
+interface OrderItem {
+  id: string;
+  productId: string;
+  size: 'S' | 'M' | 'L';
+  toppings: string[];
+  qty: number;
+  lineTotal: number;
+  product: {
+    name: string;
+    imageUrl: string | null;
+  };
+}
+
+type OrderWithItems = Omit<Order, 'items'> & { items: OrderItem[] };
 
 type OrderStatus =
   | 'PENDING'
@@ -102,7 +117,7 @@ function OrderStatusStepper({ status }: { status: OrderStatus }) {
   );
 }
 
-  function OrderItemRow({ item }: { item: any }) {
+function OrderItemRow({ item }: { item: OrderItem }) {
     return (
     <div className="flex gap-3 border-b border-gray-100 py-3 last:border-b-0 dark:border-gray-800">
       <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md bg-gray-100 dark:bg-gray-800">
@@ -148,7 +163,7 @@ export default function OrderDetailPage() {
 
   const orderId = typeof params?.id === 'string' ? params.id : undefined;
 
-  const [order, setOrder] = useState<Order | null>(null);
+  const [order, setOrder] = useState<OrderWithItems | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -156,7 +171,7 @@ export default function OrderDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get<{ data: Order }>(`/orders/${id}`);
+      const res = await api.get<{ data: OrderWithItems }>(`/orders/${id}`);
       setOrder(res.data.data);
     } catch {
       setError('Không thể tải thông tin đơn hàng');

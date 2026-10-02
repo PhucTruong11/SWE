@@ -150,7 +150,7 @@ export default function OrderHistoryPage() {
             <OrderCard
               key={order.id}
               order={order}
-              onClick={() => router.push(`/orders/${order.id}`)}
+              onClick={() => router.push(`/order/${order.id}`)}
             />
           ))}
         </div>

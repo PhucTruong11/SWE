@@ -1,26 +1,45 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import { CreateOrderDto } from './create-order.dto.js';
 import { OrdersService } from './orders.service.js';
 
+const JwtAuthGuard = AuthGuard('jwt');
+
 @Controller('orders')
+@UseGuards(JwtAuthGuard)
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
   @Post()
-  create(@Body() createOrderDto: CreateOrderDto) {
-    const user = { id: 'mock-id-123', email: 'test@test.com' };
-    return this.ordersService.create(user.id, createOrderDto);
+  async create(
+    @CurrentUser() user: any,
+    @Body() createOrderDto: CreateOrderDto,
+  ) {
+    const result = await this.ordersService.create(user.id, createOrderDto);
+    return { data: result };
   }
 
   @Get('me')
-  findMine() {
-    const user = { id: 'mock-id-123', email: 'test@test.com' };
-    return this.ordersService.findMine(user.id);
+  async findMine(@CurrentUser() user: any) {
+    const result = await this.ordersService.findMine(user.id);
+    return { data: result };
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    const user = { id: 'mock-id-123', email: 'test@test.com' };
-    return this.ordersService.findOne(user.id, id);
+  async findOne(
+    @CurrentUser() user: any,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    const result = await this.ordersService.findOne(user.id, id);
+    return { data: result };
   }
 }

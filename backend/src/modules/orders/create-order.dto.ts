@@ -1,4 +1,15 @@
-import { IsArray, IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  ArrayNotEmpty,
+  IsArray,
+  IsEnum,
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 import { ProductSize } from '@prisma/client';
 
 export class CreateOrderItemDto {
@@ -9,6 +20,10 @@ export class CreateOrderItemDto {
 }
 
 export class CreateOrderDto {
-  @IsArray() @IsNotEmpty() items: CreateOrderItemDto[];
+  @IsArray()
+  @ArrayNotEmpty()
+  @ValidateNested({ each: true })
+  @Type(() => CreateOrderItemDto)
+  items: CreateOrderItemDto[];
   @IsOptional() @IsString() promoCode?: string;
 }

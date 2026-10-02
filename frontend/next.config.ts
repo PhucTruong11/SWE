@@ -1,7 +1,8 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // ... giữ nguyên các cấu hình cũ (nếu có)
+  allowedDevOrigins: ['192.168.10.27', 'localhost'],
 };
 
 export default nextConfig;

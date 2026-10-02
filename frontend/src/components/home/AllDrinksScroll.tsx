@@ -1,30 +1,38 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useProducts } from '@/hooks/useProducts';
+import { useCategories } from '@/hooks/useCategories';
 import { ProductCard } from '@/components/product/ProductCard';
-import { CATEGORIES } from '@/components/layout/Header'; // sửa lại đúng đường dẫn nếu khác
 
 export function AllDrinksScroll() {
     const searchParams = useSearchParams();
     const categorySlug = searchParams.get('category');
+    const searchQuery = searchParams.get('q');
 
-    // FIX: để backend lọc sẵn qua GET /products?category=... (controller đã hỗ trợ),
-    // không tải hết sản phẩm về rồi lọc ở client nữa. queryKey trong useProducts có chứa params
-    // nên mỗi category được cache riêng.
+    const { categories } = useCategories();
+
     const { data: filteredProducts, isLoading, isError } = useProducts({
         category: categorySlug ?? undefined,
+        search: searchQuery ?? undefined,
     });
 
-    const activeLabel = CATEGORIES.find((c) => c.slug === categorySlug)?.label;
+    const [hasMounted, setHasMounted] = useState(false);
+    useEffect(() => setHasMounted(true), []);
+
+    const showLoading = !hasMounted || isLoading;
+
+    const activeLabel = categories.find((c) => c.slug === categorySlug)?.label;
+    const heading = searchQuery
+        ? `Kết quả cho "${searchQuery}"`
+        : activeLabel ?? 'Tất cả đồ uống';
 
     return (
         <section className="mt-6">
-            <h2 className="mb-4 text-lg font-bold text-text">
-                {activeLabel ? activeLabel : 'Tất cả đồ uống'}
-            </h2>
+            <h2 className="mb-4 text-lg font-bold text-text">{heading}</h2>
 
-            {isLoading && (
+            {showLoading && (
                 <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                     {Array.from({ length: 8 }).map((_, i) => (
                         <div key={i} className="h-64 animate-pulse rounded-2xl bg-surface" />
@@ -32,19 +40,21 @@ export function AllDrinksScroll() {
                 </div>
             )}
 
-            {isError && (
+            {!showLoading && isError && (
                 <p className="rounded-xl bg-surface p-4 text-sm text-text/70">
                     Không tải được danh sách đồ uống. Vui lòng thử lại sau.
                 </p>
             )}
 
-            {filteredProducts && filteredProducts.length === 0 && (
+            {!showLoading && filteredProducts && filteredProducts.length === 0 && (
                 <p className="rounded-xl bg-surface p-4 text-sm text-text/70">
-                    Hiện chưa có sản phẩm nào{activeLabel ? ` trong mục "${activeLabel}"` : ''}.
+                    {searchQuery
+                        ? `Không tìm thấy món nào khớp với "${searchQuery}".`
+                        : `Hiện chưa có sản phẩm nào${activeLabel ? ` trong mục "${activeLabel}"` : ''}.`}
                 </p>
             )}
 
-            {filteredProducts && filteredProducts.length > 0 && (
+            {!showLoading && filteredProducts && filteredProducts.length > 0 && (
                 <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                     {filteredProducts.map((product) => (
                         <ProductCard key={product.id} product={product} variant="bestseller" />

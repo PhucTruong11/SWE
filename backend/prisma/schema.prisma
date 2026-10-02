@@ -59,20 +59,50 @@ model User {
 }
 
 model Product {
-  id          String   @id @default(uuid())
-  name        String
-  price       Int      // VND - base price (size S)
-  imageUrl    String?
-  stock       Int      @default(100)
-  version     Int      @default(1) // Optimistic locking
-  category    String?
-  isAvailable Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String  @id @default(uuid())
+  name          String
+  description   String? // Mô tả ngắn (EN/VI)
+  imageUrl      String?
+  category      String  // "phin", "tra", "freeze", "phindi", "espresso", "other"
+  allowToppings Boolean @default(false) // true = cho phép thêm topping
+  stock         Int     @default(100)
+  version       Int     @default(1) // Optimistic locking
+  isAvailable   Boolean @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
+  prices     ProductPrice[] // Bảng giá theo size (S/M/L)
   orderItems OrderItem[]
 
   @@map("products")
+}
+
+/// Bảng giá theo từng size của sản phẩm.
+/// Một sản phẩm có thể có 1-3 size tùy loại.
+/// VD: Trà Sữa Highlands chỉ có M và L (không có S).
+model ProductPrice {
+  id        String      @id @default(uuid())
+  productId String
+  size      ProductSize
+  price     Int         // VND (đơn vị: đồng)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, size]) // Mỗi sản phẩm chỉ có 1 giá cho mỗi size
+  @@map("product_prices")
+}
+
+/// Topping có thể thêm vào đồ uống.
+/// Chỉ những Product có allowToppings=true mới hiển thị danh sách topping.
+model Topping {
+  id          String  @id @default(uuid())
+  name        String  @unique
+  price       Int     // VND
+  imageUrl    String?
+  isAvailable Boolean @default(true)
+  createdAt   DateTime @default(now())
+
+  @@map("toppings")
 }
 
 model Order {
@@ -90,6 +120,8 @@ model Order {
   items    OrderItem[]
   payments Payment[]
 
+  @@index([userId])
+  @@index([createdAt])
   @@map("orders")
 }
 
@@ -98,7 +130,7 @@ model OrderItem {
   orderId   String
   productId String
   size      ProductSize @default(S)
-  toppings  String[]    // Array of topping names
+  toppings  String[]    // Snapshot tên topping tại thời điểm đặt
   qty       Int         @default(1)
   lineTotal Int         // VND
 
@@ -119,5 +151,6 @@ model Payment {
 
   order Order @relation(fields: [orderId], references: [id])
 
+  @@index([orderId])
   @@map("payments")
 }

@@ -5,10 +5,10 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from './Sidebar';
 import { useAuth } from '@/hooks/useAuth';
+import { useCategories } from '@/hooks/useCategories';
 import { useCartStore, useHasCartHydrated } from '@/stores/cart.store';
 
 // Kiểu dữ liệu tối thiểu cho 1 dòng sản phẩm trong popup giỏ hàng
-// FIX: dùng interface thay cho "any" để hết báo đỏ lỗi TypeScript (no-explicit-any)
 interface CartPreviewItem {
     name: string;
     size: string;
@@ -46,38 +46,26 @@ const ChevronIcon = ({ open }: { open: boolean }) => (
     </svg>
 );
 
-export const CATEGORIES = [
-    { slug: 'phin', label: 'Cà phê Phin' },
-    { slug: 'phindi', label: 'PhinDi' },
-    { slug: 'espresso', label: 'Cà phê Espresso' },
-    { slug: 'tra', label: 'Trà' },
-    { slug: 'freeze', label: 'Đá xay (Freeze)' },
-    { slug: 'other', label: 'Khác' },
-];
-
 export function Header() {
     const [isSidebarOpen, setSidebarOpen] = useState(false);
     const [isMenuOpen, setMenuOpen] = useState(false);
     const [isCartHovered, setIsCartHovered] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
 
-    // FIX HYDRATION: dùng cờ hydrate thật của store (bật lên đúng lúc localStorage đọc xong)
-    // thay vì tự đoán bằng "mounted", để tránh trường hợp mount xong nhưng store
-    // vẫn chưa kịp đọc localStorage.
     const hasHydrated = useHasCartHydrated();
-
     const { user } = useAuth();
     const router = useRouter();
 
-    // Lấy dữ liệu từ Cart Store
+    // Danh mục THẬT lấy từ dữ liệu sản phẩm — không còn mảng demo hardcode
+    const { categories } = useCategories();
+
     const cartItems = useCartStore((s) => s.items) as CartPreviewItem[];
     const cartCount = useCartStore((s) => s.totalItems());
     const cartTotalPrice = useCartStore((s) => s.totalPrice());
-    // FIX: lấy action xóa sản phẩm để dùng cho nút "x"
-    // Nếu store của bạn đặt tên khác (vd removeFromCart), đổi lại đúng tên ở đây
     const removeItem = useCartStore((s) => s.removeItem);
 
-    // Ref bọc quanh nút "Menu" + dropdown, để biết click có nằm trong hay ngoài khu vực này
+    // Giữ ref này để đóng Menu nếu người dùng bấm hẳn ra ngoài trên thiết bị cảm ứng
+    // (hover không có tác dụng trên mobile/tablet chạm), hover vẫn là cách mở/đóng chính
     const menuRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -90,9 +78,6 @@ export function Header() {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    // FIX: vì không có/không tìm thấy file layout.tsx, gắn thẳng bộ lắng nghe sự kiện
-    // "unauthorized" (được api.ts bắn ra khi gặp lỗi 401) ngay trong Header - vì Header
-    // đã hiển thị ở mọi trang, nên chỗ này chạy tương đương như đặt ở layout gốc.
     useEffect(() => {
         function handleUnauthorized() {
             router.push('/auth/login');
@@ -105,7 +90,9 @@ export function Header() {
         e.preventDefault();
         const q = searchQuery.trim();
         if (!q) return;
-        router.push(`/search?q=${encodeURIComponent(q)}`);
+        // FIX: đồng bộ với Sidebar — trỏ về Home, nơi AllDrinksScroll đã dùng
+        // đúng parseSearchQuery/matchesProduct từ lib/search.ts
+        router.push(`/?q=${encodeURIComponent(q)}`);
     };
 
     return (
@@ -121,9 +108,14 @@ export function Header() {
                             Trang chủ
                         </Link>
 
-                        <div ref={menuRef} className="relative">
+                        {/* MỞ BẰNG HOVER — giống hành vi popup giỏ hàng bên dưới, không cần bấm */}
+                        <div
+                            ref={menuRef}
+                            className="relative"
+                            onMouseEnter={() => setMenuOpen(true)}
+                            onMouseLeave={() => setMenuOpen(false)}
+                        >
                             <button
-                                onClick={() => setMenuOpen((v) => !v)}
                                 className="flex items-center gap-1 whitespace-nowrap hover:text-primary"
                                 aria-expanded={isMenuOpen}
                             >
@@ -132,8 +124,17 @@ export function Header() {
                             </button>
 
                             {isMenuOpen && (
-                                <div className="absolute left-1/2 top-full z-40 mt-2 w-56 -translate-x-1/2 rounded-xl border border-primary/10 bg-surface p-2 shadow-lg">
-                                    {CATEGORIES.map((cat) => (
+                                <div className="absolute left-1/2 top-full z-40 w-56 -translate-x-1/2 rounded-xl border border-primary/10 bg-surface p-2 pt-2 shadow-lg">
+                                    {/* "Tất cả" dùng ?view=all — khác với "/" trần của Trang chủ/logo,
+                                        để HomeSections biết đây là xem list chứ không phải vào Home */}
+                                    <Link
+                                        href="/?view=all"
+                                        onClick={() => setMenuOpen(false)}
+                                        className="block rounded-lg px-3 py-2 text-sm font-bold text-primary hover:bg-background"
+                                    >
+                                        Tất cả
+                                    </Link>
+                                    {categories.map((cat) => (
                                         <Link
                                             key={cat.slug}
                                             href={`/?category=${encodeURIComponent(cat.slug)}`}
@@ -167,7 +168,6 @@ export function Header() {
                 </div>
 
                 <div className="hidden shrink-0 items-center gap-5 lg:flex">
-                    {/* POPUP NÚT GIỎ HÀNG KHI HOVER */}
                     <div
                         className="relative py-2"
                         onMouseEnter={() => setIsCartHovered(true)}
@@ -180,7 +180,6 @@ export function Header() {
                             <span>Giỏ hàng ({hasHydrated ? cartCount : 0})</span>
                         </Link>
 
-                        {/* Dropdown Khung preview giỏ hàng */}
                         {isCartHovered && (
                             <div className="absolute right-0 top-full z-50 w-80 rounded-2xl border border-primary/15 bg-surface p-4 shadow-xl transition-all">
                                 <h4 className="border-b border-primary/10 pb-2.5 text-sm font-bold text-text">
@@ -193,7 +192,6 @@ export function Header() {
                                     </div>
                                 ) : (
                                     <>
-                                        {/* Danh sách hiển thị tối đa 3 khung món */}
                                         <div className="my-2 flex max-h-72 flex-col divide-y divide-primary/10 overflow-y-auto pr-1">
                                             {cartItems.map((item, idx) => (
                                                 <div key={idx} className="group/item relative flex items-center gap-3 py-2.5 pr-5">
@@ -218,7 +216,6 @@ export function Header() {
                                                             Size {item.size} × {item.quantity}
                                                         </p>
 
-                                                        {/* Hiển thị Topping nếu có */}
                                                         {item.toppings && item.toppings.length > 0 && (
                                                             <p className="truncate text-[10px] text-text/50">
                                                                 + {item.toppings.map((t) => (typeof t === 'string' ? t : t.name)).join(', ')}
@@ -226,14 +223,12 @@ export function Header() {
                                                         )}
                                                     </div>
 
-                                                    {/* Tổng giá riêng cho từng dòng nhóm món */}
                                                     <div className="text-right">
                                                         <span className="text-xs font-black text-primary">
                                                             {(item.lineTotal || (item.unitPrice ?? 0) * item.quantity || 0).toLocaleString('vi-VN')}đ
                                                         </span>
                                                     </div>
 
-                                                    {/* FIX: nút "x" xóa sản phẩm khỏi giỏ hàng */}
                                                     <button
                                                         type="button"
                                                         onClick={(e) => {
@@ -250,7 +245,6 @@ export function Header() {
                                             ))}
                                         </div>
 
-                                        {/* Phần chân Popover: Tổng tiền & Nút thanh toán */}
                                         <div className="border-t border-primary/10 pt-3">
                                             <div className="flex items-center justify-between text-xs font-bold text-text mb-3">
                                                 <span>Tổng tiền:</span>

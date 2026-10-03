@@ -1,47 +1,50 @@
 // DTO (Data Transfer Object): Khai báo cấu trúc dữ liệu Giỏ hàng mà Frontend gửi lên.
+// class-validator sẽ tự động kiểm tra, nếu sai format → trả về HTTP 400 ngay tại cửa.
 
 import {
-    IsString,
+    IsArray,
     IsIn,
     IsInt,
-    IsNumber,
+    IsNotEmpty,
     IsOptional,
-    IsArray,
+    IsString,
     Min,
     ValidateNested,
     ArrayMinSize,
+    IsNumber,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateOrderItemDto {
     @IsString()
-    productId: string;  // ID sản phẩm
+    @IsNotEmpty({ message: 'productId không được để trống' })
+    productId: string;
 
-    @IsIn(['S', 'M', 'L'])
-    size: 'S' | 'M' | 'L';  // Size
+    @IsIn(['S', 'M', 'L'], { message: 'size phải là S, M hoặc L' })
+    size: 'S' | 'M' | 'L';
 
-    @IsInt()
-    @Min(1)
-    qty: number;        // Số lượng ly
+    @IsInt({ message: 'Số lượng phải là số nguyên' })
+    @Min(1, { message: 'Số lượng phải ít nhất là 1' })
+    qty: number;
 
     @IsOptional()
     @IsArray()
     @IsString({ each: true })
-    toppings?: string[]; // Tên các topping (snapshot tại thời điểm đặt)
+    toppings?: string[];
 
     @IsNumber()
     @Min(0)
-    lineTotal: number;  // Thành tiền dòng này (VND) - Backend sẽ kiểm tra lại
+    lineTotal: number;
 }
 
 export class CreateOrderDto {
     @IsArray()
-    @ArrayMinSize(1)
+    @ArrayMinSize(1, { message: 'Giỏ hàng không được rỗng' })
     @ValidateNested({ each: true })
     @Type(() => CreateOrderItemDto)
-    items: CreateOrderItemDto[];  // Danh sách các món trong giỏ
+    items: CreateOrderItemDto[];
 
     @IsOptional()
     @IsString()
-    promoCode?: string;           // Mã giảm giá (nếu có)
+    promoCode?: string;
 }

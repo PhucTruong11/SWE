@@ -4,8 +4,8 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+import { useCategories } from '@/hooks/useCategories';
 import { useCartStore, useHasCartHydrated } from '@/stores/cart.store';
-import { CATEGORIES } from './Header';
 
 interface SidebarProps {
     isOpen: boolean;
@@ -58,9 +58,10 @@ const NAV_ITEMS = [
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
     const { user } = useAuth();
     const cartCount = useCartStore((s) => s.totalItems());
-    // FIX HYDRATION: chỉ hiển thị số thật sau khi store đã đọc xong localStorage
     const hasHydrated = useHasCartHydrated();
     const router = useRouter();
+
+    const { categories } = useCategories();
 
     const [isCategoryOpen, setCategoryOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -69,7 +70,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         e.preventDefault();
         const q = searchQuery.trim();
         if (!q) return;
-        router.push(`/search?q=${encodeURIComponent(q)}`);
+        // Giống Header: trả về Home với ?q=..., không còn route /search riêng
+        router.push(`/?q=${encodeURIComponent(q)}`);
         onClose();
     };
 
@@ -158,10 +160,17 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
                         {isCategoryOpen && (
                             <div className="ml-8 flex flex-col gap-1 border-l border-white/15 pl-3">
-                                {CATEGORIES.map((cat) => (
+                                <Link
+                                    href="/?view=all"
+                                    onClick={onClose}
+                                    className="rounded-lg px-2 py-1.5 text-sm font-bold text-white hover:bg-white/10"
+                                >
+                                    Tất cả
+                                </Link>
+                                {categories.map((cat) => (
                                     <Link
                                         key={cat.slug}
-                                        href={`/menu?category=${cat.slug}`}
+                                        href={`/?category=${cat.slug}`}
                                         onClick={onClose}
                                         className="rounded-lg px-2 py-1.5 text-sm font-medium text-white/85 hover:bg-white/10"
                                     >
@@ -174,10 +183,13 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                 </div>
 
                 <div className="mt-auto p-2">
-                    <div className="overflow-hidden rounded-xl bg-background text-primary shadow-lg">
-                        <div className="flex items-center justify-center gap-2 px-4 py-3">
+                    <div className="overflow-hidden rounded-xl bg-orange-500 text-primary shadow-lg">
+                        <Link
+                            href="/cart"
+                            onClick={onClose}
+                            className="flex items-center justify-center gap-2 px-4 py-3">
                             <p className="text-base font-bold">Giỏ hàng ({hasHydrated ? cartCount : 0})</p>
-                        </div>
+                        </Link>
 
                         <Link
                             href="/checkout"

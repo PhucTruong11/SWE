@@ -20,7 +20,7 @@ export default function CartPage() {
         Trên Laptop: Ép vào một khối ở giữa màn hình cho đẹp 
       */}
       <main className="flex-1 md:py-12 md:px-4">
-        <div className="h-full md:h-auto md:max-w-2xl md:mx-auto md:bg-white md:rounded-3xl md:shadow-xl md:overflow-hidden md:min-h-[600px] flex flex-col">
+        <div className="h-full md:h-auto w-full flex justify-center md:min-h-[600px]">
           <CartContent />
         </div>
       </main>

@@ -1,10 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useProducts } from '@/hooks/useProducts';
 import { useCategories } from '@/hooks/useCategories';
 import { ProductCard } from '@/components/product/ProductCard';
+
+function subscribe() {
+    return () => { };
+}
 
 export function AllDrinksScroll() {
     const searchParams = useSearchParams();
@@ -18,8 +22,11 @@ export function AllDrinksScroll() {
         search: searchQuery ?? undefined,
     });
 
-    const [hasMounted, setHasMounted] = useState(false);
-    useEffect(() => setHasMounted(true), []);
+    const hasMounted = useSyncExternalStore(
+        subscribe,
+        () => true,
+        () => false,
+    );
 
     const showLoading = !hasMounted || isLoading;
 

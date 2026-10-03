@@ -347,6 +347,37 @@ const TOPPINGS = [
   { name: 'Shot Espresso',      price: 10000, imageUrl: '/images/toppings/shot-espresso.jpg' },
 ];
 
+// ──────────────────────────────────────────
+// DANH SÁCH PROMOTIONS / VOUCHERS
+// ──────────────────────────────────────────
+const PROMOTIONS = [
+  {
+    code: 'WELCOME10',
+    description: 'Giảm 10% cho đơn hàng từ 30k',
+    discountType: 'PERCENTAGE',
+    discountValue: 10,
+    minOrderValue: 30000,
+    maxDiscount: 15000,
+    isActive: true,
+  },
+  {
+    code: 'COFFEE20K',
+    description: 'Giảm ngay 20.000đ cho đơn từ 40k',
+    discountType: 'FIXED_AMOUNT',
+    discountValue: 20000,
+    minOrderValue: 40000,
+    isActive: true,
+  },
+  {
+    code: 'BREWLITE50',
+    description: 'Giảm 50% tối đa 30.000đ',
+    discountType: 'PERCENTAGE',
+    discountValue: 50,
+    minOrderValue: 50000,
+    maxDiscount: 30000,
+    isActive: true,
+  },
+];
 // ==========================================
 // Hàm Seed
 // ==========================================
@@ -363,6 +394,7 @@ async function main() {
   await prisma.product.deleteMany();
   await prisma.topping.deleteMany();
   await prisma.user.deleteMany();
+  await prisma.promotion.deleteMany(); // thêm cho phần ưu đãi (promo)
 
   // ── Bước 2: Tạo Toppings ──
   console.log('🍡 Đang tạo Toppings...');
@@ -401,7 +433,17 @@ async function main() {
   }
 
   console.log(`   ✅ Đã tạo ${productCount} sản phẩm với ${priceCount} mức giá`);
-
+ 
+  // ── Bước 4: Tạo Promotions ──
+  console.log('🎟️  Đang tạo Promotions...');
+  const promotions = await Promise.all(
+    PROMOTIONS.map((p) =>
+      prisma.promotion.create({ data: p }),
+    ),
+  );
+  
+  console.log(`   ✅ Đã tạo ${promotions.length} mã ưu đãi`);
+  
   // ── Tổng kết ──
   console.log('\n🎉 Seeding hoàn tất!');
   console.log('────────────────────────────────────────');
@@ -409,6 +451,7 @@ async function main() {
   console.log(`   Products:       ${productCount}`);
   console.log(`   Product Prices: ${priceCount}`);
   console.log('────────────────────────────────────────');
+  console.log(`   Promotions:     ${promotions.length}`);
 }
 
 main()

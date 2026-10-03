@@ -6,6 +6,14 @@ import { ApplyPromotionDto } from './dto/apply-promotion.dto.js';
 export class PromotionsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // Lấy tất cả mã đang active để hiển thị lên UI
+  async findAll() {
+    return this.prisma.promotion.findMany({
+      where: { isActive: true },
+      orderBy: { minOrderValue: 'asc' },
+    });
+  }
+
   async applyPromotion(dto: ApplyPromotionDto) {
     const { code, subtotal } = dto;
 
@@ -13,7 +21,6 @@ export class PromotionsService {
       throw new BadRequestException('Vui lòng nhập mã ưu đãi');
     }
 
-    // Nếu trong schema.prisma tên model là Voucher thì đổi promo thành voucher
     const promo = await this.prisma.promotion.findUnique({
       where: { code: code.trim().toUpperCase() },
     });

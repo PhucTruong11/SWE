@@ -1,10 +1,14 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateOrderDto } from './dto/create-order.dto.js';
+import { PromotionsService } from '../promotions/promotions.service.js';
 
 @Injectable()
 export class OrdersService {
-    constructor(private readonly prisma: PrismaService) {}
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly promotionsService: PromotionsService
+    ) {}
 
     // POST /orders - Tạo đơn hàng mới từ giỏ hàng Frontend
     async create(dto: CreateOrderDto, userId: string) {
@@ -60,13 +64,29 @@ export class OrdersService {
             };
         });
 
+        // Kiểm tra và tính mã giảm giá
+        let finalTotal = calculatedTotal;
+        let finalDiscount = 0;
+
+        if (dto.promoCode) {
+            // Gọi sang service của bạn làm Promo để nó tự xử lý (tách bạch trách nhiệm)
+            const promoResult = await this.promotionsService.applyPromotion({
+                code: dto.promoCode,
+                subtotal: calculatedTotal
+            });
+            
+            finalDiscount = promoResult.discountAmount;
+            finalTotal -= finalDiscount;
+        }
+
         // Lưu đơn hàng vào Database bằng Prisma Transaction
         // (Transaction = "làm tất cả hoặc không làm gì" - nếu lỡ lỗi giữa chừng thì hoàn tác hết)
         const order = await this.prisma.$transaction(async (tx) => {
             const newOrder = await tx.order.create({
                 data: {
                     userId,
-                    total: calculatedTotal,
+                    total: finalTotal,             // Tiền thực tế sau giảm
+                    discount: finalDiscount,       // Tiền giảm
                     status: 'PENDING',
                     promoCode: dto.promoCode ?? null,
                     items: {

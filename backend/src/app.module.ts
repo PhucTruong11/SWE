@@ -7,6 +7,7 @@ import { ProductsModule } from './modules/products/products.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { OrdersModule } from './modules/orders/orders.module.js';
 import { PaymentsModule } from './modules/payments/payments.module.js';
+import { EmailModule } from './modules/email/email.module.js';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { PaymentsModule } from './modules/payments/payments.module.js';
     AuthModule,
     OrdersModule,
     PaymentsModule,
+    EmailModule,
   ],
   controllers: [AppController],
   providers: [AppService],

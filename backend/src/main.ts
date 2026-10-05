@@ -1,9 +1,13 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Kích hoạt middleware đọc Cookie từ Browser gửi lên (Phục vụ JWT Authentication)
+  app.use(cookieParser()); // 👈 Bổ sung dòng này
 
   // Global prefix cho tất cả routes: /api/*
   app.setGlobalPrefix('api');

@@ -14,8 +14,10 @@ import {
   type CardFormErrors,
 } from '@/components/checkout';
 
+import type { AppliedPromo } from '@/lib/voucher';
+
 export default function CheckoutPage() {
-  const { items, clearCart, appliedPromo } = useCartStore();
+  const { items, clearCart, appliedPromo, applyPromo, removePromo } = useCartStore();
   const hasHydrated = useHasCartHydrated();
 
   // Phương thức thanh toán: EWALLET (MoMo) | CARD (Thẻ ngân hàng)
@@ -51,7 +53,7 @@ export default function CheckoutPage() {
   }, [isExpired]);
 
   // Tính toán số tiền thực tế từ giỏ hàng kèm giảm giá Voucher
-  const subtotal = items.reduce((sum, item) => sum + item.lineTotal, 0);
+  const subtotal = items.reduce((sum, item) => sum + (item.lineTotal ?? 0), 0);
   const discountAmount = appliedPromo ? appliedPromo.discount : 0;
   const finalTotal = Math.max(0, subtotal - discountAmount);
   const pointsEarned = Math.floor(finalTotal / 1000); // 1.000đ = 1 điểm
@@ -330,6 +332,9 @@ export default function CheckoutPage() {
             onCheckout={handleCheckout}
             onPayment={handleCheckout}
             onRenew={handleRenewOrder}
+            appliedPromo={appliedPromo}
+            onApplyPromo={applyPromo}
+            onRemovePromo={removePromo}
           />
         </div>
       </div>

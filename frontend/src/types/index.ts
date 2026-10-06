@@ -26,7 +26,7 @@ export interface ToppingOption {
   price: number; // VND
 }
 
-export type { CartItem, CartTopping } from '@/stores/cart.store';
+export type { CartItem } from '@/stores/cart.store';
 
 export interface User {
   id: string;

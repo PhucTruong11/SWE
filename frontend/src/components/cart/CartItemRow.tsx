@@ -49,17 +49,17 @@ export function CartItemRow({ item, index }: CartItemRowProps) {
             {item.name}
           </h3>
           <p className="mt-0.5 text-sm font-medium text-gray-500">Size {item.size}</p>
-          
+
           {item.toppings && item.toppings.length > 0 && (
-            <p className="text-xs text-gray-400 mt-0.5 line-clamp-1" title={item.toppings.map(t => t.name).join(', ')}>
-              + {item.toppings.map(t => t.name).join(', ')}
+            <p className="text-xs text-gray-400 mt-0.5 line-clamp-1" title={item.toppings.map(t => typeof t === 'string' ? t : t.name).join(', ')}>
+              + {item.toppings.map(t => typeof t === 'string' ? t : t.name).join(', ')}
             </p>
           )}
         </div>
 
         {/* 3. Giá tiền của dòng này */}
         <p className="font-bold text-primary text-lg">
-          {item.lineTotal.toLocaleString('vi-VN')}đ
+          {(item.lineTotal || (item.unitPrice * item.quantity)).toLocaleString('vi-VN')}đ
         </p>
       </div>
 
@@ -80,11 +80,11 @@ export function CartItemRow({ item, index }: CartItemRowProps) {
           >
             <Minus size={14} />
           </button>
-          
+
           <span className="w-4 text-center text-sm font-bold text-text">
             {item.quantity}
           </span>
-          
+
           <button
             onClick={handleIncrease}
             className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-100 text-text hover:bg-gray-200 transition-colors"

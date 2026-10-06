@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import { formatVND } from '@/lib/utils';
-import { useCartStore, calculateVoucherDiscount } from '@/stores/cart.store';
 import type { CartItem } from '@/types';
+import type { AppliedPromo } from '@/lib/voucher';
+import { calculateVoucherDiscount } from '@/lib/voucher';
 
 interface OrderSummaryProps {
   items: CartItem[];
@@ -15,6 +16,9 @@ interface OrderSummaryProps {
   onCheckout?: () => void;
   onPayment?: () => void;
   onRenew?: () => void;
+  appliedPromo?: AppliedPromo | null;
+  onApplyPromo?: (promo: AppliedPromo) => void;
+  onRemovePromo?: () => void;
 }
 
 export function OrderSummary({
@@ -27,14 +31,16 @@ export function OrderSummary({
   onCheckout,
   onPayment,
   onRenew,
+  appliedPromo,
+  onApplyPromo,
+  onRemovePromo,
 }: OrderSummaryProps) {
-  const { appliedPromo, applyPromo, removePromo } = useCartStore();
   const [voucherInput, setVoucherInput] = useState('');
   const [voucherError, setVoucherError] = useState<string | null>(null);
 
   const triggerCheckout = onCheckout || onPayment;
   const totalItemsCount = items.reduce((s, i) => s + (Number(i.quantity) || 1), 0);
-  const itemsSubtotal = propSubtotal ?? items.reduce((sum, item) => sum + item.lineTotal, 0);
+  const itemsSubtotal = propSubtotal ?? items.reduce((sum, item) => sum + (item.lineTotal ?? 0), 0);
 
   const handleApplyVoucher = () => {
     setVoucherError(null);
@@ -43,11 +49,13 @@ export function OrderSummary({
       setVoucherError(result.message);
       return;
     }
-    applyPromo({
-      code: voucherInput.trim().toUpperCase(),
-      discount: result.discount,
-      description: result.description,
-    });
+    if (onApplyPromo) {
+      onApplyPromo({
+        code: voucherInput.trim().toUpperCase(),
+        discount: result.discount,
+        description: result.description,
+      });
+    }
     setVoucherInput('');
   };
 
@@ -70,7 +78,7 @@ export function OrderSummary({
               </p>
             </div>
             <span className="font-semibold text-[#1E3932]">
-              {formatVND(item.lineTotal)}
+              {formatVND(item.lineTotal ?? 0)}
             </span>
           </div>
         ))}
@@ -93,7 +101,7 @@ export function OrderSummary({
           </div>
           <button
             type="button"
-            onClick={removePromo}
+            onClick={onRemovePromo}
             className="text-xs text-red-500 hover:text-red-700 hover:underline font-semibold ml-2"
           >
             Bỏ mã

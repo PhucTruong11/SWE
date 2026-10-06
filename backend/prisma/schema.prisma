@@ -46,16 +46,35 @@ enum ProductSize {
 // ==========================================
 
 model User {
-  id            String   @id @default(uuid())
-  email         String   @unique
-  passwordHash  String
-  loyaltyPoints Int      @default(0)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                String             @id @default(uuid())
+  email             String             @unique
+  fullName          String?            // Họ và tên
+  phone             String?            // Số điện thoại liên hệ
+  passwordHash      String
+  loyaltyPoints     Int                @default(0)
+  emailVerifiedAt   DateTime?          // null = chưa xác minh email
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 
-  orders Order[]
+  orders            Order[]
+  addresses         Address[]          // Danh sách địa chỉ giao hàng
+  emailVerification EmailVerification?
 
   @@map("users")
+}
+
+model EmailVerification {
+  id         String   @id @default(uuid())
+  userId     String   @unique
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash   String   // Băm (hash) của mã OTP 6 số
+  expiresAt  DateTime // Thời điểm hết hạn của mã (10 phút)
+  attempts   Int      @default(0) // Số lần nhập sai (giới hạn thử)
+  lastSentAt DateTime @default(now()) // Thời điểm gửi OTP gần nhất (chống gửi lại liên tục)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("email_verifications")
 }
 
 model Product {
@@ -153,6 +172,25 @@ model Payment {
 
   @@index([orderId])
   @@map("payments")
+}
+
+model Address {
+  id            String   @id @default(uuid())
+  userId        String
+  recipientName String   // Tên người nhận hàng
+  phone         String   // Số điện thoại nhận hàng
+  detailAddress String   // Số nhà, tên đường, tòa nhà
+  ward          String?  // Phường / Xã
+  district      String?  // Quận / Huyện
+  city          String?  // Tỉnh / Thành phố
+  isDefault     Boolean  @default(false) // Địa chỉ mặc định
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("addresses")
 }
 
 model Promotion {

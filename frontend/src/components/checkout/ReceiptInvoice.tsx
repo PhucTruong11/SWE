@@ -90,7 +90,7 @@ export function ReceiptInvoice({ data, onReset }: ReceiptInvoiceProps) {
                 </div>
                 <div className="w-12 text-center text-gray-700 font-medium">x{item.quantity}</div>
                 <div className="w-24 text-right font-semibold text-[#1E3932]">
-                  {formatVND(item.lineTotal)}
+                  {formatVND(item.lineTotal ?? 0)}
                 </div>
               </div>
             ))}

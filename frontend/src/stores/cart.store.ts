@@ -4,12 +4,15 @@ import { create } from 'zustand';
 
 export interface CartItem {
   id?: string;
+  productId?: string;
   name: string;
   size: string;
   quantity: number;
   unitPrice: number;
-  imageUrl?: string;
-  toppings?: (string | { name: string })[];
+  basePrice?: number;
+  totalToppingPrice?: number;
+  imageUrl?: string | null;
+  toppings?: any[];
   lineTotal?: number;
 }
 

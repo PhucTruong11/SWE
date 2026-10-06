@@ -242,7 +242,6 @@ export default function ProfilePage() {
             <div className="mt-4 border-t border-primary/10 pt-4">
               <div className="flex items-center justify-between rounded-2xl bg-background p-4 border border-primary/5">
                 <div className="flex items-center gap-2">
-                  <span className="text-lg">⭐</span>
                   <span className="text-xs font-bold text-text">Điểm tích lũy</span>
                 </div>
                 <span className="text-base font-black text-primary">{profile?.loyaltyPoints || 0} điểm</span>

@@ -25,6 +25,12 @@ interface Promotion {
 export function CartContent({ onClose }: CartContentProps) {
   const router = useRouter();
   const { isAuthenticated, loading: authLoading } = useAuth();
+<<<<<<< HEAD
+=======
+  const { items, totalPrice, totalItems } = useCartStore();
+  
+  const [showLoginModal, setShowLoginModal] = useState(false);
+>>>>>>> a38c513b5f53513f3e73fcbc76147efc9dbb2558
   const { items, totalPrice, totalItems, clearCart } = useCartStore();
 
   const [isLoading, setIsLoading] = useState(false);
@@ -190,7 +196,11 @@ export function CartContent({ onClose }: CartContentProps) {
         <div className="bg-gray-100 p-6 rounded-full mb-4">
           <ShoppingBag size={48} className="text-gray-300" />
         </div>
+<<<<<<< HEAD
         <h2 className="text-xl font-bold text-gray-800 mb-2">Giỏ hàng trống</h2>
+=======
+        <h2 className="text-xl font-bold text-text mb-2">Giỏ hàng trống</h2>
+>>>>>>> a38c513b5f53513f3e73fcbc76147efc9dbb2558
         <p className="text-gray-500 mb-8 max-w-xs">
           Bạn chưa chọn món nào. Hãy xem menu để chọn những thức uống tuyệt ngon nhé!
         </p>
@@ -206,9 +216,15 @@ export function CartContent({ onClose }: CartContentProps) {
   }
 
   return (
+<<<<<<< HEAD
     <div className="flex w-full md:justify-center transition-all duration-300 items-stretch relative z-20">
       {/* Wrapper vừa khít 2 cột */}
       <div ref={dropdownRef} className="flex items-stretch">
+=======
+    <>
+      {/* Wrapper layout ngoài cùng (chiếm full màn hình) */}
+      <div className="flex w-full md:justify-center transition-all duration-300 items-stretch relative z-20">
+>>>>>>> a38c513b5f53513f3e73fcbc76147efc9dbb2558
         
         {/* 1. CỘT TRÁI: GIỎ HÀNG CHÍNH */}
         <div className="flex flex-col bg-surface md:bg-white h-full md:h-auto w-full md:w-[650px] md:rounded-3xl md:shadow-xl md:border md:border-gray-100 md:overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] shrink-0">
@@ -325,10 +341,94 @@ export function CartContent({ onClose }: CartContentProps) {
               </div>
             </div>
 
+<<<<<<< HEAD
             {errorMsg && (
               <div className="mb-4 flex items-start gap-2 rounded-xl bg-red-50 border border-red-200 p-3 text-sm text-red-600">
                 <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
                 <span>{errorMsg}</span>
+=======
+        {/* Thông báo kết quả Áp dụng Mã giảm giá */}
+        {promoMsg && (
+          <div
+            className={`mb-4 flex items-center gap-1.5 text-xs font-medium ${
+              promoMsg.type === 'success' ? 'text-green-600' : 'text-red-500'
+            }`}
+          >
+            {promoMsg.type === 'success' ? (
+              <CheckCircle2 size={14} className="flex-shrink-0" />
+            ) : (
+              <AlertCircle size={14} className="flex-shrink-0" />
+            )}
+            <span>{promoMsg.text}</span>
+          </div>
+        )}
+
+        {/* Bảng tính tiền */}
+        <div className="space-y-3 mb-6 text-sm text-text mt-4">
+          <div className="flex justify-between">
+            <span className="text-gray-500">Tạm tính</span>
+            <span className="font-bold">{subtotal.toLocaleString('vi-VN')}đ</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-500">Giảm giá</span>
+            <span className="font-bold text-red-500">
+              - {discountAmount.toLocaleString('vi-VN')}đ
+            </span>
+          </div>
+          <div className="border-t border-dashed border-gray-200 pt-3 flex justify-between items-end">
+            <span className="font-bold text-base">Tổng cộng</span>
+            <span className="font-bold text-2xl text-primary">
+              {finalTotal.toLocaleString('vi-VN')}đ
+            </span>
+          </div>
+        </div>
+
+        {errorMsg && (
+          <div className="mb-4 flex items-start gap-2 rounded-xl bg-red-50 border border-red-200 p-3 text-sm text-red-600">
+            <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
+            <span>{errorMsg}</span>
+          </div>
+        )}
+
+        <button
+          onClick={handlePlaceOrder}
+          disabled={isLoading}
+          className="w-full bg-primary hover:bg-primary-hover disabled:bg-primary/60 disabled:cursor-not-allowed text-white py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-2 transition-all shadow-md hover:shadow-lg active:scale-95"
+        >
+          {isLoading ? (
+            <>
+              <Loader2 size={20} className="animate-spin" />
+              Đang xử lý...
+            </>
+          ) : (
+            <>
+              Tiến hành Thanh toán <ArrowRight size={20} />
+            </>
+          )}
+        </button>
+      </div>
+      </div>
+
+      {/* 2. CỘT PHẢI: BẢNG PROMO SLIDE-IN (Chỉ dành cho Desktop) */}
+      <div 
+        className={`hidden md:flex flex-col bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] shrink-0 ${
+          showDropdown ? 'w-[340px] opacity-100 translate-x-0 ml-6' : 'w-0 opacity-0 -translate-x-10 pointer-events-none ml-0 border-0'
+        }`}
+      >
+        <div className="bg-white p-5 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <h3 className="font-bold text-text text-lg whitespace-nowrap">Kho Voucher</h3>
+          </div>
+          <p className="text-xs text-gray-500 mt-1 whitespace-nowrap">Chọn mã phù hợp để tiết kiệm hơn nhé!</p>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 bg-background/50">
+          <div className="space-y-3 w-[288px]">
+            {availablePromos.length === 0 ? (
+              <div className="text-center py-10 text-gray-400">
+                <Tag size={40} className="mx-auto mb-2 opacity-50" />
+                <p className="text-sm">Hiện chưa có ưu đãi nào</p>
+>>>>>>> a38c513b5f53513f3e73fcbc76147efc9dbb2558
               </div>
             )}
 
@@ -401,6 +501,7 @@ export function CartContent({ onClose }: CartContentProps) {
                           <CheckCircle2 size={12} className="text-white -rotate-45 mb-1" />
                         </div>
                       )}
+<<<<<<< HEAD
 
                       <div className="flex items-start justify-between mb-2">
                         <div>
@@ -449,6 +550,16 @@ export function CartContent({ onClose }: CartContentProps) {
           </div>
         </div>
       )}
+=======
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </div>
+>>>>>>> a38c513b5f53513f3e73fcbc76147efc9dbb2558
     </div>
   );
 }

@@ -51,7 +51,6 @@ export function Header() {
   const [isMenuOpen, setMenuOpen] = useState(false);
   const [isCartHovered, setIsCartHovered] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isUserMenuHovered, setIsUserMenuHovered] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 
@@ -66,7 +65,7 @@ export function Header() {
   const removeItem = useCartStore((s) => s.removeItem);
 
   const menuRef = useRef<HTMLDivElement>(null);
-    const userMenuRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleUnauthorized() {
@@ -81,7 +80,6 @@ export function Header() {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setMenuOpen(false);
       }
-      // Bổ sung đóng User Menu khi click ra ngoài
       if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
         setIsUserMenuOpen(false);
       }
@@ -374,7 +372,7 @@ export function Header() {
           <div className="w-full max-w-sm rounded-3xl border border-primary/10 bg-surface p-6 text-center shadow-2xl">
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-red-100 text-red-500">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             </div>
             <h3 className="mb-2 text-lg font-bold text-text">Xác nhận đăng xuất</h3>

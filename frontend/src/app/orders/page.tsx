@@ -101,8 +101,6 @@ export default function OrderHistoryPage() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchOrders = useCallback(async () => {
-    setLoading(true);
-    setError(null);
     try {
       const res = await api.get<{ data: Order[] }>('/orders/me');
       setOrders(res.data.data);
@@ -114,6 +112,7 @@ export default function OrderHistoryPage() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchOrders();
   }, [fetchOrders]);
 

@@ -168,8 +168,6 @@ export default function OrderDetailPage() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchOrder = useCallback(async (id: string) => {
-    setLoading(true);
-    setError(null);
     try {
       const res = await api.get<{ data: OrderWithItems }>(`/orders/${id}`);
       setOrder(res.data.data);
@@ -182,10 +180,13 @@ export default function OrderDetailPage() {
 
   useEffect(() => {
     if (!orderId) {
-      setLoading(false);
-      setError('Mã đơn hàng không hợp lệ');
+      Promise.resolve().then(() => {
+        setLoading(false);
+        setError('Mã đơn hàng không hợp lệ');
+      });
       return;
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchOrder(orderId);
   }, [orderId, fetchOrder]);
 

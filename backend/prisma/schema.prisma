@@ -174,21 +174,17 @@ model Payment {
   @@map("payments")
 }
 
-model Address {
-  id            String   @id @default(uuid())
-  userId        String
-  recipientName String   // Tên người nhận hàng
-  phone         String   // Số điện thoại nhận hàng
-  detailAddress String   // Số nhà, tên đường, tòa nhà
-  ward          String?  // Phường / Xã
-  district      String?  // Quận / Huyện
-  city          String?  // Tỉnh / Thành phố
-  isDefault     Boolean  @default(false) // Địa chỉ mặc định
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@map("addresses")
+model Promotion {
+  id             String    @id @default(uuid())
+  code           String    @unique // Mã giảm giá (ví dụ: BREW10, COFFEE20K)
+  description    String?   // Mô tả ưu đãi
+  discountType   String    // "PERCENTAGE" (giảm %) hoặc "FIXED_AMOUNT" (giảm tiền cố định)
+  discountValue  Float     // Giá trị giảm (10% hoặc 20000đ)
+  minOrderValue  Float     @default(0) // Giá trị đơn hàng tối thiểu
+  maxDiscount    Float?    // Giảm tối đa (áp dụng cho %)
+  startDate      DateTime  @default(now())
+  endDate        DateTime?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 }

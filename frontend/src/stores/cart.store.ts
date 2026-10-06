@@ -1,152 +1,171 @@
-import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
+'use client';
 
-export interface CartTopping {
-    id: string;
-    name: string;
-    price: number;
-    quantity: number;
-}
+import { create } from 'zustand';
 
 export interface CartItem {
-    productId: string;
-    name: string;
-    size: 'S' | 'M' | 'L';
-    basePrice: number;
-    toppings?: CartTopping[];
-    totalToppingPrice?: number;
-    unitPrice: number;
-    quantity: number;
-    lineTotal: number;
-    imageUrl?: string;
+  id?: string;
+  productId?: string;
+  name: string;
+  size: string;
+  quantity: number;
+  unitPrice: number;
+  basePrice?: number;
+  totalToppingPrice?: number;
+  imageUrl?: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  toppings?: any[];
+  lineTotal?: number;
 }
 
-interface CartState {
-    items: CartItem[];
-    addItem: (item: CartItem) => void;
-    removeItem: (index: number) => void;
-    updateQuantity: (index: number, quantity: number) => void;
-    clearCart: () => void;
-    totalItems: () => number;
-    totalPrice: () => number;
-    // FIX HYDRATION: cờ đánh dấu store đã đọc xong dữ liệu từ localStorage hay chưa.
-    // Server luôn có _hasHydrated = false (vì server không có localStorage),
-    // client cũng bắt đầu bằng false ở lần render đầu tiên -> khớp với server,
-    // sau đó zustand tự đọc xong localStorage rồi mới bật thành true.
-    _hasHydrated: boolean;
-    setHasHydrated: (state: boolean) => void;
+interface CartStore {
+  items: CartItem[];
+  currentUserId: string | null;
+
+  initUserCart: (userId: string | null) => void;
+  addItem: (item: CartItem) => void;
+  removeItem: (index: number) => void;
+  updateQuantity: (index: number, quantity: number) => void;
+  clearCart: () => void;
+  totalPrice: () => number;
+  totalItems: () => number;
 }
 
-export const useCartStore = create<CartState>()(
-    persist(
-        (set, get) => ({
-            items: [],
+// Tạo key localStorage độc lập cho từng user hoặc khách
+const getCartKey = (userId: string | null) => {
+  return userId ? `brewlite_cart_user_${userId}` : `brewlite_cart_guest`;
+};
 
-            addItem: (newItem: CartItem) => {
-                const currentItems = get().items;
+// Hàm gộp danh sách món từ Khách vào Tài khoản (cộng dồn số lượng nếu trùng món + size)
+const mergeCartItems = (existingItems: CartItem[], guestItems: CartItem[]): CartItem[] => {
+  const merged = [...existingItems];
 
-                // Kiểm tra xem món trùng sản phẩm, trùng size và trùng danh sách topping không
-                const existingIndex = currentItems.findIndex((item) => {
-                    if (item.productId !== newItem.productId || item.size !== newItem.size) return false;
-                    
-                    const itemToppings = item.toppings || [];
-                    const newItemToppings = newItem.toppings || [];
+  guestItems.forEach((guestItem) => {
+    const existingIndex = merged.findIndex(
+      (item) => item.name === guestItem.name && item.size === guestItem.size
+    );
 
-                    if (itemToppings.length !== newItemToppings.length) return false;
+    if (existingIndex > -1) {
+      merged[existingIndex] = {
+        ...merged[existingIndex],
+        quantity: merged[existingIndex].quantity + guestItem.quantity,
+      };
+    } else {
+      merged.push(guestItem);
+    }
+  });
 
-                    return itemToppings.every((t, i) => 
-                        t.id === newItemToppings[i]?.id && t.quantity === newItemToppings[i]?.quantity
-                    );
-                });
+  return merged;
+};
 
-                if (existingIndex > -1) {
-                    const updatedItems = [...currentItems];
-                    const existingItem = updatedItems[existingIndex];
-                    const newQty = existingItem.quantity + newItem.quantity;
-                    const unitPrice = Number(existingItem.unitPrice) || 0;
+// Hàm lưu dữ liệu vào localStorage
+const saveToStorage = (userId: string | null, items: CartItem[]) => {
+  if (typeof window !== 'undefined') {
+    const key = getCartKey(userId);
+    localStorage.setItem(key, JSON.stringify(items));
+  }
+};
 
-                    updatedItems[existingIndex] = {
-                        ...existingItem,
-                        quantity: newQty,
-                        lineTotal: unitPrice * newQty,
-                    };
+export const useCartStore = create<CartStore>((set, get) => ({
+  items: [],
+  currentUserId: null,
 
-                    set({ items: updatedItems });
-                } else {
-                    const validQty = Number(newItem.quantity) || 1;
-                    const validUnitPrice = Number(newItem.unitPrice) || 0;
+  initUserCart: (userId: string | null) => {
+    if (typeof window === 'undefined') return;
 
-                    set({
-                        items: [
-                            ...currentItems,
-                            {
-                                ...newItem,
-                                quantity: validQty,
-                                unitPrice: validUnitPrice,
-                                lineTotal: validUnitPrice * validQty,
-                            },
-                        ],
-                    });
-                }
-            },
+    const guestKey = getCartKey(null);
+    const guestSaved = localStorage.getItem(guestKey);
+    let guestItems: CartItem[] = [];
 
-            removeItem: (index: number) => {
-                set((state) => ({
-                    items: state.items.filter((_, i) => i !== index),
-                }));
-            },
+    if (guestSaved) {
+      try {
+        guestItems = JSON.parse(guestSaved);
+      } catch (e) {
+        console.error('Lỗi khi đọc giỏ hàng khách:', e);
+      }
+    }
 
-            updateQuantity: (index: number, newQuantity: number) => {
-                if (newQuantity <= 0) {
-                    get().removeItem(index);
-                    return;
-                }
+    if (userId) {
+      // 🟢 NGƯỜI DÙNG ĐĂNG NHẬP
+      const userKey = getCartKey(userId);
+      const userSaved = localStorage.getItem(userKey);
+      let userItems: CartItem[] = [];
 
-                set((state) => {
-                    const updatedItems = [...state.items];
-                    const targetItem = updatedItems[index];
-
-                    if (targetItem) {
-                        const unitPrice = Number(targetItem.unitPrice) || 0;
-                        updatedItems[index] = {
-                            ...targetItem,
-                            quantity: newQuantity,
-                            lineTotal: unitPrice * newQuantity,
-                        };
-                    }
-
-                    return { items: updatedItems };
-                });
-            },
-
-            clearCart: () => set({ items: [] }),
-
-            totalItems: () =>
-                get().items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0),
-
-            totalPrice: () =>
-                get().items.reduce((sum, item) => {
-                    const line = Number(item.lineTotal);
-                    const unit = Number(item.unitPrice);
-                    const qty = Number(item.quantity) || 1;
-                    const itemTotal = !isNaN(line) && line > 0 ? line : unit * qty;
-                    return sum + (isNaN(itemTotal) ? 0 : itemTotal);
-                }, 0),
-
-            _hasHydrated: false,
-            setHasHydrated: (state: boolean) => set({ _hasHydrated: state }),
-        }),
-        {
-            name: 'brewlite-cart-storage',
-            storage: createJSONStorage(() => localStorage),
-            // FIX HYDRATION: báo cho store biết ngay khi đọc xong dữ liệu localStorage
-            onRehydrateStorage: () => (state) => {
-                state?.setHasHydrated(true);
-            },
+      if (userSaved) {
+        try {
+          userItems = JSON.parse(userSaved);
+        } catch (e) {
+          console.error('Lỗi khi đọc giỏ hàng người dùng:', e);
         }
-    )
-);
+      }
 
-// Hook dùng chung: mọi nơi hiển thị số lượng/tổng tiền giỏ hàng nên dùng hook này
-// để tránh lỗi Hydration failed khi giỏ hàng đã có sản phẩm từ trước.
-export const useHasCartHydrated = () => useCartStore((s) => s._hasHydrated);
+      // Nếu có món trong giỏ hàng Khách -> Gộp vào giỏ hàng User và dọn dẹp giỏ khách
+      if (guestItems.length > 0) {
+        userItems = mergeCartItems(userItems, guestItems);
+        localStorage.setItem(userKey, JSON.stringify(userItems));
+        localStorage.removeItem(guestKey); // Xóa giỏ hàng khách sau khi đã gộp thành công
+      }
+
+      set({ currentUserId: userId, items: userItems });
+    } else {
+      // ⚪ KHÁCH VẮNG LAI / ĐĂNG XUẤT
+      set({ currentUserId: null, items: guestItems });
+    }
+  },
+
+  addItem: (newItem) => {
+    const currentItems = get().items;
+
+    const existingIndex = currentItems.findIndex(
+      (item) => item.name === newItem.name && item.size === newItem.size
+    );
+
+    let updatedItems: CartItem[];
+    if (existingIndex > -1) {
+      updatedItems = [...currentItems];
+      updatedItems[existingIndex].quantity += newItem.quantity;
+    } else {
+      updatedItems = [...currentItems, newItem];
+    }
+
+    set({ items: updatedItems });
+    saveToStorage(get().currentUserId, updatedItems);
+  },
+
+  removeItem: (index) => {
+    const updatedItems = get().items.filter((_, i) => i !== index);
+    set({ items: updatedItems });
+    saveToStorage(get().currentUserId, updatedItems);
+  },
+
+  updateQuantity: (index, quantity) => {
+    if (quantity <= 0) {
+      get().removeItem(index);
+      return;
+    }
+    const updatedItems = [...get().items];
+    updatedItems[index].quantity = quantity;
+    set({ items: updatedItems });
+    saveToStorage(get().currentUserId, updatedItems);
+  },
+
+  clearCart: () => {
+    set({ items: [] });
+    if (typeof window !== 'undefined') {
+      const key = getCartKey(get().currentUserId);
+      localStorage.removeItem(key);
+    }
+  },
+
+  totalPrice: () => {
+    return get().items.reduce((total, item) => {
+      const itemPrice = item.lineTotal || item.unitPrice * item.quantity;
+      return total + itemPrice;
+    }, 0);
+  },
+
+  totalItems: () => {
+    return get().items.reduce((total, item) => total + item.quantity, 0);
+  },
+}));
+
+export const useHasCartHydrated = () => true;

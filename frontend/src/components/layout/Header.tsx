@@ -53,6 +53,7 @@ export function Header() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isUserMenuHovered, setIsUserMenuHovered] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 
   const hasHydrated = useHasCartHydrated();
   const { user, loading, logout } = useAuth();
@@ -65,6 +66,7 @@ export function Header() {
   const removeItem = useCartStore((s) => s.removeItem);
 
   const menuRef = useRef<HTMLDivElement>(null);
+    const userMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleUnauthorized() {
@@ -78,6 +80,10 @@ export function Header() {
     function handleClickOutside(e: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setMenuOpen(false);
+      }
+      // Bổ sung đóng User Menu khi click ra ngoài
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setIsUserMenuOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -265,12 +271,12 @@ export function Header() {
           {loading ? (
             <div className="h-8 w-24 animate-pulse rounded-full bg-primary/10" />
           ) : user ? (
-            <div
-              className="relative py-2"
-              onMouseEnter={() => setIsUserMenuHovered(true)}
-              onMouseLeave={() => setIsUserMenuHovered(false)}
-            >
-              <button className="flex items-center gap-2 rounded-full border border-primary/20 px-3 py-1.5 text-sm font-semibold text-text transition-colors hover:bg-background hover:text-primary">
+            <div ref={userMenuRef} className="relative py-2">
+              <button
+                type="button"
+                onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                className="flex items-center gap-2 rounded-full border border-primary/20 px-3 py-1.5 text-sm font-semibold text-text transition-colors hover:bg-background hover:text-primary active:scale-95"
+              >
                 <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-primary">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
@@ -280,11 +286,11 @@ export function Header() {
                 <span className="max-w-[120px] truncate" title={user.email}>
                   {user.name || user.email}
                 </span>
-                <ChevronIcon open={isUserMenuHovered} />
+                <ChevronIcon open={isUserMenuOpen} />
               </button>
 
-              {isUserMenuHovered && (
-                <div className="absolute right-0 top-full z-50 mt-1 w-56 rounded-2xl border border-primary/15 bg-surface p-2 shadow-xl transition-all">
+              {isUserMenuOpen && (
+                <div className="absolute right-0 top-full z-50 mt-2 w-56 rounded-2xl border border-primary/15 bg-surface p-2 shadow-xl transition-all">
                   <div className="mb-1 rounded-t-xl border-b border-primary/10 bg-primary/5 px-3 py-2">
                     <p className="truncate text-sm font-bold text-text">{user.name || 'Thành viên'}</p>
                     <p className="truncate text-xs text-text/60">{user.email}</p>
@@ -293,6 +299,7 @@ export function Header() {
                   <div className="py-1">
                     <Link
                       href="/profile"
+                      onClick={() => setIsUserMenuOpen(false)}
                       className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-text transition-colors hover:bg-background hover:text-primary"
                     >
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -304,6 +311,7 @@ export function Header() {
                     
                     <Link
                       href="/rewards"
+                      onClick={() => setIsUserMenuOpen(false)}
                       className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-text transition-colors hover:bg-background hover:text-primary"
                     >
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -316,7 +324,10 @@ export function Header() {
                   <div className="mt-1 border-t border-primary/10 pt-1">
                     <button
                       type="button"
-                      onClick={() => setShowLogoutModal(true)}
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        setShowLogoutModal(true);
+                      }}
                       className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-red-500 transition-colors hover:bg-red-50 hover:text-red-600"
                     >
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

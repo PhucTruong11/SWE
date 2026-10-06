@@ -12,6 +12,7 @@ export interface CartItem {
   basePrice?: number;
   totalToppingPrice?: number;
   imageUrl?: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   toppings?: any[];
   lineTotal?: number;
 }

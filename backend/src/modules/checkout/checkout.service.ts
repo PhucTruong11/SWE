@@ -25,6 +25,29 @@ export interface VoucherRule {
 }
 
 export const VALID_VOUCHERS: Record<string, VoucherRule> = {
+  WELCOME10: {
+    code: 'WELCOME10',
+    description: 'Giảm 10% cho đơn hàng từ 30k',
+    discountType: 'PERCENT',
+    discountValue: 10,
+    minOrderValue: 30000,
+    maxDiscount: 15000,
+  },
+  COFFEE20K: {
+    code: 'COFFEE20K',
+    description: 'Giảm ngay 20.000đ cho đơn từ 40k',
+    discountType: 'FIXED',
+    discountValue: 20000,
+    minOrderValue: 40000,
+  },
+  BREWLITE50: {
+    code: 'BREWLITE50',
+    description: 'Giảm 50% tối đa 30.000đ',
+    discountType: 'PERCENT',
+    discountValue: 50,
+    minOrderValue: 50000,
+    maxDiscount: 30000,
+  },
   CHAOBAN: {
     code: 'CHAOBAN',
     description: 'Giảm 15.000đ cho đơn từ 40.000đ',
@@ -42,7 +65,7 @@ export const VALID_VOUCHERS: Record<string, VoucherRule> = {
   },
   FREESHIP: {
     code: 'FREESHIP',
-    description: 'Giảm 10.000đ',
+    description: 'Giảm 10.000đ cho đơn từ 30.000đ',
     discountType: 'FIXED',
     discountValue: 10000,
     minOrderValue: 30000,
@@ -104,31 +127,58 @@ export class CheckoutService {
     }
 
     const cleanCode = promoCode.trim().toUpperCase();
-    const rule = VALID_VOUCHERS[cleanCode];
 
-    if (!rule) {
+    // 1. Kiểm tra trong DB Promotions trước
+    const dbPromo = await this.prisma.promotion.findUnique({
+      where: { code: cleanCode },
+    });
+
+    // 2. Dự phòng trong VALID_VOUCHERS nếu DB chưa có
+    const fallbackRule = VALID_VOUCHERS[cleanCode];
+
+    if (!dbPromo && !fallbackRule) {
       throw new BadRequestException(
         `Mã giảm giá "${promoCode}" không tồn tại hoặc đã hết hạn`,
       );
     }
 
+    if (dbPromo && !dbPromo.isActive) {
+      throw new BadRequestException(
+        `Mã giảm giá "${promoCode}" đã ngừng hoạt động`,
+      );
+    }
+
     // Giá trị đơn ban đầu (trước khi trừ giảm giá cũ nếu có)
     const baseTotal = order.total + order.discount;
+    const minOrderValue = dbPromo ? dbPromo.minOrderValue : (fallbackRule?.minOrderValue ?? 0);
 
-    if (baseTotal < rule.minOrderValue) {
+    if (baseTotal < minOrderValue) {
       throw new BadRequestException(
-        `Đơn hàng cần đạt tối thiểu ${rule.minOrderValue.toLocaleString('vi-VN')}đ để sử dụng mã "${rule.code}".`,
+        `Đơn hàng cần đạt tối thiểu ${minOrderValue.toLocaleString('vi-VN')}đ để sử dụng mã "${cleanCode}".`,
       );
     }
 
     // Tính toán số tiền được giảm
     let discountAmount = 0;
-    if (rule.discountType === 'FIXED') {
-      discountAmount = rule.discountValue;
-    } else {
-      discountAmount = Math.floor((baseTotal * rule.discountValue) / 100);
-      if (rule.maxDiscount && discountAmount > rule.maxDiscount) {
-        discountAmount = rule.maxDiscount;
+    const description = dbPromo?.description || fallbackRule?.description || '';
+
+    if (dbPromo) {
+      if (dbPromo.discountType === 'PERCENTAGE') {
+        discountAmount = Math.floor((baseTotal * dbPromo.discountValue) / 100);
+        if (dbPromo.maxDiscount && discountAmount > dbPromo.maxDiscount) {
+          discountAmount = dbPromo.maxDiscount;
+        }
+      } else {
+        discountAmount = Math.floor(dbPromo.discountValue);
+      }
+    } else if (fallbackRule) {
+      if (fallbackRule.discountType === 'FIXED') {
+        discountAmount = fallbackRule.discountValue;
+      } else {
+        discountAmount = Math.floor((baseTotal * fallbackRule.discountValue) / 100);
+        if (fallbackRule.maxDiscount && discountAmount > fallbackRule.maxDiscount) {
+          discountAmount = fallbackRule.maxDiscount;
+        }
       }
     }
 
@@ -136,10 +186,10 @@ export class CheckoutService {
     const finalTotal = Math.max(0, baseTotal - discountAmount);
 
     // Cập nhật lại đơn hàng
-    const updatedOrder = await this.prisma.order.update({
+    await this.prisma.order.update({
       where: { id: orderId },
       data: {
-        promoCode: rule.code,
+        promoCode: cleanCode,
         discount: discountAmount,
         total: finalTotal,
       },
@@ -147,12 +197,12 @@ export class CheckoutService {
 
     return {
       success: true,
-      promoCode: rule.code,
-      description: rule.description,
+      promoCode: cleanCode,
+      description,
       discount: discountAmount,
       originalTotal: baseTotal,
       finalTotal,
-      message: `Áp dụng thành công mã "${rule.code}"! Bạn được giảm ${discountAmount.toLocaleString('vi-VN')}đ.`,
+      message: `Áp dụng thành công mã "${cleanCode}"! Bạn được giảm ${discountAmount.toLocaleString('vi-VN')}đ.`,
     };
   }
 
@@ -165,9 +215,20 @@ export class CheckoutService {
     idempotencyKey: string,
     promoCode?: string,
   ) {
-    // Nếu có truyền kèm mã giảm giá, áp dụng trước
-    if (promoCode) {
-      await this.applyVoucher(orderId, promoCode);
+    // Nếu có truyền kèm mã giảm giá, kiểm tra xem đơn đã áp dụng mã này chưa để tránh tính lặp
+    if (promoCode && promoCode.trim()) {
+      const existingOrderForPromo = await this.prisma.order.findUnique({
+        where: { id: orderId },
+        select: { promoCode: true, discount: true },
+      });
+
+      // Chỉ gọi applyVoucher nếu mã gửi lên khác với mã đã lưu trong order
+      if (
+        !existingOrderForPromo ||
+        existingOrderForPromo.promoCode?.toUpperCase() !== promoCode.trim().toUpperCase()
+      ) {
+        await this.applyVoucher(orderId, promoCode);
+      }
     }
     // ── Bước 1: Chống thanh toán trùng lặp (Idempotency Guard) ──
     const existingPayment = await this.prisma.payment.findUnique({

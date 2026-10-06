@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useCartStore } from '@/stores/cart.store';
+import { useCartStore, useHasCartHydrated } from '@/stores/cart.store';
 import api from '@/lib/api';
 import {
   ReceiptInvoice,
@@ -16,6 +16,7 @@ import {
 
 export default function CheckoutPage() {
   const { items, clearCart, appliedPromo } = useCartStore();
+  const hasHydrated = useHasCartHydrated();
 
   // Phương thức thanh toán: EWALLET (MoMo) | CARD (Thẻ ngân hàng)
   const [method, setMethod] = useState<'EWALLET' | 'CARD'>('EWALLET');
@@ -157,7 +158,7 @@ export default function CheckoutPage() {
           productId: item.productId,
           size: item.size,
           qty: item.quantity,
-          toppings: item.toppings?.map((t) => t.name) || [],
+          toppings: item.toppings?.flatMap((t) => Array(t.quantity).fill(t.name)) || [],
           lineTotal: item.lineTotal,
         })),
         promoCode: appliedPromo?.code,
@@ -212,7 +213,7 @@ export default function CheckoutPage() {
           month: '2-digit',
           year: 'numeric',
         }),
-        items,
+        items: [...items],
         subtotal,
         discount: discountAmount,
         promoCode: appliedPromo?.code || createdOrder.promoCode || null,
@@ -224,21 +225,22 @@ export default function CheckoutPage() {
       // 5. Dọn dẹp giỏ hàng sau khi hoàn tất
       clearCart();
     } catch (err: unknown) {
-      const message =
+      let message = 'Có lỗi xảy ra trong quá trình thanh toán đơn hàng. Vui lòng thử lại!';
+      if (
         typeof err === 'object' &&
         err !== null &&
         'response' in err &&
-        typeof err.response === 'object' &&
-        err.response !== null &&
-        'data' in err.response &&
-        typeof err.response.data === 'object' &&
-        err.response.data !== null &&
-        'message' in err.response.data &&
-        typeof err.response.data.message === 'string'
-          ? err.response.data.message
-          : err instanceof Error
-          ? err.message
-          : 'Có lỗi xảy ra trong quá trình thanh toán đơn hàng. Vui lòng thử lại!';
+        typeof (err as { response?: unknown }).response === 'object'
+      ) {
+        const resData = (err as { response?: { data?: { message?: unknown } } }).response?.data;
+        if (resData?.message) {
+          message = Array.isArray(resData.message)
+            ? resData.message.join(', ')
+            : String(resData.message);
+        }
+      } else if (err instanceof Error) {
+        message = err.message;
+      }
 
       setErrorMessage(message);
     } finally {
@@ -260,6 +262,21 @@ export default function CheckoutPage() {
             clearCart();
           }}
         />
+      </main>
+    );
+  }
+
+  // Chờ đọc xong dữ liệu giỏ hàng từ localStorage để tránh giật giao diện
+  if (!hasHydrated) {
+    return (
+      <main className="mx-auto flex w-full max-w-md flex-1 items-center justify-center px-4 py-24">
+        <div className="flex flex-col items-center gap-3 text-sm text-gray-500 font-medium">
+          <svg className="h-7 w-7 animate-spin text-primary" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+          </svg>
+          Đang tải thông tin đơn hàng...
+        </div>
       </main>
     );
   }

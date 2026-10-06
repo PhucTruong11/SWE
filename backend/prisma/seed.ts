@@ -377,7 +377,41 @@ const PROMOTIONS = [
     maxDiscount: 30000,
     isActive: true,
   },
+  {
+    code: 'CHAOBAN',
+    description: 'Giảm 15.000đ cho đơn từ 40.000đ',
+    discountType: 'FIXED_AMOUNT',
+    discountValue: 15000,
+    minOrderValue: 40000,
+    isActive: true,
+  },
+  {
+    code: 'BREW10',
+    description: 'Giảm 10% (tối đa 25.000đ) cho mọi đơn',
+    discountType: 'PERCENTAGE',
+    discountValue: 10,
+    minOrderValue: 0,
+    maxDiscount: 25000,
+    isActive: true,
+  },
+  {
+    code: 'FREESHIP',
+    description: 'Giảm 10.000đ cho đơn từ 30.000đ',
+    discountType: 'FIXED_AMOUNT',
+    discountValue: 10000,
+    minOrderValue: 30000,
+    isActive: true,
+  },
+  {
+    code: 'TRIAN',
+    description: 'Tặng 1 ly nước miễn phí (giảm 100%)',
+    discountType: 'PERCENTAGE',
+    discountValue: 100,
+    minOrderValue: 0,
+    isActive: true,
+  },
 ];
+
 // ==========================================
 // Hàm Seed
 // ==========================================

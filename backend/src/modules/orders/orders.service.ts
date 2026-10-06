@@ -47,6 +47,17 @@ export class OrdersService {
             }
         }
 
+        // Lấy tất cả tên topping được yêu cầu trong giỏ hàng
+        const requestedToppingNames = dto.items.flatMap(item => item.toppings || []);
+        const uniqueToppingNames = [...new Set(requestedToppingNames)];
+        
+        let toppingsFromDb: any[] = [];
+        if (uniqueToppingNames.length > 0) {
+            toppingsFromDb = await this.prisma.topping.findMany({
+                where: { name: { in: uniqueToppingNames }, isAvailable: true }
+            });
+        }
+
         // Tính lại tổng tiền từng dòng và tổng đơn hàng
         let calculatedTotal = 0;
         const orderItemsData = dto.items.map((item) => {
@@ -59,9 +70,21 @@ export class OrdersService {
                 );
             }
 
-            // Tính thành tiền
-            // Topping giá tính theo snapshot từ Frontend
-            const lineTotalFromDb = priceObj.price * item.qty;
+            // Tính tiền topping
+            let toppingTotal = 0;
+            if (item.toppings && item.toppings.length > 0) {
+                for (const tName of item.toppings) {
+                    const dbTopping = toppingsFromDb.find(t => t.name === tName);
+                    if (dbTopping) {
+                        toppingTotal += dbTopping.price;
+                    } else {
+                        // Bỏ qua hoặc báo lỗi, ở đây chọn bỏ qua nếu không tìm thấy (hoặc đã ẩn)
+                    }
+                }
+            }
+
+            // Tính thành tiền (Giá size + giá các topping) * số lượng
+            const lineTotalFromDb = (priceObj.price + toppingTotal) * item.qty;
             calculatedTotal += lineTotalFromDb;
 
             return {
@@ -116,8 +139,16 @@ export class OrdersService {
 
     // GET /orders/me - Lấy danh sách đơn hàng của user đang đăng nhập
     async findAllByUser(userId: string) {
+        let targetUserId = userId;
+        if (targetUserId === 'guest-user-placeholder') {
+            const defaultUser = await this.prisma.user.findFirst();
+            if (defaultUser) {
+                targetUserId = defaultUser.id;
+            }
+        }
+
         return this.prisma.order.findMany({
-            where: { userId },
+            where: { userId: targetUserId },
             orderBy: { createdAt: 'desc' }, // Đơn mới nhất lên đầu
             include: {
                 items: {
@@ -145,7 +176,8 @@ export class OrdersService {
         }
 
         // Kiểm tra đơn hàng có thuộc về user này không (chống xem đơn của người khác)
-        if (order.userId !== userId) {
+        // Nếu là khách vãng lai (guest) thì cho phép xem đơn theo link mã đơn hàng
+        if (userId !== 'guest-user-placeholder' && order.userId !== userId) {
             throw new NotFoundException(`Không tìm thấy đơn hàng #${id}`);
         }
 

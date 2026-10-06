@@ -38,6 +38,56 @@ export function calculateVoucherDiscount(code: string, subtotal: number): {
     if (!clean) {
         return { valid: false, discount: 0, message: 'Vui lòng nhập mã giảm giá', description: '' };
     }
+    if (clean === 'WELCOME10') {
+        if (subtotal < 30000) {
+            return {
+                valid: false,
+                discount: 0,
+                message: 'Mã WELCOME10 yêu cầu đơn hàng từ 30.000đ trở lên.',
+                description: 'Giảm 10% (tối đa 15.000đ)',
+            };
+        }
+        const disc = Math.min(15000, Math.floor(subtotal * 0.1));
+        return {
+            valid: true,
+            discount: disc,
+            message: `Áp dụng mã WELCOME10 thành công (-${disc.toLocaleString('vi-VN')}đ)`,
+            description: 'Giảm 10% cho đơn từ 30k',
+        };
+    }
+    if (clean === 'COFFEE20K') {
+        if (subtotal < 40000) {
+            return {
+                valid: false,
+                discount: 0,
+                message: 'Mã COFFEE20K yêu cầu đơn hàng từ 40.000đ trở lên.',
+                description: 'Giảm ngay 20.000đ cho đơn từ 40k',
+            };
+        }
+        return {
+            valid: true,
+            discount: 20000,
+            message: 'Áp dụng mã COFFEE20K thành công (-20.000đ)',
+            description: 'Giảm ngay 20.000đ cho đơn từ 40k',
+        };
+    }
+    if (clean === 'BREWLITE50') {
+        if (subtotal < 50000) {
+            return {
+                valid: false,
+                discount: 0,
+                message: 'Mã BREWLITE50 yêu cầu đơn hàng từ 50.000đ trở lên.',
+                description: 'Giảm 50% (tối đa 30.000đ)',
+            };
+        }
+        const disc = Math.min(30000, Math.floor(subtotal * 0.5));
+        return {
+            valid: true,
+            discount: disc,
+            message: `Áp dụng mã BREWLITE50 thành công (-${disc.toLocaleString('vi-VN')}đ)`,
+            description: 'Giảm 50% tối đa 30.000đ',
+        };
+    }
     if (clean === 'CHAOBAN') {
         if (subtotal < 40000) {
             return {

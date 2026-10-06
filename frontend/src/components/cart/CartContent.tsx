@@ -23,17 +23,19 @@ interface Promotion {
 
 export function CartContent({ onClose }: CartContentProps) {
   const router = useRouter();
-  const { items, totalPrice, totalItems, clearCart } = useCartStore();
+  const { items, totalPrice, totalItems, clearCart, applyPromo, appliedPromo, removePromo } = useCartStore();
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // --- STATE QUẢN LÝ PROMO CODE & DANH SÁCH MÃ ---
-  const [promoCode, setPromoCode] = useState('');
-  const [appliedCode, setAppliedCode] = useState<string | null>(null);
-  const [discountAmount, setDiscountAmount] = useState(0);
+  const [promoCode, setPromoCode] = useState(appliedPromo?.code || '');
+  const [appliedCode, setAppliedCode] = useState<string | null>(appliedPromo?.code || null);
+  const [discountAmount, setDiscountAmount] = useState(appliedPromo?.discount || 0);
   const [promoLoading, setPromoLoading] = useState(false);
-  const [promoMsg, setPromoMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [promoMsg, setPromoMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(
+    appliedPromo ? { type: 'success', text: `Đang áp dụng mã: ${appliedPromo.code}` } : null
+  );
 
   const [availablePromos, setAvailablePromos] = useState<Promotion[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -120,46 +122,22 @@ export function CartContent({ onClose }: CartContentProps) {
     }
   };
 
-  // --- HÀM TẠO ĐƠN HÀNG ---
-  const handlePlaceOrder = async () => {
-    setIsLoading(true);
-    setErrorMsg(null);
-
-    try {
-      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-
-      const payload = {
-        items: items.map((item) => ({
-          productId: item.productId,
-          size: item.size,
-          qty: item.quantity,
-          toppings: item.toppings?.map((t) => t.name) ?? [],
-          lineTotal: item.lineTotal,
-        })),
-        promoCode: appliedCode,
-      };
-
-      const res = await fetch(`${backendUrl}/orders`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+  // --- HÀM ĐIẾU HƯỚNG SANG TRANG THANH TOÁN ---
+  const handleGoToCheckout = () => {
+    // Lưu mã giảm giá đã áp dụng vào store trước khi qua trang checkout
+    if (appliedCode && discountAmount > 0) {
+      applyPromo({
+        code: appliedCode,
+        discount: discountAmount,
+        description: 'Ưu đãi đã áp dụng',
       });
-
-      const json = await res.json();
-
-      if (!res.ok) {
-        setErrorMsg(json.message || 'Có lỗi xảy ra, vui lòng thử lại!');
-        return;
-      }
-
-      const orderId = json.data?.id;
-      clearCart();
-      router.push(`/order-success?orderId=${orderId}`);
-    } catch {
-      setErrorMsg('Không thể kết nối đến máy chủ. Vui lòng kiểm tra lại kết nối!');
-    } finally {
-      setIsLoading(false);
+    } else {
+      removePromo();
     }
+    
+    // Đóng panel giỏ hàng và chuyển hướng
+    if (onClose) onClose();
+    router.push('/checkout');
   };
 
   if (items.length === 0) {
@@ -315,7 +293,7 @@ export function CartContent({ onClose }: CartContentProps) {
         )}
 
         <button
-          onClick={handlePlaceOrder}
+          onClick={handleGoToCheckout}
           disabled={isLoading}
           className="w-full bg-primary hover:bg-primary-hover disabled:bg-primary/60 disabled:cursor-not-allowed text-white py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-2 transition-all shadow-md hover:shadow-lg active:scale-95"
         >

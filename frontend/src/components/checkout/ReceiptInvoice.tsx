@@ -170,7 +170,16 @@ export function ReceiptInvoice({ data, onReset }: ReceiptInvoiceProps) {
       </div>
 
       {/* Nút hành động */}
-      <div className="mt-6 flex w-full max-w-2xl gap-4 no-print">
+      <div className="mt-6 flex w-full max-w-2xl flex-col sm:flex-row gap-3 no-print">
+        <Link
+          href={`/orders/${data.orderId}`}
+          onClick={onReset}
+          className="flex-1 flex items-center justify-center gap-2 rounded-full bg-emerald-700 py-3.5 text-center font-bold text-white hover:bg-emerald-800 transition-colors shadow-md"
+        >
+          <span>📦</span>
+          Theo Dõi Đơn Hàng
+        </Link>
+
         <button
           type="button"
           onClick={() => window.print()}

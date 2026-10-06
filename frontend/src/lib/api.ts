@@ -12,9 +12,11 @@ export const api = axios.create({
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    const requestUrl = error.config?.url?.split('?')[0];
     if (
       error.response?.status === 401 &&
-      typeof window !== 'undefined'
+      typeof window !== 'undefined' &&
+      !requestUrl?.endsWith('/auth/me')
     ) {
       window.dispatchEvent(new Event('unauthorized'));
     }
@@ -22,5 +24,4 @@ api.interceptors.response.use(
   }
 );
 
-// 👈 Thêm dòng này để tương thích với code cũ của các bạn trong nhóm
 export default api;

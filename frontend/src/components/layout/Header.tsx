@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from './Sidebar';
 import { useAuth } from '@/hooks/useAuth';
+import { useCategories } from '@/hooks/useCategories';
 import { useCartStore, useHasCartHydrated } from '@/stores/cart.store';
 
 // Kiểu dữ liệu tối thiểu cho 1 dòng sản phẩm trong popup giỏ hàng
@@ -45,41 +46,33 @@ const ChevronIcon = ({ open }: { open: boolean }) => (
   </svg>
 );
 
-export const CATEGORIES = [
-  { slug: 'phin', label: 'Cà phê Phin' },
-  { slug: 'phindi', label: 'PhinDi' },
-  { slug: 'espresso', label: 'Cà phê Espresso' },
-  { slug: 'tra', label: 'Trà' },
-  { slug: 'freeze', label: 'Đá xay (Freeze)' },
-  { slug: 'other', label: 'Khác' },
-];
-
 export function Header() {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [isMenuOpen, setMenuOpen] = useState(false);
   const [isCartHovered, setIsCartHovered] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // State quản lý hiển thị menu người dùng khi hover
   const [isUserMenuHovered, setIsUserMenuHovered] = useState(false);
-
-  // State hiển thị Modal xác nhận đăng xuất
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const hasHydrated = useHasCartHydrated();
-
-  // Tích hợp user, loading và hàm logout từ useAuth
   const { user, loading, logout } = useAuth();
+  const { categories } = useCategories();
   const router = useRouter();
 
-  // Lấy dữ liệu từ Cart Store
   const cartItems = useCartStore((s) => s.items) as CartPreviewItem[];
   const cartCount = useCartStore((s) => s.totalItems());
   const cartTotalPrice = useCartStore((s) => s.totalPrice());
   const removeItem = useCartStore((s) => s.removeItem);
 
-  // Ref bọc quanh nút "Menu" + dropdown
   const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleUnauthorized() {
+      router.push('/auth/login');
+    }
+    window.addEventListener('unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('unauthorized', handleUnauthorized);
+  }, [router]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -95,7 +88,7 @@ export function Header() {
     e.preventDefault();
     const q = searchQuery.trim();
     if (!q) return;
-    router.push(`/search?q=${encodeURIComponent(q)}`);
+    router.push(`/?q=${encodeURIComponent(q)}`);
   };
 
   return (
@@ -111,9 +104,14 @@ export function Header() {
               Trang chủ
             </Link>
 
-            <div ref={menuRef} className="relative">
+            {/* Menu Dropdown sử dụng dữ liệu từ Hook useCategories */}
+            <div
+              ref={menuRef}
+              className="relative"
+              onMouseEnter={() => setMenuOpen(true)}
+              onMouseLeave={() => setMenuOpen(false)}
+            >
               <button
-                onClick={() => setMenuOpen((v) => !v)}
                 className="flex items-center gap-1 whitespace-nowrap hover:text-primary"
                 aria-expanded={isMenuOpen}
               >
@@ -122,8 +120,15 @@ export function Header() {
               </button>
 
               {isMenuOpen && (
-                <div className="absolute left-1/2 top-full z-40 mt-2 w-56 -translate-x-1/2 rounded-xl border border-primary/10 bg-surface p-2 shadow-lg">
-                  {CATEGORIES.map((cat) => (
+                <div className="absolute left-1/2 top-full z-40 w-56 -translate-x-1/2 rounded-xl border border-primary/10 bg-surface p-2 shadow-lg">
+                  <Link
+                    href="/?view=all"
+                    onClick={() => setMenuOpen(false)}
+                    className="block rounded-lg px-3 py-2 text-sm font-bold text-primary hover:bg-background"
+                  >
+                    Tất cả
+                  </Link>
+                  {categories.map((cat) => (
                     <Link
                       key={cat.slug}
                       href={`/?category=${encodeURIComponent(cat.slug)}`}
@@ -157,7 +162,7 @@ export function Header() {
         </div>
 
         <div className="hidden shrink-0 items-center gap-5 lg:flex">
-          {/* POPUP NÚT GIỎ HÀNG KHI HOVER */}
+          {/* POPUP GIỎ HÀNG KHI HOVER */}
           <div
             className="relative py-2"
             onMouseEnter={() => setIsCartHovered(true)}
@@ -170,7 +175,6 @@ export function Header() {
               <span>Giỏ hàng ({hasHydrated ? cartCount : 0})</span>
             </Link>
 
-            {/* Dropdown Khung preview giỏ hàng */}
             {isCartHovered && (
               <div className="absolute right-0 top-full z-50 w-80 rounded-2xl border border-primary/15 bg-surface p-4 shadow-xl transition-all">
                 <h4 className="border-b border-primary/10 pb-2.5 text-sm font-bold text-text">
@@ -257,11 +261,10 @@ export function Header() {
             )}
           </div>
 
-          {/* HIỂN THỊ KHU VỰC TÀI KHOẢN KHÁCH HÀNG */}
+          {/* KHU VỰC TÀI KHOẢN KHÁCH HÀNG */}
           {loading ? (
             <div className="h-8 w-24 animate-pulse rounded-full bg-primary/10" />
           ) : user ? (
-            /* MENU DROPDOWN TÀI KHOẢN KHI HOVER */
             <div
               className="relative py-2"
               onMouseEnter={() => setIsUserMenuHovered(true)}
@@ -280,7 +283,6 @@ export function Header() {
                 <ChevronIcon open={isUserMenuHovered} />
               </button>
 
-              {/* KHUNG THẢ XUỐNG KHI HOVER */}
               {isUserMenuHovered && (
                 <div className="absolute right-0 top-full z-50 mt-1 w-56 rounded-2xl border border-primary/15 bg-surface p-2 shadow-xl transition-all">
                   <div className="mb-1 rounded-t-xl border-b border-primary/10 bg-primary/5 px-3 py-2">

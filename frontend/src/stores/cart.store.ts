@@ -20,6 +20,7 @@ export interface CartItem {
 interface CartStore {
   items: CartItem[];
   currentUserId: string | null;
+  appliedPromo: { code: string; discount: number; description: string } | null;
 
   initUserCart: (userId: string | null) => void;
   addItem: (item: CartItem) => void;
@@ -28,6 +29,8 @@ interface CartStore {
   clearCart: () => void;
   totalPrice: () => number;
   totalItems: () => number;
+  applyPromo: (promo: { code: string; discount: number; description: string }) => void;
+  removePromo: () => void;
 }
 
 // Tạo key localStorage độc lập cho từng user hoặc khách
@@ -68,6 +71,7 @@ const saveToStorage = (userId: string | null, items: CartItem[]) => {
 export const useCartStore = create<CartStore>((set, get) => ({
   items: [],
   currentUserId: null,
+  appliedPromo: null,
 
   initUserCart: (userId: string | null) => {
     if (typeof window === 'undefined') return;
@@ -149,7 +153,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
   },
 
   clearCart: () => {
-    set({ items: [] });
+    set({ items: [], appliedPromo: null });
     if (typeof window !== 'undefined') {
       const key = getCartKey(get().currentUserId);
       localStorage.removeItem(key);
@@ -166,6 +170,9 @@ export const useCartStore = create<CartStore>((set, get) => ({
   totalItems: () => {
     return get().items.reduce((total, item) => total + item.quantity, 0);
   },
+
+  applyPromo: (promo) => set({ appliedPromo: promo }),
+  removePromo: () => set({ appliedPromo: null }),
 }));
 
 export const useHasCartHydrated = () => true;

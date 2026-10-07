@@ -26,7 +26,7 @@ interface Promotion {
 export function CartContent({ onClose }: CartContentProps) {
   const router = useRouter();
   const { isAuthenticated, loading: authLoading } = useAuth();
-  const { items, totalPrice, totalItems, clearCart } = useCartStore();
+  const { items, totalPrice, totalItems, clearCart, appliedPromo, applyPromo, removePromo } = useCartStore();
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -34,8 +34,7 @@ export function CartContent({ onClose }: CartContentProps) {
 
   // --- STATE QUẢN LÝ PROMO CODE & DANH SÁCH MÃ ---
   const [promoCode, setPromoCode] = useState('');
-  const [appliedCode, setAppliedCode] = useState<string | null>(null);
-  const [discountAmount, setDiscountAmount] = useState(0);
+  const discountAmount = appliedPromo ? appliedPromo.discount : 0;
   const [promoLoading, setPromoLoading] = useState(false);
   const [promoMsg, setPromoMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -116,19 +115,20 @@ export function CartContent({ onClose }: CartContentProps) {
       const json = await res.json();
 
       if (!res.ok) {
-        setDiscountAmount(0);
-        setAppliedCode(null);
+        removePromo();
         setPromoMsg({ type: 'error', text: json.message || 'Mã ưu đãi không hợp lệ' });
         return;
       }
 
       setPromoCode(json.code);
-      setDiscountAmount(json.discountAmount);
-      setAppliedCode(json.code);
+      applyPromo({
+        code: json.code,
+        discount: json.discountAmount,
+        description: json.message || 'Khuyến mãi'
+      });
       setPromoMsg({ type: 'success', text: json.message || 'Áp dụng mã ưu đãi thành công!' });
     } catch {
-      setDiscountAmount(0);
-      setAppliedCode(null);
+      removePromo();
       setPromoMsg({ type: 'error', text: 'Không thể kết nối đến máy chủ!' });
     } finally {
       setPromoLoading(false);
@@ -149,17 +149,17 @@ export function CartContent({ onClose }: CartContentProps) {
       const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
       const payload = {
-      items: items.map((item) => ({
-        // 1. Sử dụng item.id hoặc item.productId (ép kiểu an toàn nếu type CartItem dùng `id`)
-        productId: (item as any).productId || item.id,
-        size: item.size,
-        qty: item.quantity,
-        // 2. Xử lý an toàn cho toppings (kiểm tra t là string hay object trước khi lấy name)
-        toppings: item.toppings?.map((t) => (typeof t === 'string' ? t : t.name)) ?? [],
-        lineTotal: item.lineTotal,
-      })),
-      promoCode: appliedCode,
-    };
+        items: items.map((item) => ({
+          // 1. Sử dụng item.id hoặc item.productId (ép kiểu an toàn nếu type CartItem dùng `id`)
+          productId: (item as any).productId || item.id,
+          size: item.size,
+          qty: item.quantity,
+          // 2. Xử lý an toàn cho toppings (kiểm tra t là string hay object trước khi lấy name)
+          toppings: item.toppings?.map((t) => (typeof t === 'string' ? t : t.name)) ?? [],
+          lineTotal: item.lineTotal,
+        })),
+        promoCode: appliedPromo?.code || null,
+      };
 
       const res = await fetch(`${backendUrl}/orders`, {
         method: 'POST',
@@ -210,10 +210,10 @@ export function CartContent({ onClose }: CartContentProps) {
     <div className="flex w-full md:justify-center transition-all duration-300 items-stretch relative z-20">
       {/* Wrapper vừa khít 2 cột */}
       <div ref={dropdownRef} className="flex items-stretch">
-        
+
         {/* 1. CỘT TRÁI: GIỎ HÀNG CHÍNH */}
-        <div className="flex flex-col bg-surface md:bg-white h-full md:h-auto w-full md:w-[650px] md:rounded-3xl md:shadow-xl md:border md:border-gray-100 md:overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] shrink-0">
-          
+        <div className="flex flex-col bg-surface md:bg-white h-full md:h-[80vh] md:max-h-[800px] w-full md:w-[650px] md:rounded-3xl md:shadow-xl md:border md:border-gray-100 md:overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] shrink-0">
+
           {/* Danh sách sản phẩm */}
           <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-background/50">
             <h2 className="font-bold text-lg text-text mb-4">
@@ -228,7 +228,7 @@ export function CartContent({ onClose }: CartContentProps) {
 
           {/* Khối Mã giảm giá & Tóm tắt đơn hàng */}
           <div className="bg-white p-4 md:p-6 border-t border-gray-100 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)]">
-            
+
             {/* Khung nhập mã */}
             <div className="relative mb-2">
               <div className="flex gap-2">
@@ -293,9 +293,8 @@ export function CartContent({ onClose }: CartContentProps) {
             {/* Thông báo kết quả Áp dụng Mã */}
             {promoMsg && (
               <div
-                className={`mb-4 flex items-center gap-1.5 text-xs font-medium ${
-                  promoMsg.type === 'success' ? 'text-green-600' : 'text-red-500'
-                }`}
+                className={`mb-4 flex items-center gap-1.5 text-xs font-medium ${promoMsg.type === 'success' ? 'text-green-600' : 'text-red-500'
+                  }`}
               >
                 {promoMsg.type === 'success' ? (
                   <CheckCircle2 size={14} className="flex-shrink-0" />
@@ -353,10 +352,9 @@ export function CartContent({ onClose }: CartContentProps) {
         </div>
 
         {/* 2. CỘT PHẢI: BẢNG PROMO SLIDE-IN (Chỉ dành cho Desktop) */}
-        <div 
-          className={`hidden md:flex flex-col bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] shrink-0 ${
-            showDropdown ? 'w-[340px] opacity-100 translate-x-0 ml-6' : 'w-0 opacity-0 -translate-x-10 pointer-events-none ml-0 border-0'
-          }`}
+        <div
+          className={`hidden md:flex flex-col bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] shrink-0 md:h-[80vh] md:max-h-[800px] ${showDropdown ? 'w-[340px] opacity-100 translate-x-0 ml-6' : 'w-0 opacity-0 -translate-x-10 pointer-events-none ml-0 border-0'
+            }`}
         >
           <div className="bg-white p-5 border-b border-gray-100">
             <div className="flex items-center gap-2">
@@ -378,26 +376,24 @@ export function CartContent({ onClose }: CartContentProps) {
                   return (
                     <div
                       key={promo.id}
-                      onClick={() => { 
+                      onClick={() => {
                         if (!isEligible) return;
-                        if (appliedCode === promo.code) {
-                          setAppliedCode(null);
-                          setDiscountAmount(0);
+                        if (appliedPromo?.code === promo.code) {
+                          removePromo();
                           setPromoCode('');
                           setPromoMsg(null);
                         } else {
-                          handleApplyPromo(promo.code); 
+                          handleApplyPromo(promo.code);
                         }
                       }}
-                      className={`relative overflow-hidden p-4 rounded-2xl border-2 transition-all select-none ${
-                        appliedCode === promo.code
+                      className={`relative overflow-hidden p-4 rounded-2xl border-2 transition-all select-none ${appliedPromo?.code === promo.code
                           ? 'bg-primary/5 border-primary shadow-md'
-                          : isEligible 
-                          ? 'bg-white border-gray-200 hover:border-primary/40 hover:shadow-md cursor-pointer' 
-                          : 'bg-gray-100 border-gray-100 opacity-60 cursor-not-allowed'
-                      }`}
+                          : isEligible
+                            ? 'bg-white border-gray-200 hover:border-primary/40 hover:shadow-md cursor-pointer'
+                            : 'bg-gray-100 border-gray-100 opacity-60 cursor-not-allowed'
+                        }`}
                     >
-                      {appliedCode === promo.code && (
+                      {appliedPromo?.code === promo.code && (
                         <div className="absolute -right-6 -top-6 bg-primary w-12 h-12 rotate-45 flex items-end justify-center pb-1 shadow-sm">
                           <CheckCircle2 size={12} className="text-white -rotate-45 mb-1" />
                         </div>
@@ -418,7 +414,7 @@ export function CartContent({ onClose }: CartContentProps) {
                         {promo.maxDiscount && (
                           <p className="text-[10px] text-gray-400 mt-0.5">Giảm tối đa {promo.maxDiscount.toLocaleString('vi-VN')}đ</p>
                         )}
-                        
+
                         {!isEligible && (
                           <div className="mt-2 text-[10px] font-bold text-red-500 bg-red-50 px-2 py-1 rounded-md w-max">
                             Mua thêm {(promo.minOrderValue - subtotal).toLocaleString('vi-VN')}đ để dùng

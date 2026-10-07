@@ -3,12 +3,11 @@
 
 import {
     IsArray,
-    IsEnum,
+    IsIn,
     IsInt,
     IsNotEmpty,
     IsOptional,
     IsString,
-    IsUUID,
     Min,
     ValidateNested,
     ArrayMinSize,
@@ -17,32 +16,32 @@ import {
 import { Type } from 'class-transformer';
 
 export class CreateOrderItemDto {
-    @IsUUID()           // Phải đúng định dạng UUID
-    @IsNotEmpty()
+    @IsString()
+    @IsNotEmpty({ message: 'productId không được để trống' })
     productId: string;
 
-    @IsEnum(['S', 'M', 'L'], { message: 'size phải là S, M hoặc L' })
+    @IsIn(['S', 'M', 'L'], { message: 'size phải là S, M hoặc L' })
     size: 'S' | 'M' | 'L';
 
-    @IsInt()            // Phải là số nguyên (không phải 1.5)
+    @IsInt({ message: 'Số lượng phải là số nguyên' })
     @Min(1, { message: 'Số lượng phải ít nhất là 1' })
     qty: number;
 
-    @IsOptional()       // Không bắt buộc
+    @IsOptional()
     @IsArray()
-    @IsString({ each: true }) // Từng phần tử trong mảng phải là string
+    @IsString({ each: true })
     toppings?: string[];
 
     @IsNumber()
     @Min(0)
-    lineTotal: number;  // Frontend gửi lên để tham khảo, Backend tự tính lại
+    lineTotal: number;
 }
 
 export class CreateOrderDto {
     @IsArray()
     @ArrayMinSize(1, { message: 'Giỏ hàng không được rỗng' })
-    @ValidateNested({ each: true }) // Validate từng phần tử bên trong mảng
-    @Type(() => CreateOrderItemDto) // class-transformer cần biết kiểu để validate nested
+    @ValidateNested({ each: true })
+    @Type(() => CreateOrderItemDto)
     items: CreateOrderItemDto[];
 
     @IsOptional()

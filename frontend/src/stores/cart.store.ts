@@ -127,6 +127,9 @@ export const useCartStore = create<CartStore>((set, get) => ({
     if (existingIndex > -1) {
       updatedItems = [...currentItems];
       updatedItems[existingIndex].quantity += newItem.quantity;
+      if (updatedItems[existingIndex].unitPrice) {
+        updatedItems[existingIndex].lineTotal = updatedItems[existingIndex].unitPrice * updatedItems[existingIndex].quantity;
+      }
     } else {
       updatedItems = [...currentItems, newItem];
     }
@@ -148,6 +151,9 @@ export const useCartStore = create<CartStore>((set, get) => ({
     }
     const updatedItems = [...get().items];
     updatedItems[index].quantity = quantity;
+    if (updatedItems[index].unitPrice) {
+      updatedItems[index].lineTotal = updatedItems[index].unitPrice * quantity;
+    }
     set({ items: updatedItems });
     saveToStorage(get().currentUserId, updatedItems);
   },
@@ -162,7 +168,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
 
   totalPrice: () => {
     return get().items.reduce((total, item) => {
-      const itemPrice = item.lineTotal || item.unitPrice * item.quantity;
+      const itemPrice = item.unitPrice ? item.unitPrice * item.quantity : (item.lineTotal || 0);
       return total + itemPrice;
     }, 0);
   },

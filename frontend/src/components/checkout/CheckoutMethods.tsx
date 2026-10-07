@@ -74,7 +74,6 @@ export function CheckoutMethods({
               : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
           }`}
         >
-          <span className="text-2xl">📱</span>
           <span className="text-sm">Ví MoMo / VietQR</span>
         </button>
 
@@ -87,7 +86,6 @@ export function CheckoutMethods({
               : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
           }`}
         >
-          <span className="text-2xl">💳</span>
           <span className="text-sm">Thẻ ngân hàng</span>
         </button>
       </div>

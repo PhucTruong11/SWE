@@ -10,6 +10,7 @@ import { OrdersModule } from './modules/orders/orders.module.js';
 import { CheckoutModule } from './modules/checkout/checkout.module.js';
 import { EmailModule } from './modules/email/email.module.js';
 import { PromotionsModule } from './modules/promotions/promotions.module.js';
+import { AdminModule } from './modules/admin/admin.module.js';
 
 @Module({
   imports: [
@@ -25,8 +26,9 @@ import { PromotionsModule } from './modules/promotions/promotions.module.js';
     CheckoutModule,
     EmailModule,
     PromotionsModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }

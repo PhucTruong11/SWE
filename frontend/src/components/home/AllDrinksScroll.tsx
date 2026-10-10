@@ -40,7 +40,7 @@ export function AllDrinksScroll() {
             <h2 className="mb-4 text-lg font-bold text-text">{heading}</h2>
 
             {showLoading && (
-                <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
                     {Array.from({ length: 8 }).map((_, i) => (
                         <div key={i} className="h-64 animate-pulse rounded-2xl bg-surface" />
                     ))}
@@ -62,7 +62,7 @@ export function AllDrinksScroll() {
             )}
 
             {!showLoading && filteredProducts && filteredProducts.length > 0 && (
-                <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
                     {filteredProducts.map((product) => (
                         <ProductCard key={product.id} product={product} variant="bestseller" />
                     ))}

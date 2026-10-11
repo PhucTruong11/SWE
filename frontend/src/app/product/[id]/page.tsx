@@ -171,6 +171,26 @@ export default function ProductDetailPage() {
                 <span>/</span>
                 <span className="font-bold text-text">{product.name}</span>
             </nav>
+            
+            <div className="my-6">
+                <Link
+                    href="/"
+                    className="group inline-flex items-center gap-2 rounded-full border border-primary/30 bg-surface px-4 py-2 text-sm font-bold text-primary shadow-sm transition-all duration-300 hover:scale-105 hover:border-primary hover:shadow-md active:scale-95"
+                >
+                    <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        className="transition-transform duration-300 group-hover:-translate-x-1"
+                    >
+                        <path d="M19 12H5M12 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    Quay lại
+                </Link>
+            </div>
 
             <div className="grid grid-cols-1 items-start gap-10 md:grid-cols-2">
                 {/* Ảnh sản phẩm chính */}

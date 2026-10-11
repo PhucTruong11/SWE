@@ -1,11 +1,9 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { formatVND } from '@/lib/utils';
 import type { Product } from '@/types';
-import { useCartStore, type CartItem } from '@/stores/cart.store';
 
 interface ProductCardProps {
     product: Product & {
@@ -35,40 +33,7 @@ function getDisplayPrice(product: ProductCardProps['product']): { rawPrice: numb
 
 export function ProductCard({ product, variant = 'bestseller', priority = false }: ProductCardProps) {
     const href = `/product/${product.id}`;
-    const { rawPrice, formattedPrice } = getDisplayPrice(product);
-
-    const addItemToCart = useCartStore((s) => s.addItem);
-    const [showAddedToast, setShowAddedToast] = useState(false);
-
-    useEffect(() => {
-        if (!showAddedToast) return;
-        const timer = setTimeout(() => setShowAddedToast(false), 1500);
-        return () => clearTimeout(timer);
-    }, [showAddedToast]);
-
-    const handleQuickAdd = (e: React.MouseEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-
-        const defaultSize = (product.prices && product.prices.length > 0 ? product.prices[0].size : 'S') as 'S' | 'M' | 'L';
-        const validPrice = Number(rawPrice) || 0;
-
-        const newItem: CartItem = {
-            productId: product.id,
-            name: product.name,
-            size: defaultSize,
-            basePrice: validPrice,
-            toppings: [],
-            totalToppingPrice: 0,
-            unitPrice: validPrice,
-            quantity: 1,
-            lineTotal: validPrice,
-            imageUrl: product.imageUrl ?? undefined,
-        };
-
-        addItemToCart(newItem);
-        setShowAddedToast(true);
-    };
+    const { formattedPrice } = getDisplayPrice(product);
 
     if (variant === 'compact') {
         return (
@@ -111,12 +76,6 @@ export function ProductCard({ product, variant = 'bestseller', priority = false 
                 </span>
             )}
 
-            {showAddedToast && (
-                <span className="absolute left-1/2 top-2 z-20 -translate-x-1/2 whitespace-nowrap rounded-full bg-green-600 px-3 py-1 text-[11px] font-bold text-white shadow-md animate-in fade-in">
-                    ✓ Đã thêm vào giỏ hàng
-                </span>
-            )}
-
             {/* Khung ảnh cố định với Next Image */}
             <div className="relative h-28 w-28 overflow-hidden rounded-full bg-background shadow-inner transition-transform duration-300 ease-in-out group-hover:scale-105">
                 {product.imageUrl ? (
@@ -141,13 +100,12 @@ export function ProductCard({ product, variant = 'bestseller', priority = false 
                 <p className="text-sm font-bold text-primary">{formattedPrice}</p>
             </div>
 
-            <button
-                type="button"
-                onClick={handleQuickAdd}
+            <span
+                
                 className="w-full rounded-full bg-primary py-2 text-xs font-medium text-white shadow-sm transition-all duration-300 hover:scale-[1.02] group-hover:bg-primary-hover group-hover:shadow-md active:scale-95"
             >
-                Thêm vào giỏ hàng
-            </button>
+                Chi tiết sản phẩm
+            </span>
         </Link>
     );
 }

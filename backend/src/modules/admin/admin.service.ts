@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { OrderStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { assertTransition } from '../orders/orders-state.js';
 import { ListOrdersQueryDto } from './dto/list-orders-query.dto.js';
+import { UpdateStockDto } from './dto/update-stock.dto.js';
 
 // Các trạng thái đã thanh toán thành công (tính vào doanh thu)
 const REVENUE_STATUSES: OrderStatus[] = ['PAID', 'PREPARING', 'READY', 'COMPLETED'];
@@ -116,6 +117,65 @@ export class AdminService {
             }
 
             return tx.order.update({ where: { id }, data: { status: next } });
+        });
+    }
+
+    // QUẢN LÝ KHO (INVENTORY / STOCK)
+
+    // Danh sách toàn bộ sản phẩm cho Admin (kèm tồn kho, size, trạng thái)
+    async listProducts(category?: string, search?: string) {
+        const where: Prisma.ProductWhereInput = {};
+        if (category && category !== 'all') {
+            where.category = category;
+        }
+        if (search?.trim()) {
+            where.name = { contains: search.trim(), mode: 'insensitive' };
+        }
+
+        return this.prisma.product.findMany({
+            where,
+            include: {
+                prices: { orderBy: { size: 'asc' } },
+            },
+            orderBy: { name: 'asc' },
+        });
+    }
+
+    // Cập nhật tồn kho: cộng thêm (+) hoặc gán mới
+    async updateStock(id: string, dto: UpdateStockDto) {
+        const product = await this.prisma.product.findUnique({ where: { id } });
+        if (!product) throw new NotFoundException(`Không tìm thấy sản phẩm ${id}`);
+
+        let newStock = product.stock;
+        if (dto.stock !== undefined) {
+            newStock = dto.stock;
+        } else if (dto.quantityToAdd !== undefined) {
+            newStock = product.stock + dto.quantityToAdd;
+        }
+
+        if (newStock < 0) {
+            throw new BadRequestException('Số lượng tồn kho không được âm');
+        }
+
+        return this.prisma.product.update({
+            where: { id },
+            data: {
+                stock: newStock,
+                version: { increment: 1 },
+            },
+        });
+    }
+
+    // Bật / tắt trạng thái mở bán sản phẩm
+    async toggleProductAvailability(id: string) {
+        const product = await this.prisma.product.findUnique({ where: { id } });
+        if (!product) throw new NotFoundException(`Không tìm thấy sản phẩm ${id}`);
+
+        return this.prisma.product.update({
+            where: { id },
+            data: {
+                isAvailable: !product.isAvailable,
+            },
         });
     }
 }

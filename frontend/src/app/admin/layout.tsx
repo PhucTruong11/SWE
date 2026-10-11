@@ -3,12 +3,13 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, ClipboardList, Store, LogOut, Menu, X } from 'lucide-react';
+import { LayoutDashboard, ClipboardList, Boxes, Store, LogOut, Menu, X } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
 const NAV_ITEMS = [
     { href: '/admin', label: 'Trang chủ', icon: LayoutDashboard, exact: true },
     { href: '/admin/orders', label: 'Đơn hàng', icon: ClipboardList, exact: false },
+    { href: '/admin/inventory', label: 'Kho hàng', icon: Boxes, exact: false },
 ];
 
 function MenuContent({

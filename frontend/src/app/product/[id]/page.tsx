@@ -21,6 +21,8 @@ interface Product {
     imageUrl?: string;
     category: string;
     allowToppings: boolean;
+    stock?: number;
+    isAvailable?: boolean;
     prices: ProductPrice[];
 }
 
@@ -103,6 +105,9 @@ export default function ProductDetailPage() {
         );
     }
 
+    const isOutOfStock = (product.stock !== undefined && product.stock <= 0) || product.isAvailable === false;
+    const availableStock = product.stock !== undefined ? product.stock : 999;
+
     const currentPriceObj = product.prices?.find((p) => p.size === selectedSize) || product.prices?.[0];
     const basePrice = currentPriceObj ? Number(currentPriceObj.price) || 0 : 0;
 
@@ -112,9 +117,10 @@ export default function ProductDetailPage() {
     }, 0);
 
     const singleUnitPrice = basePrice + totalToppingPrice;
-    const grandTotal = singleUnitPrice * (quantity || 1);
+    const grandTotal = isOutOfStock ? 0 : singleUnitPrice * (quantity || 1);
 
     const handleToppingQtyChange = (topId: string, delta: number) => {
+        if (isOutOfStock) return;
         setToppingQuantities((prev) => {
             const current = prev[topId] || 0;
             const updated = Math.max(0, current + delta);
@@ -123,6 +129,11 @@ export default function ProductDetailPage() {
     };
 
     const handleAddToCart = () => {
+        if (isOutOfStock) {
+            alert('Sản phẩm này hiện đang tạm hết hàng, quý khách vui lòng chọn món khác nhé!');
+            return;
+        }
+
         const selectedToppingsSummary = Object.entries(toppingQuantities)
             .filter(([, qty]) => qty > 0)
             .map(([topId, qty]) => {
@@ -135,7 +146,7 @@ export default function ProductDetailPage() {
                 };
             });
 
-        const validQty = Math.max(1, Number(quantity) || 1);
+        const validQty = Math.min(availableStock, Math.max(1, Number(quantity) || 1));
 
         addItemToCart({
             productId: product.id,
@@ -171,6 +182,26 @@ export default function ProductDetailPage() {
                 <span>/</span>
                 <span className="font-bold text-text">{product.name}</span>
             </nav>
+            
+            <div className="my-6">
+                <Link
+                    href="/"
+                    className="group inline-flex items-center gap-2 rounded-full border border-primary/30 bg-surface px-4 py-2 text-sm font-bold text-primary shadow-sm transition-all duration-300 hover:scale-105 hover:border-primary hover:shadow-md active:scale-95"
+                >
+                    <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        className="transition-transform duration-300 group-hover:-translate-x-1"
+                    >
+                        <path d="M19 12H5M12 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    Quay lại
+                </Link>
+            </div>
 
             <div className="grid grid-cols-1 items-start gap-10 md:grid-cols-2">
                 {/* Ảnh sản phẩm chính */}
@@ -332,13 +363,17 @@ export default function ProductDetailPage() {
                         )
                     )}
 
+
                     <div className="flex items-center justify-between py-1">
                         <span className="text-sm font-bold text-text">Số lượng ly:</span>
-                        <div className="flex items-center gap-3 rounded-2xl border border-primary/20 bg-surface p-1.5 shadow-sm">
+                        <div className={`flex items-center gap-3 rounded-2xl border border-primary/20 bg-surface p-1.5 shadow-sm ${
+                            isOutOfStock ? 'opacity-40 pointer-events-none' : ''
+                        }`}>
                             <button
                                 type="button"
+                                disabled={isOutOfStock || quantity <= 1}
                                 onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                                className="h-8 w-8 rounded-xl text-sm font-bold text-text transition-colors hover:bg-primary/10 active:scale-95"
+                                className="h-8 w-8 rounded-xl text-sm font-bold text-text transition-colors hover:bg-primary/10 active:scale-95 disabled:opacity-30"
                             >
                                 -
                             </button>
@@ -346,7 +381,8 @@ export default function ProductDetailPage() {
                                 type="text"
                                 inputMode="numeric"
                                 pattern="[0-9]*"
-                                value={quantity === 0 ? '' : quantity}
+                                disabled={isOutOfStock}
+                                value={isOutOfStock ? 0 : quantity === 0 ? '' : quantity}
                                 placeholder="1"
                                 onFocus={(e) => e.target.select()}
                                 onMouseUp={(e) => e.preventDefault()}
@@ -355,7 +391,7 @@ export default function ProductDetailPage() {
                                     if (cleaned === '') {
                                         setQuantity(0);
                                     } else {
-                                        const val = parseInt(cleaned, 10);
+                                        const val = Math.min(availableStock, parseInt(cleaned, 10));
                                         setQuantity(isNaN(val) ? 1 : val);
                                     }
                                 }}
@@ -366,8 +402,9 @@ export default function ProductDetailPage() {
                             />
                             <button
                                 type="button"
-                                onClick={() => setQuantity((q) => q + 1)}
-                                className="h-8 w-8 rounded-xl text-sm font-bold text-text transition-colors hover:bg-primary/10 active:scale-95"
+                                disabled={isOutOfStock || quantity >= availableStock}
+                                onClick={() => setQuantity((q) => Math.min(availableStock, q + 1))}
+                                className="h-8 w-8 rounded-xl text-sm font-bold text-text transition-colors hover:bg-primary/10 active:scale-95 disabled:opacity-30"
                             >
                                 +
                             </button>
@@ -382,13 +419,23 @@ export default function ProductDetailPage() {
                             </p>
                         </div>
 
-                        <button
-                            type="button"
-                            onClick={handleAddToCart}
-                            className="rounded-full bg-primary px-7 py-3 text-sm font-bold text-white shadow-md transition-all hover:bg-primary-hover active:scale-95"
-                        >
-                            Thêm vào giỏ
-                        </button>
+                        {isOutOfStock ? (
+                            <button
+                                type="button"
+                                disabled
+                                className="cursor-not-allowed rounded-full bg-gray-300 px-7 py-3 text-sm font-bold text-gray-500 shadow-none"
+                            >
+                                Tạm hết hàng
+                            </button>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={handleAddToCart}
+                                className="rounded-full bg-primary px-7 py-3 text-sm font-bold text-white shadow-md transition-all hover:bg-primary-hover active:scale-95"
+                            >
+                                Thêm vào giỏ
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>

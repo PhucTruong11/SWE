@@ -1,11 +1,9 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { formatVND } from '@/lib/utils';
 import type { Product } from '@/types';
-import { useCartStore, type CartItem } from '@/stores/cart.store';
 
 interface ProductCardProps {
     product: Product & {
@@ -35,40 +33,8 @@ function getDisplayPrice(product: ProductCardProps['product']): { rawPrice: numb
 
 export function ProductCard({ product, variant = 'bestseller', priority = false }: ProductCardProps) {
     const href = `/product/${product.id}`;
-    const { rawPrice, formattedPrice } = getDisplayPrice(product);
-
-    const addItemToCart = useCartStore((s) => s.addItem);
-    const [showAddedToast, setShowAddedToast] = useState(false);
-
-    useEffect(() => {
-        if (!showAddedToast) return;
-        const timer = setTimeout(() => setShowAddedToast(false), 1500);
-        return () => clearTimeout(timer);
-    }, [showAddedToast]);
-
-    const handleQuickAdd = (e: React.MouseEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-
-        const defaultSize = (product.prices && product.prices.length > 0 ? product.prices[0].size : 'S') as 'S' | 'M' | 'L';
-        const validPrice = Number(rawPrice) || 0;
-
-        const newItem: CartItem = {
-            productId: product.id,
-            name: product.name,
-            size: defaultSize,
-            basePrice: validPrice,
-            toppings: [],
-            totalToppingPrice: 0,
-            unitPrice: validPrice,
-            quantity: 1,
-            lineTotal: validPrice,
-            imageUrl: product.imageUrl ?? undefined,
-        };
-
-        addItemToCart(newItem);
-        setShowAddedToast(true);
-    };
+    const { formattedPrice } = getDisplayPrice(product);
+    const isOutOfStock = (product.stock !== undefined && product.stock <= 0) || product.isAvailable === false;
 
     if (variant === 'compact') {
         return (
@@ -84,10 +50,15 @@ export function ProductCard({ product, variant = 'bestseller', priority = false 
                             fill
                             sizes="80px"
                             priority={priority}
-                            className="object-cover transition-opacity duration-300"
+                            className={`object-cover transition-opacity duration-300 ${isOutOfStock ? 'opacity-40 grayscale' : ''}`}
                         />
                     ) : (
                         <div className="flex h-full w-full items-center justify-center text-2xl">☕</div>
+                    )}
+                    {isOutOfStock && (
+                        <span className="absolute inset-0 flex items-center justify-center bg-black/60 text-[10px] font-bold uppercase tracking-wider text-white">
+                            Hết
+                        </span>
                     )}
                 </div>
                 <div>
@@ -105,17 +76,15 @@ export function ProductCard({ product, variant = 'bestseller', priority = false 
             href={href}
             className="group relative flex flex-col items-center justify-between gap-3 rounded-2xl border border-primary/15 bg-surface p-4 text-center shadow-sm transition-all duration-300 ease-in-out hover:-translate-y-1.5 hover:border-primary/40 hover:shadow-xl"
         >
-            {product.isBestSeller && (
+            {isOutOfStock ? (
+                <span className="absolute -right-1.5 -top-1.5 z-10 rounded-full bg-rose-600 px-2.5 py-0.5 text-[10px] font-bold text-white shadow-md">
+                    HẾT HÀNG
+                </span>
+            ) : product.isBestSeller ? (
                 <span className="absolute -right-1.5 -top-1.5 z-10 rounded-full bg-orange-500 px-2.5 py-0.5 text-[10px] font-bold text-white shadow-md">
                     HOT!
                 </span>
-            )}
-
-            {showAddedToast && (
-                <span className="absolute left-1/2 top-2 z-20 -translate-x-1/2 whitespace-nowrap rounded-full bg-green-600 px-3 py-1 text-[11px] font-bold text-white shadow-md animate-in fade-in">
-                    ✓ Đã thêm vào giỏ hàng
-                </span>
-            )}
+            ) : null}
 
             {/* Khung ảnh cố định với Next Image */}
             <div className="relative h-28 w-28 overflow-hidden rounded-full bg-background shadow-inner transition-transform duration-300 ease-in-out group-hover:scale-105">
@@ -127,10 +96,18 @@ export function ProductCard({ product, variant = 'bestseller', priority = false 
                         sizes="112px"
                         priority={priority}
                         loading={priority ? 'eager' : undefined}
-                        className="object-cover transition-opacity duration-300"
+                        className={`object-cover transition-opacity duration-300 ${isOutOfStock ? 'opacity-40 grayscale' : ''}`}
                     />
                 ) : (
                     <div className="flex h-full w-full items-center justify-center text-3xl">☕</div>
+                )}
+
+                {isOutOfStock && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-[1px]">
+                        <span className="rounded-full bg-rose-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white">
+                            Hết hàng
+                        </span>
+                    </div>
                 )}
             </div>
 
@@ -141,13 +118,14 @@ export function ProductCard({ product, variant = 'bestseller', priority = false 
                 <p className="text-sm font-bold text-primary">{formattedPrice}</p>
             </div>
 
-            <button
-                type="button"
-                onClick={handleQuickAdd}
-                className="w-full rounded-full bg-primary py-2 text-xs font-medium text-white shadow-sm transition-all duration-300 hover:scale-[1.02] group-hover:bg-primary-hover group-hover:shadow-md active:scale-95"
+            <span
+                className={`w-full rounded-full py-2 text-xs font-semibold shadow-sm transition-all duration-300 ${isOutOfStock
+                    ? 'bg-gray-200 text-gray-500 hover:bg-gray-300'
+                    : 'bg-primary text-white hover:scale-[1.02] group-hover:bg-primary-hover group-hover:shadow-md active:scale-95'
+                }`}
             >
-                Thêm vào giỏ hàng
-            </button>
+                {isOutOfStock ? 'Tạm hết hàng' : 'Chi tiết sản phẩm'}
+            </span>
         </Link>
     );
 }

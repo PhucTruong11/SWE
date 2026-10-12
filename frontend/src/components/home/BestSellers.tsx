@@ -31,7 +31,7 @@ export function BestSellers() {
             )}
 
             {products && products.length > 0 && (
-                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <div className="grid grid-cols-2 gap-6 lg:grid-cols-4">
                     {products.map((product, index) => (
                         <ProductCard
                             key={product.id}

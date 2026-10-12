@@ -209,13 +209,13 @@ export function CartContent({ onClose }: CartContentProps) {
   return (
     <div className="flex w-full md:justify-center transition-all duration-300 items-stretch relative z-20">
       {/* Wrapper vừa khít 2 cột */}
-      <div ref={dropdownRef} className="flex items-stretch">
+      <div ref={dropdownRef} className="flex items-stretch w-full max-w-full md:w-auto">
 
         {/* 1. CỘT TRÁI: GIỎ HÀNG CHÍNH */}
         <div className="flex flex-col bg-surface md:bg-white h-full md:h-[80vh] md:max-h-[800px] w-full md:w-[650px] md:rounded-3xl md:shadow-xl md:border md:border-gray-100 md:overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] shrink-0">
 
           {/* Danh sách sản phẩm */}
-          <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-background/50">
+          <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-background/50 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
             <h2 className="font-bold text-lg text-text mb-4">
               Món đã chọn ({totalItems()})
             </h2>
@@ -363,7 +363,7 @@ export function CartContent({ onClose }: CartContentProps) {
             <p className="text-xs text-gray-500 mt-1 whitespace-nowrap">Chọn mã phù hợp để tiết kiệm hơn nhé!</p>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 bg-background/50">
+          <div className="flex-1 overflow-y-auto p-4 bg-background/50 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
             <div className="space-y-3 w-[288px]">
               {availablePromos.length === 0 ? (
                 <div className="text-center py-10 text-gray-400">

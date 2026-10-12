@@ -176,7 +176,6 @@ export function ReceiptInvoice({ data, onReset }: ReceiptInvoiceProps) {
           onClick={onReset}
           className="flex-1 flex items-center justify-center gap-2 rounded-full bg-emerald-700 py-3.5 text-center font-bold text-white hover:bg-emerald-800 transition-colors shadow-md"
         >
-          <span>📦</span>
           Theo Dõi Đơn Hàng
         </Link>
 
@@ -185,7 +184,6 @@ export function ReceiptInvoice({ data, onReset }: ReceiptInvoiceProps) {
           onClick={() => window.print()}
           className="flex-1 flex items-center justify-center gap-2 rounded-full border-2 border-primary bg-white py-3.5 text-center font-bold text-primary hover:bg-emerald-50 transition-colors shadow-sm"
         >
-          <span>🖨️</span>
           In / Tải hóa đơn (PDF)
         </button>
 
@@ -194,7 +192,6 @@ export function ReceiptInvoice({ data, onReset }: ReceiptInvoiceProps) {
           onClick={onReset}
           className="flex-1 flex items-center justify-center gap-2 rounded-full bg-primary py-3.5 text-center font-bold text-white hover:bg-primary-hover transition-colors shadow-lg"
         >
-          <span>🏠</span>
           Về Trang Chủ Đặt Món
         </Link>
       </div>

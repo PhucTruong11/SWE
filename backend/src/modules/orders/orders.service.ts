@@ -25,14 +25,12 @@ export class OrdersService {
         }
 
         // Lấy thông tin + giá thực tế của từng sản phẩm từ Database
-        // (Mục đích: Không tin giá Frontend gửi lên, phải tự tính lại để chống gian lận)
         const productIds = dto.items.map((item) => item.productId);
         const products = await this.prisma.product.findMany({
             where: { id: { in: productIds }, isAvailable: true },
             include: { prices: true },
         });
 
-        // Kiểm tra xem tất cả sản phẩm có còn hoạt động không
         if (products.length !== productIds.length) {
             throw new BadRequestException('Một số sản phẩm không tồn tại hoặc đã ngừng kinh doanh');
         }
@@ -112,7 +110,6 @@ export class OrdersService {
         }
 
         // Lưu đơn hàng vào Database bằng Prisma Transaction
-        // (Transaction = "làm tất cả hoặc không làm gì" - nếu lỡ lỗi giữa chừng thì hoàn tác hết)
         const order = await this.prisma.$transaction(async (tx) => {
             const newOrder = await tx.order.create({
                 data: {

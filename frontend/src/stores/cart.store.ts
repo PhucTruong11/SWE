@@ -89,7 +89,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
     }
 
     if (userId) {
-      // 🟢 NGƯỜI DÙNG ĐĂNG NHẬP
+      // NGƯỜI DÙNG ĐĂNG NHẬP
       const userKey = getCartKey(userId);
       const userSaved = localStorage.getItem(userKey);
       let userItems: CartItem[] = [];
@@ -111,7 +111,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
 
       set({ currentUserId: userId, items: userItems });
     } else {
-      // ⚪ KHÁCH VẮNG LAI / ĐĂNG XUẤT
+      // KHÁCH VẮNG LAI / ĐĂNG XUẤT
       set({ currentUserId: null, items: guestItems });
     }
   },

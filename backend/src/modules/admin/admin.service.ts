@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { assertTransition } from '../orders/orders-state.js';
 import { ListOrdersQueryDto } from './dto/list-orders-query.dto.js';
 import { UpdateStockDto } from './dto/update-stock.dto.js';
+import { CreatePromotionDto } from './dto/create-promotion.dto.js'
 
 // Các trạng thái đã thanh toán thành công (tính vào doanh thu)
 const REVENUE_STATUSES: OrderStatus[] = ['PAID', 'PREPARING', 'READY', 'COMPLETED'];
@@ -175,6 +176,36 @@ export class AdminService {
             where: { id },
             data: {
                 isAvailable: !product.isAvailable,
+            },
+        });
+    }
+
+    async createPromotion(dto: CreatePromotionDto) {
+        const formattedCode = dto.code.trim().toUpperCase();
+
+        const existingPromo = await this.prisma.promotion.findUnique({
+            where: {code: formattedCode},
+        });
+
+        if (existingPromo) {
+            throw new BadRequestException('Mã voucher "${formattedCode}" đã tồn tại trên hệ thống');
+        }
+
+        if (dto.discountType === 'PERCENTAGE' && dto.discountValue > 100) {
+            throw new BadRequestException('Mức giảm theo phần trăm không được vượt quá 100%');
+        }
+
+        return this.prisma.promotion.create({
+            data: {
+                code: formattedCode,
+                description: dto.description?.trim() || null,
+                discountType: dto.discountType,
+                discountValue: dto.discountValue,
+                minOrderValue: dto.minOrderValue ?? 0,
+                maxDiscount: dto.discountType === 'PERCENTAGE' ? (dto.maxDiscount ?? null) : null,
+                startDate: new Date(),
+                endDate: dto.endDate ? new Date(dto.endDate) : null,
+                isActive: dto.isActive ?? true,
             },
         });
     }

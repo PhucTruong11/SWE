@@ -4,15 +4,16 @@ import { useEffect, useState } from 'react';
 import Image from 'next/image';
 
 interface Slide {
-    imageUrl: string;
+    desktopUrl: string; // ảnh 3:1, 1920x640 cho laptop
+    mobileUrl: string;  // ảnh 3:2, 1200x800 cho mobile
     alt: string;
 }
 
 const SLIDES: Slide[] = [
-    { imageUrl: '/images/banner_gioi_thieu.jpg', alt: 'Gioi thieu' },
-    { imageUrl: '/images/banner_san_pham.jpg', alt: 'San pham' },
-    { imageUrl: '/images/banner_khuyen_mai.jpg', alt: 'Khuyen mai' },
-    { imageUrl: '/images/banner_cham_soc.jpg', alt: 'Cham soc' },
+    { desktopUrl: '/images/banner_gioi_thieu.jpg', mobileUrl: '/images/banner_gioi_thieu_mobile.jpg', alt: 'Gioi thieu' },
+    { desktopUrl: '/images/banner_san_pham.jpg', mobileUrl: '/images/banner_san_pham_mobile.jpg', alt: 'San pham' },
+    { desktopUrl: '/images/banner_khuyen_mai.jpg', mobileUrl: '/images/banner_khuyen_mai_mobile.jpg', alt: 'Khuyen mai' },
+    { desktopUrl: '/images/banner_cham_soc.jpg', mobileUrl: '/images/banner_cham_soc_mobile.jpg', alt: 'Cham soc' },
 ];
 
 const AUTO_SLIDE_INTERVAL_MS = 4000;
@@ -37,21 +38,28 @@ export function PromoCarousel() {
                 {SLIDES.map((slide, i) => (
                     <div
                         key={i}
-                        className="relative aspect-square w-full shrink-0 bg-primary md:aspect-[3/1]"
+                        className="relative h-[35svh] min-h-[180px] max-h-[320px] w-full shrink-0 bg-primary md:h-auto md:max-h-none md:min-h-0 md:aspect-[3/1]"
                     >
                         <Image
-                            src={slide.imageUrl}
+                            src={slide.mobileUrl}
                             alt={slide.alt}
                             fill
                             priority={i === 0}
-                            sizes="(max-width: 768px) 100vw, 1024px"
-                            className="object-fill"
+                            sizes="100vw"
+                            className="object-fill md:hidden"
+                        />
+                        <Image
+                            src={slide.desktopUrl}
+                            alt={slide.alt}
+                            fill
+                            priority={i === 0}
+                            sizes="(max-width: 1024px) 100vw, 960px"
+                            className="hidden object-cover md:block"
                         />
                     </div>
                 ))}
             </div>
 
-            {/* Dot indicator — bấm để chuyển slide thủ công */}
             {SLIDES.length > 1 && (
                 <div className="absolute inset-x-0 bottom-3 flex justify-center gap-1.5">
                     {SLIDES.map((_, i) => (

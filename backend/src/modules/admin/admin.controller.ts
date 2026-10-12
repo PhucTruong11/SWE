@@ -1,11 +1,12 @@
 import {
-    Body, Controller, Get, Param, ParseUUIDPipe, Patch, Query, UseGuards,
+    Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards,
 } from '@nestjs/common';
 import { AdminService } from './admin.service.js';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto.js';
 import { ListOrdersQueryDto } from './dto/list-orders-query.dto.js';
 import { UpdateStockDto } from './dto/update-stock.dto.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
+import { CreatePromotionDto } from './dto/create-promotion.dto.js';
 
 // TODO(Role): sau này thêm RolesGuard + @Roles('ADMIN')
 @Controller('admin')
@@ -59,4 +60,12 @@ export class AdminController {
     async toggleAvailability(@Param('id', ParseUUIDPipe) id: string) {
         return { data: await this.adminService.toggleProductAvailability(id) };
     }
+
+    // POST /api/admin/promotions
+    @Post('promotions')
+    async createPromotion(
+        @Body() dto: CreatePromotionDto) {
+            const result = await this.adminService.createPromotion(dto);
+            return { message: 'Tạo mã voucher thành công!', data: result,};
+        }
 }

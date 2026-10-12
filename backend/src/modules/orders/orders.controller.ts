@@ -12,13 +12,6 @@ import {
 import { OrdersService } from './orders.service.js';
 import { CreateOrderDto } from './dto/create-order.dto.js';
 
-// NOTE: Khi bạn làm Task 7 (Auth) xong, uncomment 2 dòng dưới và xóa GUEST_USER_ID
-// import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
-// import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
-
-// Tạm dùng userId cứng để test khi Auth chưa xong.
-// Bước 1: Cần có 1 User trong DB với ID này (chạy seed hoặc tạo tay)
-// Bước 2: Khi Auth (Task 7) xong -> xóa dòng này và dùng @CurrentUser()
 const GUEST_USER_ID = 'guest-user-placeholder';
 
 @Controller('orders')
@@ -26,9 +19,8 @@ export class OrdersController {
   constructor(private readonly ordersService: OrdersService) { }
 
   // POST /orders - Tạo đơn hàng mới
-  // Frontend gửi: { items: [...], promoCode: '...' }
   @Post()
-  @HttpCode(HttpStatus.CREATED) // Trả về HTTP 201 khi tạo thành công
+  @HttpCode(HttpStatus.CREATED)
   async createOrder(
     @Body() createOrderDto: CreateOrderDto,
     // Khi Auth xong: thay 2 dòng dưới bằng: @CurrentUser() user: any

@@ -295,7 +295,7 @@ export function Header() {
                     <p className="truncate text-sm font-bold text-text">{user.name || 'Thành viên'}</p>
                     <p className="truncate text-xs text-text/60">{user.email}</p>
                   </div>
-                  
+
                   <div className="py-1">
                     <Link
                       href="/profile"
@@ -308,7 +308,7 @@ export function Header() {
                       </svg>
                       Thông tin tài khoản
                     </Link>
-                    
+
                     <Link
                       href="/rewards"
                       onClick={() => setIsUserMenuOpen(false)}
@@ -320,7 +320,7 @@ export function Header() {
                       Điểm thưởng
                     </Link>
                   </div>
-                  
+
                   <div className="mt-1 border-t border-primary/10 pt-1">
                     <button
                       type="button"
@@ -374,7 +374,7 @@ export function Header() {
           <div className="w-full max-w-sm rounded-3xl border border-primary/10 bg-surface p-6 text-center shadow-2xl">
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-red-100 text-red-500">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
             <h3 className="mb-2 text-lg font-bold text-text">Xác nhận đăng xuất</h3>

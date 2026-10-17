@@ -5,9 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import api from '@/lib/api';
 import { CartStickyBar } from '@/components/cart/CartStickyBar';
+import { OrderStatusStepper } from '@/components/orders/OrderStatus';
 import { formatVND } from '@/lib/utils';
-
-const cn = (...classes: (string | boolean | undefined)[]) => classes.filter(Boolean).join(' ');
 
 import { useCartStore } from '@/stores/cart.store';
 import type { Order } from '@/types';
@@ -27,28 +26,6 @@ interface OrderItem {
 
 type OrderWithItems = Omit<Order, 'items'> & { items: OrderItem[] };
 
-type OrderStatus =
-  | 'PENDING'
-  | 'PAID'
-  | 'PAYMENT_FAILED'
-  | 'CANCELLED'
-  | 'PREPARING'
-  | 'READY'
-  | 'COMPLETED';
-
-const STEPS: { status: OrderStatus; label: string }[] = [
-  { status: 'PENDING', label: 'Đặt đơn' },
-  { status: 'PAID', label: 'Đã thanh toán' },
-  { status: 'PREPARING', label: 'Đang chuẩn bị' },
-  { status: 'READY', label: 'Có thể nhận' },
-];
-
-function getStepIndex(status: OrderStatus): number {
-  if (status === 'COMPLETED') return STEPS.length - 1;
-  const idx = STEPS.findIndex((s) => s.status === status);
-  return idx === -1 ? -1 : idx;
-}
-
 function formatVietnameseDateTime(iso: string): string {
   return new Intl.DateTimeFormat('vi-VN', {
     day: '2-digit',
@@ -57,64 +34,6 @@ function formatVietnameseDateTime(iso: string): string {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(iso));
-}
-
-function OrderStatusStepper({ status }: { status: OrderStatus }) {
-  if (status === 'CANCELLED' || status === 'PAYMENT_FAILED') {
-    return (
-      <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-400">
-        {status === 'CANCELLED' ? 'Đơn hàng đã bị hủy' : 'Thanh toán thất bại'}
-      </div>
-    );
-  }
-
-  const currentIndex = getStepIndex(status);
-
-  return (
-    <div className="flex items-center justify-between">
-      {STEPS.map((step, index) => {
-        const isCompleted = index <= currentIndex;
-        const isLast = index === STEPS.length - 1;
-
-        return (
-          <div key={step.status} className="flex flex-1 items-center last:flex-none">
-            <div className="flex flex-col items-center gap-1">
-              <div
-                className={cn(
-                  'flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold',
-                  isCompleted
-                    ? 'bg-primary text-white'
-                    : 'bg-gray-200 text-gray-500 dark:bg-gray-800 dark:text-gray-400',
-                )}
-              >
-                {index + 1}
-              </div>
-              <span
-                className={cn(
-                  'whitespace-nowrap text-[11px]',
-                  isCompleted
-                    ? 'font-medium text-text'
-                    : 'text-gray-400 dark:text-gray-500',
-                )}
-              >
-                {step.label}
-              </span>
-            </div>
-            {!isLast && (
-              <div
-                className={cn(
-                  'mx-1 h-0.5 flex-1',
-                  index < currentIndex
-                    ? 'bg-primary'
-                    : 'bg-gray-200 dark:bg-gray-800',
-                )}
-              />
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
 }
 
 function OrderItemRow({ item }: { item: OrderItem }) {
@@ -255,34 +174,41 @@ export default function OrderDetailPage() {
         ))}
       </div>
 
-      <div className="flex items-center justify-between rounded-xl border border-gray-100 p-4 dark:border-gray-800">
-        <div className="flex flex-col gap-1">
-          {order.promoCode && (
-            <div className="flex items-center justify-between gap-4 text-sm">
-              <span className="text-gray-500">Mã khuyến mãi</span>
-              <span className="font-medium text-text">{order.promoCode}</span>
-            </div>
-          )}
-          {order.discount > 0 && (
-            <div className="flex items-center justify-between gap-4 text-sm text-red-600 dark:text-red-400">
-              <span>Số tiền giảm</span>
-              <span>-{formatVND(order.discount)}</span>
-            </div>
-          )}
-          {order.loyaltyPointsEarned > 0 && (
-            <div className="flex items-center justify-between gap-4 text-sm">
-              <span className="text-gray-500">Điểm thưởng nhận được</span>
-              <span className="font-medium text-text">
-                + {order.loyaltyPointsEarned} điểm
-              </span>
-            </div>
-          )}
-          <div className="mt-1 flex items-center justify-between gap-4 border-t border-gray-100 pt-2 dark:border-gray-800">
-            <span className="text-sm font-medium text-gray-500">Tổng cộng</span>
-            <span className="text-lg font-bold text-text">
-              {formatVND(order.total)}
+      <div className="flex flex-col gap-3 rounded-xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900/50">
+        <div className="flex justify-between items-center text-sm">
+          <span>Tạm tính</span>
+          <span className="whitespace-nowrap">{formatVND(order.total + order.discount)}</span>
+        </div>
+        {order.promoCode && (
+          <div className="flex justify-between items-center text-sm">
+            <span>Mã khuyến mãi</span>
+            <span className="min-w-0 break-all text-right font-bold">
+              {order.promoCode}
             </span>
           </div>
+        )}
+        {order.discount > 0 && (
+          <div className="flex justify-between items-center text-sm">
+            <span>Giảm giá</span>
+            <span className="whitespace-nowrap text-red-500 font-medium">
+              - {formatVND(order.discount)}
+            </span>
+          </div>
+        )}
+        {order.loyaltyPointsEarned > 0 && (
+          <div className="flex justify-between items-center text-sm">
+            <span>Điểm thưởng</span>
+            <span className="whitespace-nowrap text-green-600 font-medium">
+              + {order.loyaltyPointsEarned} điểm
+            </span>
+          </div>
+        )}
+        <div className="my-1 border-t border-dashed border-gray-200 dark:border-gray-700" />
+        <div className="flex justify-between items-center text-sm gap-4">
+          <span className="font-bold text-base">Tổng thanh toán</span>
+          <span className="whitespace-nowrap font-black text-xl text-primary">
+            {formatVND(order.total)}
+          </span>
         </div>
       </div>
       <CartStickyBar />

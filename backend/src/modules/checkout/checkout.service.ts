@@ -299,20 +299,8 @@ export class CheckoutService {
       );
     }
 
-    // ── Bước 4: Gọi cổng thanh toán (Mock) ──
-    // Nếu đơn hàng 0đ (do voucher giảm 100%), tự động hoàn tất mà không cần gọi cổng thanh toán
-    const gatewayResult =
-      order.total === 0
-        ? { success: true, gatewayRef: `FREE-VOUCHER-${Date.now()}` }
-        : await callMockGateway(order.total, method);
-
-    // ── Bước 5: Tính điểm thưởng (1,000đ = 1 điểm) ──
-    const pointsEarned = gatewayResult.success
-      ? Math.floor(order.total / 1000)
-      : 0;
-
-    // ── Bước 6: Ghi vào Database với Cơ chế Khóa Chống Race Condition ──
-    const payment = await this.prisma.$transaction(async (tx) => {
+    // ── Bước 4: Ghi vào Database với Cơ chế Khóa Chống Race Condition ──
+    const transactionResult = await this.prisma.$transaction(async (tx) => {
       // 🔒 6a: Khóa dòng Order (Pessimistic Lock: SELECT FOR UPDATE)
       // Ngăn chặn 2 request đồng thời cho cùng 1 đơn hàng lọt qua cùng lúc
       await tx.$executeRaw`SELECT 1 FROM "orders" WHERE "id" = ${orderId} FOR UPDATE`;
@@ -320,12 +308,27 @@ export class CheckoutService {
       // Kiểm tra lại trạng thái đơn hàng sau khi có lock (phòng trường hợp request trước vừa cập nhật)
       const lockedOrder = await tx.order.findUnique({
         where: { id: orderId },
-        select: { status: true },
+        select: { status: true, total: true, userId: true },
       });
 
       if (!lockedOrder || !ALLOWED_STATUSES.includes(lockedOrder.status)) {
         throw new ConflictException('Đơn hàng đã được xử lý bởi một phiên giao dịch khác');
       }
+
+      if (!Number.isSafeInteger(lockedOrder.total) || lockedOrder.total < 0) {
+        throw new BadRequestException('Số tiền thanh toán không hợp lệ');
+      }
+
+      // ── Bước 5: Gọi cổng thanh toán (Mock) với số tiền đã xác minh ──
+      // Nếu đơn hàng 0đ (do voucher giảm 100%), tự động hoàn tất mà không cần gọi cổng thanh toán
+      const gatewayResult =
+        lockedOrder.total === 0
+          ? { success: true, gatewayRef: `FREE-VOUCHER-${Date.now()}` }
+          : await callMockGateway(lockedOrder.total, method);
+
+      const pointsEarned = gatewayResult.success
+        ? Math.floor(lockedOrder.total / 10_000)
+        : 0;
 
       if (gatewayResult.success) {
         // 🔒 6b: Optimistic Locking - Trừ tồn kho và chống bán lố (Overselling)
@@ -360,7 +363,7 @@ export class CheckoutService {
         data: {
           orderId,
           idempotencyKey,
-          amount: order.total,
+          amount: lockedOrder.total,
           method,
           status: gatewayResult.success
             ? PaymentStatus.SUCCESS
@@ -379,14 +382,12 @@ export class CheckoutService {
         });
 
         // 6e: Cộng điểm thưởng cho người dùng
-        if (order.userId) {
-          await tx.user.update({
-            where: { id: order.userId },
-            data: {
-              loyaltyPoints: { increment: pointsEarned },
-            },
-          });
-        }
+        await tx.user.update({
+          where: { id: lockedOrder.userId },
+          data: {
+            loyaltyPoints: { increment: pointsEarned },
+          },
+        });
       } else {
         await tx.order.update({
           where: { id: orderId },
@@ -394,17 +395,21 @@ export class CheckoutService {
         });
       }
 
-      return newPayment;
+      return {
+        payment: newPayment,
+        success: gatewayResult.success,
+        pointsEarned,
+      };
     });
 
     // ── Bước 7: Trả về kết quả ──
     return {
       isDuplicate: false,
-      success: gatewayResult.success,
-      payment,
-      pointsEarned,
-      message: gatewayResult.success
-        ? `Thanh toán thành công! Bạn được cộng ${pointsEarned} điểm thưởng.`
+      success: transactionResult.success,
+      payment: transactionResult.payment,
+      pointsEarned: transactionResult.pointsEarned,
+      message: transactionResult.success
+        ? `Thanh toán thành công! Bạn được cộng ${transactionResult.pointsEarned} điểm thưởng.`
         : 'Thanh toán thất bại. Vui lòng thử lại hoặc chọn phương thức khác.',
     };
   }

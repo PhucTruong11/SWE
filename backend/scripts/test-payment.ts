@@ -349,17 +349,17 @@ async function runTests() {
   await prisma.product.delete({ where: { id: limitedProduct.id } });
 
   // =========================================================================
-  // TEST CASE 8: TIMEOUT 3 PHÚT - Tự động hủy đơn hàng quá hạn thanh toán
+  // TEST CASE 8: TIMEOUT 2 PHÚT - Tự động hủy đơn hàng quá hạn thanh toán
   // =========================================================================
-  console.log(`\n🧪 [TEST 8] TIMEOUT: Đơn hàng quá 3 phút không thanh toán...`);
+  console.log(`\n🧪 [TEST 8] TIMEOUT: Đơn hàng quá 2 phút không thanh toán...`);
   
-  // Tạo đơn hàng giả lập thời điểm tạo là 4 phút trước (> 3 phút timeout)
+  // Tạo đơn hàng giả lập thời điểm tạo là 3 phút trước (> 2 phút timeout)
   const expiredOrder = await prisma.order.create({
     data: {
       userId: user.id,
       status: 'PENDING',
       total: 60000,
-      createdAt: new Date(Date.now() - 4 * 60 * 1000), // Tạo cách đây 4 phút
+      createdAt: new Date(Date.now() - 3 * 60 * 1000), // Tạo cách đây 3 phút
       items: {
         create: [{
           productId: sampleProduct.id,
@@ -394,13 +394,13 @@ async function runTests() {
 
   const isTimeoutHandled =
     resTimeout.status === 400 &&
-    dataTimeout.message?.includes('quá 3 phút') &&
+    dataTimeout.message?.includes('quá 2 phút') &&
     orderAfterTimeout?.status === 'CANCELLED' &&
     dataCountdown.remainingSeconds === 0 &&
     dataCountdown.isExpired === true;
 
   if (isTimeoutHandled) {
-    console.log(`   ${GREEN}✅ PASS - Cơ chế Timeout 3 phút hoạt động chính xác!${RESET}`);
+    console.log(`   ${GREEN}✅ PASS - Cơ chế Timeout 2 phút hoạt động chính xác!${RESET}`);
     console.log(`      - HTTP Status: ${resTimeout.status} Bad Request`);
     console.log(`      - Lý do chặn: "${dataTimeout.message}"`);
     console.log(`      - Trạng thái DB: ${orderAfterTimeout?.status} (Đã tự động chuyển thành CANCELLED)`);
@@ -474,7 +474,7 @@ async function runTests() {
     dataStatusWithVoucher.total === 40000 &&
     dataStatusWithVoucher.promoCode === 'CHAOBAN' &&
     dataPayVoucher.payment?.amount === 40000 &&
-    dataPayVoucher.pointsEarned === 40; // 40k = 40 điểm
+    dataPayVoucher.pointsEarned === 4; // 40k / 10.000 = 4 điểm (theo công thức 10.000đ = 1 điểm)
 
   if (isVoucherPass) {
     console.log(`   ${GREEN}✅ PASS - Quản lý Voucher & Khuyến mãi hoạt động hoàn hảo!${RESET}`);

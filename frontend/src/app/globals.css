@@ -39,14 +39,22 @@ body {
 
 /* Tối ưu khi bấm In / Xuất PDF Hóa đơn */
 @media print {
-  header, nav, button, a, .no-print {
+
+  header,
+  nav,
+  button,
+  a,
+  .no-print {
     display: none !important;
   }
-  body, main {
+
+  body,
+  main {
     background: white !important;
     padding: 0 !important;
     margin: 0 !important;
   }
+
   #brewlite-receipt {
     box-shadow: none !important;
     border: 1px dashed #ccc !important;
@@ -54,4 +62,27 @@ body {
     width: 100% !important;
     padding: 20px !important;
   }
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 98, 65, 0.2);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 98, 65, 0.4);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 98, 65, 0.25) transparent;
 }

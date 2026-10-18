@@ -11,13 +11,13 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
 };
 
 const STATUS_BADGE_CLASS: Record<OrderStatus, string> = {
-  PENDING: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-400',
-  PAID: 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-400',
-  PREPARING: 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-400',
-  READY: 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-400',
-  COMPLETED: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400',
-  CANCELLED: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400',
-  PAYMENT_FAILED: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400',
+  PENDING: 'bg-amber-100 text-amber-800 border border-amber-200/60',
+  PAID: 'bg-blue-100 text-blue-800 border border-blue-200/60',
+  PREPARING: 'bg-purple-100 text-purple-800 border border-purple-200/60',
+  READY: 'bg-emerald-100 text-emerald-800 border border-emerald-200/60',
+  COMPLETED: 'bg-gray-100 text-gray-700 border border-gray-200/70',
+  CANCELLED: 'bg-rose-100 text-rose-700 border border-rose-200/60',
+  PAYMENT_FAILED: 'bg-rose-100 text-rose-700 border border-rose-200/60',
 };
 
 const STEPS: { status: OrderStatus; label: string }[] = [
@@ -38,7 +38,7 @@ function getStepIndex(status: OrderStatus): number {
 export function OrderStatusBadge({ status }: { status: OrderStatus }) {
   return (
     <span
-      className={`rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_BADGE_CLASS[status]}`}
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold ${STATUS_BADGE_CLASS[status]}`}
     >
       {STATUS_LABEL[status]}
     </span>
@@ -48,7 +48,7 @@ export function OrderStatusBadge({ status }: { status: OrderStatus }) {
 export function OrderStatusStepper({ status }: { status: OrderStatus }) {
   if (status === 'CANCELLED' || status === 'PAYMENT_FAILED') {
     return (
-      <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-400">
+      <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
         {status === 'CANCELLED' ? 'Đơn hàng đã bị hủy' : 'Thanh toán thất bại'}
       </div>
     );
@@ -67,20 +67,20 @@ export function OrderStatusStepper({ status }: { status: OrderStatus }) {
             <div className="flex flex-col items-center gap-1">
               <div
                 className={cn(
-                  'flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold',
+                  'flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold transition-all',
                   isCompleted
-                    ? 'bg-primary text-white'
-                    : 'bg-gray-200 text-gray-500 dark:bg-gray-800 dark:text-gray-400',
+                    ? 'bg-primary text-white shadow-sm'
+                    : 'bg-primary/10 text-text/50',
                 )}
               >
                 {index + 1}
               </div>
               <span
                 className={cn(
-                  'whitespace-nowrap text-[11px]',
+                  'whitespace-nowrap text-[11px] font-semibold',
                   isCompleted
-                    ? 'font-medium text-text'
-                    : 'text-gray-400 dark:text-gray-500',
+                    ? 'text-text'
+                    : 'text-text/40',
                 )}
               >
                 {step.label}
@@ -89,10 +89,10 @@ export function OrderStatusStepper({ status }: { status: OrderStatus }) {
             {!isLast && (
               <div
                 className={cn(
-                  'mx-1 h-0.5 flex-1',
+                  'mx-2 h-0.5 flex-1 rounded-full',
                   index < currentIndex
                     ? 'bg-primary'
-                    : 'bg-gray-200 dark:bg-gray-800',
+                    : 'bg-primary/15',
                 )}
               />
             )}

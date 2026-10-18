@@ -13,9 +13,12 @@ interface OrderSummaryProps {
   pointsEarned: number;
   isSubmitting: boolean;
   isExpired: boolean;
+  canRenew?: boolean;
+  durationSeconds?: number;
   onCheckout?: () => void;
   onPayment?: () => void;
   onRenew?: () => void;
+  onReturnToCart?: () => void;
   appliedPromo?: AppliedPromo | null;
   onApplyPromo?: (promo: AppliedPromo) => void;
   onRemovePromo?: () => void;
@@ -28,9 +31,12 @@ export function OrderSummary({
   pointsEarned,
   isSubmitting,
   isExpired,
+  canRenew = true,
+  durationSeconds = 120,
   onCheckout,
   onPayment,
   onRenew,
+  onReturnToCart,
   appliedPromo,
   onApplyPromo,
   onRemovePromo,
@@ -38,6 +44,7 @@ export function OrderSummary({
   const [voucherInput, setVoucherInput] = useState('');
   const [voucherError, setVoucherError] = useState<string | null>(null);
 
+  const durationLabel = durationSeconds >= 60 ? `${Math.floor(durationSeconds / 60)} phút` : `${durationSeconds} giây`;
   const triggerCheckout = onCheckout || onPayment;
   const totalItemsCount = items.reduce((s, i) => s + (Number(i.quantity) || 1), 0);
   const itemsSubtotal = propSubtotal ?? items.reduce((sum, item) => sum + (item.lineTotal ?? 0), 0);
@@ -156,7 +163,7 @@ export function OrderSummary({
         )}
 
         <div className="flex justify-between text-emerald-900 pt-1">
-          <span>Tích lũy điểm (1.000đ = 1 điểm):</span>
+          <span>Tích lũy điểm (10.000đ = 1 điểm):</span>
           <span className="font-bold">+{pointsEarned} điểm</span>
         </div>
 
@@ -170,13 +177,37 @@ export function OrderSummary({
 
       {/* Nút bấm thanh toán chính hoặc Gia hạn khi hết hạn */}
       {isExpired ? (
-        <button
-          type="button"
-          onClick={onRenew}
-          className="mt-6 w-full rounded-full py-4 text-center font-bold text-white bg-amber-600 hover:bg-amber-700 shadow-lg transition-all active:scale-[0.99] flex items-center justify-center gap-2"
-        >
-          <span>🔄</span> Làm mới đơn hàng (Gia hạn 3 phút)
-        </button>
+        canRenew ? (
+          <button
+            type="button"
+            onClick={onRenew}
+            className="mt-6 w-full rounded-full py-4 text-center font-bold text-white bg-amber-600 hover:bg-amber-700 shadow-lg transition-all active:scale-[0.99] flex items-center justify-center gap-2"
+          >
+            Làm mới đơn hàng (Gia hạn {durationLabel})
+          </button>
+        ) : (
+          <div className="mt-6 flex flex-col gap-2">
+            <button
+              type="button"
+              disabled
+              className="w-full rounded-full py-4 text-center font-bold text-gray-500 bg-gray-200 cursor-not-allowed shadow-sm"
+            >
+              Đã hết hạn thanh toán
+            </button>
+            <p className="text-center text-xs text-red-600 font-semibold">
+              Đơn hàng đã hết 2 cơ hội thanh toán. Mã ưu đãi (nếu có) đã tự động bị thu hồi. Vui lòng quay lại giỏ hàng để tạo đơn mới.
+            </p>
+            {onReturnToCart && (
+              <button
+                type="button"
+                onClick={onReturnToCart}
+                className="w-full rounded-full border border-primary text-primary hover:bg-primary/5 py-2.5 text-center text-xs font-bold transition-all active:scale-[0.99]"
+              >
+                Quay lại giỏ hàng
+              </button>
+            )}
+          </div>
+        )
       ) : (
         <button
           type="button"

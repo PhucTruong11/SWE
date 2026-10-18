@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useCartStore, useHasCartHydrated } from '@/stores/cart.store';
 import api from '@/lib/api';
 import {
@@ -13,28 +14,45 @@ import {
   type CardFormData,
   type CardFormErrors,
 } from '@/components/checkout';
-
 import type { AppliedPromo } from '@/lib/voucher';
 
 export default function CheckoutPage() {
+  const router = useRouter();
   const { items, clearCart, appliedPromo, applyPromo, removePromo } = useCartStore();
+  const currentPromo: AppliedPromo | null = appliedPromo;
   const hasHydrated = useHasCartHydrated();
 
   // Phương thức thanh toán: EWALLET (MoMo) | CARD (Thẻ ngân hàng)
   const [method, setMethod] = useState<'EWALLET' | 'CARD'>('EWALLET');
 
-  // Thông tin form thẻ ngân hàng (bắt đầu trống, dùng nút "Điền thẻ mẫu" khi cần test)
+  // Thông tin form thẻ ngân hàng (mặc định điền sẵn thẻ mẫu Sandbox để test thanh toán ảo nhanh)
   const [cardInfo, setCardInfo] = useState<CardFormData>({
-    cardNumber: '',
-    cardHolder: '',
-    expiry: '',
-    cvv: '',
+    cardNumber: '9704 2200 8888 6666',
+    cardHolder: 'NGUYEN VAN A',
+    expiry: '12/28',
+    cvv: '888',
   });
   const [cardErrors, setCardErrors] = useState<CardFormErrors>({});
 
-  // Đồng hồ đếm ngược 3 phút (180 giây)
-  const [timeLeft, setTimeLeft] = useState(180);
+  // Thời lượng giữ đơn và thanh toán chạy ngầm: 2 phút (120 giây)
+  const CHECKOUT_DURATION_SECONDS = 120;
+  const CHECKOUT_DEADLINE_KEY = 'brewlite_checkout_deadline';
+  const CHECKOUT_RENEW_COUNT_KEY = 'brewlite_checkout_renew_count';
+  const MAX_RENEWALS = 1; // Chỉ cho phép gia hạn tối đa 1 lần duy nhất
+
+  // Đồng hồ đếm ngược chạy ngầm (không hiển thị thanh ra ngoài giao diện)
+  const [timeLeft, setTimeLeft] = useState(CHECKOUT_DURATION_SECONDS);
   const isExpired = timeLeft <= 0;
+
+  // Số lần đã gia hạn (khởi tạo đọc từ localStorage)
+  const [renewCount, setRenewCount] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const savedRenewCount = localStorage.getItem('brewlite_checkout_renew_count');
+      return savedRenewCount ? parseInt(savedRenewCount, 10) || 0 : 0;
+    }
+    return 0;
+  });
+  const canRenew = renewCount < MAX_RENEWALS;
 
   // Trạng thái xử lý thanh toán
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -43,20 +61,59 @@ export default function CheckoutPage() {
   // Dữ liệu HÓA ĐƠN XUẤT SAU KHI THANH TOÁN THÀNH CÔNG
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
 
-  // Bộ đếm thời gian
+  // Bộ đếm thời gian được đồng bộ qua localStorage và chạy hoàn toàn ngầm
   useEffect(() => {
-    if (isExpired) return;
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => (prev <= 1 ? 0 : prev - 1));
-    }, 1000);
+    if (typeof window === 'undefined') return;
+
+    const syncTimer = () => {
+      const saved = localStorage.getItem(CHECKOUT_DEADLINE_KEY);
+      let targetDeadline: number;
+
+      if (!saved) {
+        targetDeadline = Date.now() + CHECKOUT_DURATION_SECONDS * 1000;
+        localStorage.setItem(CHECKOUT_DEADLINE_KEY, targetDeadline.toString());
+      } else {
+        targetDeadline = parseInt(saved, 10);
+        // Nếu deadline cũ lưu thời gian xa hơn CHECKOUT_DURATION_SECONDS, tự động reset lại 2 phút
+        if (isNaN(targetDeadline) || targetDeadline - Date.now() > CHECKOUT_DURATION_SECONDS * 1000) {
+          targetDeadline = Date.now() + CHECKOUT_DURATION_SECONDS * 1000;
+          localStorage.setItem(CHECKOUT_DEADLINE_KEY, targetDeadline.toString());
+        }
+      }
+
+      const remaining = Math.max(0, Math.floor((targetDeadline - Date.now()) / 1000));
+      setTimeLeft(remaining);
+    };
+
+    syncTimer();
+    const timer = setInterval(syncTimer, 1000);
     return () => clearInterval(timer);
-  }, [isExpired]);
+  }, []);
+
+  // Xóa deadline & số lần gia hạn khi giỏ hàng trống
+  useEffect(() => {
+    if (items.length === 0 && typeof window !== 'undefined') {
+      localStorage.removeItem(CHECKOUT_DEADLINE_KEY);
+      localStorage.removeItem(CHECKOUT_RENEW_COUNT_KEY);
+    }
+  }, [items.length]);
+
+  // Tự động thu hồi mã giảm giá nếu hết hạn cả 2 cơ hội thanh toán (2 phút đầu + 1 lần gia hạn)
+  useEffect(() => {
+    if (isExpired && !canRenew && currentPromo) {
+      const timer = setTimeout(() => {
+        removePromo();
+        setErrorMessage('Đơn hàng đã hết hạn thanh toán qua 2 cơ hội. Mã ưu đãi đã tự động bị thu hồi.');
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [isExpired, canRenew, currentPromo, removePromo]);
 
   // Tính toán số tiền thực tế từ giỏ hàng kèm giảm giá Voucher
   const subtotal = items.reduce((sum, item) => sum + (item.lineTotal ?? 0), 0);
   const discountAmount = appliedPromo ? appliedPromo.discount : 0;
   const finalTotal = Math.max(0, subtotal - discountAmount);
-  const pointsEarned = Math.floor(finalTotal / 1000); // 1.000đ = 1 điểm
+  const pointsEarned = Math.floor(finalTotal / 10000); // 10.000đ = 1 điểm (đồng bộ với backend)
 
   // Kiểm tra tính hợp lệ của Form thẻ ngân hàng
   const validateCardForm = (): boolean => {
@@ -89,9 +146,22 @@ export default function CheckoutPage() {
     return Object.keys(errors).length === 0;
   };
 
-  // Làm mới đơn hàng khi hết hạn (Gia hạn thêm 3 phút)
+  // Làm mới đơn hàng khi hết hạn (Chỉ được gia hạn tối đa 1 lần)
   const handleRenewOrder = () => {
-    setTimeLeft(180);
+    if (renewCount >= MAX_RENEWALS) {
+      setErrorMessage('Đơn hàng đã hết số lần gia hạn cho phép (tối đa 1 lần). Vui lòng tạo lại đơn mới.');
+      return;
+    }
+
+    const nextRenewCount = renewCount + 1;
+    setRenewCount(nextRenewCount);
+
+    const newDeadline = Date.now() + CHECKOUT_DURATION_SECONDS * 1000;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(CHECKOUT_DEADLINE_KEY, newDeadline.toString());
+      localStorage.setItem(CHECKOUT_RENEW_COUNT_KEY, nextRenewCount.toString());
+    }
+    setTimeLeft(CHECKOUT_DURATION_SECONDS);
     setErrorMessage(null);
   };
 
@@ -224,7 +294,11 @@ export default function CheckoutPage() {
         method,
       });
 
-      // 5. Dọn dẹp giỏ hàng sau khi hoàn tất
+      // 5. Dọn dẹp giỏ hàng, deadline và lượt gia hạn sau khi hoàn tất
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(CHECKOUT_DEADLINE_KEY);
+        localStorage.removeItem(CHECKOUT_RENEW_COUNT_KEY);
+      }
       clearCart();
     } catch (err: unknown) {
       let message = 'Có lỗi xảy ra trong quá trình thanh toán đơn hàng. Vui lòng thử lại!';
@@ -260,6 +334,10 @@ export default function CheckoutPage() {
         <ReceiptInvoice
           data={receiptData}
           onReset={() => {
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem(CHECKOUT_DEADLINE_KEY);
+              localStorage.removeItem(CHECKOUT_RENEW_COUNT_KEY);
+            }
             setReceiptData(null);
             clearCart();
           }}
@@ -291,11 +369,11 @@ export default function CheckoutPage() {
   // 3. GIAO DIỆN CHECKOUT CHÍNH
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 px-4 py-6 pb-20 lg:px-8">
-      {/* Đồng hồ đếm ngược 3 phút kèm nút Gia hạn khi hết hạn */}
+      {/* Đồng hồ đếm ngược chạy ngầm đồng bộ với nút thanh toán */}
       <CountdownTimer
         timeLeft={timeLeft}
         isExpired={isExpired}
-        onRenew={handleRenewOrder}
+        showUI={false}
       />
 
       {errorMessage && (
@@ -329,9 +407,12 @@ export default function CheckoutPage() {
             pointsEarned={pointsEarned}
             isSubmitting={isSubmitting}
             isExpired={isExpired}
+            canRenew={canRenew}
+            durationSeconds={CHECKOUT_DURATION_SECONDS}
             onCheckout={handleCheckout}
             onPayment={handleCheckout}
             onRenew={handleRenewOrder}
+            onReturnToCart={() => router.push('/cart')}
             appliedPromo={appliedPromo}
             onApplyPromo={applyPromo}
             onRemovePromo={removePromo}

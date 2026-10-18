@@ -9,8 +9,8 @@ import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PaymentMethod, OrderStatus, PaymentStatus } from '@prisma/client';
 
-// Thời hạn thanh toán cho mỗi đơn hàng: 3 phút (180,000 ms)
-export const PAYMENT_TIMEOUT_MS = 3 * 60 * 1000;
+// Thời hạn thanh toán cho mỗi đơn hàng: 2 phút (120,000 ms)
+export const PAYMENT_TIMEOUT_MS = 2 * 60 * 1000;
 
 // ============================================================
 // Danh mục Voucher hợp lệ trong hệ thống
@@ -285,17 +285,17 @@ export class CheckoutService {
       );
     }
 
-    // ── Bước 3b: Kiểm tra Hết hạn thanh toán (Timeout Guard 3 phút) ──
+    // ── Bước 3b: Kiểm tra Hết hạn thanh toán (Timeout Guard 2 phút) ──
     const elapsedMs = Date.now() - order.createdAt.getTime();
     if (elapsedMs > PAYMENT_TIMEOUT_MS) {
-      // Đơn hàng đã quá hạn 3 phút -> Tự động cập nhật thành CANCELLED
+      // Đơn hàng đã quá hạn 2 phút -> Tự động cập nhật thành CANCELLED
       await this.prisma.order.update({
         where: { id: orderId },
         data: { status: OrderStatus.CANCELLED },
       });
 
       throw new BadRequestException(
-        'Đơn hàng đã quá hạn thanh toán (quá 3 phút) và đã tự động bị hủy.',
+        'Đơn hàng đã quá hạn thanh toán (quá 2 phút) và đã tự động bị hủy.',
       );
     }
 
@@ -474,7 +474,7 @@ export class CheckoutService {
   }
 
   // ----------------------------------------------------------
-  // Cron Job: Chạy mỗi 30 giây để quét và hủy các đơn PENDING quá 3 phút
+  // Cron Job: Chạy mỗi 30 giây để quét và hủy các đơn PENDING quá 2 phút
   // Giúp dọn dẹp hệ thống ngay cả khi user tắt trình duyệt
   // ----------------------------------------------------------
   @Cron('*/30 * * * * *')
@@ -493,7 +493,7 @@ export class CheckoutService {
 
     if (expiredOrders.count > 0) {
       this.logger.warn(
-        `⏰ [CronJob] Đã tự động hủy ${expiredOrders.count} đơn hàng PENDING do quá hạn 3 phút!`,
+        `⏰ [CronJob] Đã tự động hủy ${expiredOrders.count} đơn hàng PENDING do quá hạn 2 phút!`,
       );
     }
   }

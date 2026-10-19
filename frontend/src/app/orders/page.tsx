@@ -79,7 +79,7 @@ export default function OrderHistoryPage() {
   if (error) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-2 px-4 text-center">
-        <p className="text-sm font-medium text-red-600 dark:text-red-400">
+        <p className="text-sm font-semibold text-rose-600">
           {error}
         </p>
         <button
@@ -97,98 +97,101 @@ export default function OrderHistoryPage() {
   const pastOrders = orders.filter((order) => PAST_STATUSES.includes(order.status));
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-4 pb-24 lg:px-8 lg:pb-8">
-      <h1 className="text-lg font-semibold text-text">Đơn hàng của tôi</h1>
+    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-6 pb-24 lg:px-8 lg:pb-8">
+      <div>
+        <h1 className="text-2xl font-extrabold tracking-tight text-text">Đơn hàng của tôi</h1>
+        <p className="mt-1 text-sm text-text/70">Theo dõi trạng thái và lịch sử các món đã đặt</p>
+      </div>
 
       {activeOrders.length > 0 && (
         <section className="flex flex-col gap-3">
-          <h2 className="text-base font-semibold text-text">Đơn hàng đang xử lý</h2>
-          <div className="grid gap-4 lg:grid-cols-2">
-            {activeOrders.map((order) => (
-              <div key={order.id} className="rounded-xl border border-primary/15 bg-surface p-4 shadow-sm">
-                <div className="flex flex-col gap-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-text">
-                        #{getOrderCode(order)}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {formatVietnameseDateTime(order.createdAt)}
-                      </p>
-                    </div>
-                    <OrderStatusBadge status={order.status} />
-                  </div>
-                  <OrderStatusStepper status={order.status} />
-                  <div className="flex items-center justify-between border-t border-primary/15 pt-3">
-                    <span className="text-sm text-gray-500">
-                      {getItemCount(order)} món
-                    </span>
-                    <span className="text-base font-bold text-text">
-                      {formatVND(order.total)}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => router.push(`/orders/${order.id}`)}
-                    className="w-full rounded-lg bg-primary py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary-hover"
-                  >
-                    Xem chi tiết
-                  </button>
+          <h2 className="text-base font-bold text-text">Đơn hàng đang xử lý</h2>
+          <div className="rounded-2xl border border-primary/20 bg-surface p-5 shadow-sm">
+            <div className="flex flex-col gap-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-base font-black text-text">
+                    #{getOrderCode(activeOrder)}
+                  </p>
+                  <p className="text-xs text-text/60">
+                    {formatVietnameseDateTime(activeOrder.createdAt)}
+                  </p>
                 </div>
+                <OrderStatusBadge status={activeOrder.status} />
               </div>
-            ))}
+              <OrderStatusStepper status={activeOrder.status} />
+              <div className="flex items-center justify-between border-t border-primary/10 pt-3">
+                <span className="text-sm font-medium text-text/70">
+                  {getItemCount(activeOrder)} món
+                </span>
+                <span className="text-lg font-black text-primary">
+                  {formatVND(activeOrder.total)}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => router.push(`/orders/${activeOrder.id}`)}
+                className="w-full rounded-full bg-primary py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-primary-hover active:scale-[0.99]"
+              >
+                Xem chi tiết đơn hàng →
+              </button>
+            </div>
           </div>
         </section>
       )}
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-base font-semibold text-text">Lịch sử đơn hàng</h2>
-        <div className="max-h-[500px] overflow-y-auto rounded-xl border border-primary/15 bg-surface shadow-sm">
+        <h2 className="text-base font-bold text-text">Lịch sử đơn hàng</h2>
+        <div className="overflow-hidden rounded-2xl border border-primary/15 bg-surface shadow-sm">
           {pastOrders.length === 0 ? (
-            <div className="flex min-h-32 items-center justify-center px-4 text-center">
-              <p className="text-sm text-gray-500">Chưa có đơn hàng trong lịch sử</p>
+            <div className="flex min-h-36 items-center justify-center px-4 text-center">
+              <p className="text-sm font-medium text-text/60">Chưa có đơn hàng nào trong lịch sử.</p>
             </div>
           ) : (
-            <table className="w-full min-w-[680px] text-left text-sm">
-              <thead className="sticky top-0 bg-background text-xs uppercase text-text/60">
-                <tr>
-                  <th className="px-4 py-3 font-semibold">Mã đơn</th>
-                  <th className="px-4 py-3 font-semibold">Thời gian</th>
-                  <th className="px-4 py-3 font-semibold">Số món</th>
-                  <th className="px-4 py-3 font-semibold">Trạng thái</th>
-                  <th className="px-4 py-3 font-semibold">Tổng tiền</th>
-                  <th className="px-4 py-3 font-semibold">Hành động</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-primary/15">
-                {pastOrders.map((order) => (
-                  <tr key={order.id} className="text-text">
-                    <td className="whitespace-nowrap px-4 py-3 font-medium">
-                      #{getOrderCode(order)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-gray-500">
-                      {formatVietnameseDateTime(order.createdAt)}
-                    </td>
-                    <td className="px-4 py-3">{getItemCount(order)}</td>
-                    <td className="px-4 py-3">
-                      <OrderStatusBadge status={order.status} />
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 font-semibold">
-                      {formatVND(order.total)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <button
-                        type="button"
-                        onClick={() => router.push(`/orders/${order.id}`)}
-                        className="whitespace-nowrap font-semibold text-primary hover:underline"
-                      >
-                        Xem chi tiết
-                      </button>
-                    </td>
+            <div className="overflow-x-auto overflow-y-auto max-h-[500px]">
+              <table className="w-full min-w-[680px] text-left text-sm text-text">
+                <thead className="sticky top-0 z-10 border-b border-primary/10 bg-[#FAF7F0] text-xs font-bold uppercase tracking-wider text-text/75">
+                  <tr>
+                    <th className="px-5 py-3.5">Mã đơn</th>
+                    <th className="px-4 py-3.5">Thời gian</th>
+                    <th className="px-4 py-3.5 text-center">Số món</th>
+                    <th className="px-4 py-3.5 text-center">Trạng thái</th>
+                    <th className="px-4 py-3.5">Tổng tiền</th>
+                    <th className="px-5 py-3.5 text-right">Hành động</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-primary/10">
+                  {pastOrders.map((order) => (
+                    <tr key={order.id} className="transition-colors hover:bg-primary/[0.03]">
+                      <td className="whitespace-nowrap px-5 py-3.5 font-bold text-text">
+                        #{getOrderCode(order)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3.5 text-xs text-text/70">
+                        {formatVietnameseDateTime(order.createdAt)}
+                      </td>
+                      <td className="px-4 py-3.5 text-center font-medium text-text/80">
+                        {getItemCount(order)}
+                      </td>
+                      <td className="px-4 py-3.5 text-center">
+                        <OrderStatusBadge status={order.status} />
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3.5 font-bold text-primary">
+                        {formatVND(order.total)}
+                      </td>
+                      <td className="whitespace-nowrap px-5 py-3.5 text-right">
+                        <button
+                          type="button"
+                          onClick={() => router.push(`/orders/${order.id}`)}
+                          className="rounded-full border border-primary/20 bg-surface px-3.5 py-1.5 text-xs font-bold text-primary transition-all hover:bg-primary hover:text-white"
+                        >
+                          Xem chi tiết
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </section>

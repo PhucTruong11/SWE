@@ -150,7 +150,12 @@ export function CheckoutMethods({
           {/* Form nhập thẻ */}
           <div className="space-y-3 text-xs text-[#1E3932] mt-1">
             <div className="flex justify-between items-center mb-1">
-              <span className="font-semibold text-gray-700">Thông tin thẻ:</span>
+              <div className="flex items-center gap-1.5">
+                <span className="font-semibold text-gray-700">Thông tin thẻ:</span>
+                <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                  Thẻ test điền sẵn
+                </span>
+              </div>
               <div className="flex gap-2">
                 {onFillDemoCard && (
                   <button

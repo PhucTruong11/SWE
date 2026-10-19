@@ -117,6 +117,10 @@ export const useCartStore = create<CartStore>((set, get) => ({
   },
 
   addItem: (newItem) => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('brewlite_checkout_deadline');
+      localStorage.removeItem('brewlite_checkout_renew_count');
+    }
     const currentItems = get().items;
 
     const existingIndex = currentItems.findIndex(
@@ -139,12 +143,20 @@ export const useCartStore = create<CartStore>((set, get) => ({
   },
 
   removeItem: (index) => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('brewlite_checkout_deadline');
+      localStorage.removeItem('brewlite_checkout_renew_count');
+    }
     const updatedItems = get().items.filter((_, i) => i !== index);
     set({ items: updatedItems });
     saveToStorage(get().currentUserId, updatedItems);
   },
 
   updateQuantity: (index, quantity) => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('brewlite_checkout_deadline');
+      localStorage.removeItem('brewlite_checkout_renew_count');
+    }
     if (quantity <= 0) {
       get().removeItem(index);
       return;
@@ -159,6 +171,10 @@ export const useCartStore = create<CartStore>((set, get) => ({
   },
 
   clearCart: () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('brewlite_checkout_deadline');
+      localStorage.removeItem('brewlite_checkout_renew_count');
+    }
     set({ items: [], appliedPromo: null });
     if (typeof window !== 'undefined') {
       const key = getCartKey(get().currentUserId);

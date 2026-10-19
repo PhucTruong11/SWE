@@ -1,22 +1,21 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useCartStore, useHasCartHydrated } from '@/stores/cart.store';
 import api from '@/lib/api';
 import {
-  ReceiptInvoice,
   CountdownTimer,
   CheckoutMethods,
   OrderSummary,
   EmptyCheckout,
-  type ReceiptData,
   type CardFormData,
   type CardFormErrors,
 } from '@/components/checkout';
 
-import type { AppliedPromo } from '@/lib/voucher';
-
 export default function CheckoutPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { items, clearCart, appliedPromo, applyPromo, removePromo } = useCartStore();
   const hasHydrated = useHasCartHydrated();
 
@@ -40,8 +39,11 @@ export default function CheckoutPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Dữ liệu HÓA ĐƠN XUẤT SAU KHI THANH TOÁN THÀNH CÔNG
-  const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
+  // Giữ order/key trong suốt vòng đời thao tác để retry do timeout không tạo request mới.
+  const [orderId, setOrderId] = useState<string | null>(
+    searchParams.get('orderId'),
+  );
+  const paymentAttemptRef = useRef<string | null>(null);
 
   // Bộ đếm thời gian
   useEffect(() => {
@@ -154,78 +156,71 @@ export default function CheckoutPage() {
     setErrorMessage(null);
 
     try {
-      // 1. Gửi request tạo Order lên Backend: POST /api/orders
-      const orderPayload = {
-        items: items.map((item) => ({
-          productId: item.productId,
-          size: item.size,
-          qty: item.quantity,
-          toppings: item.toppings?.flatMap((t) => Array(t.quantity).fill(t.name)) || [],
-          lineTotal: item.lineTotal,
-        })),
-        promoCode: appliedPromo?.code,
-      };
-
-      const orderRes = await api.post('/orders', orderPayload);
-      const createdOrder = orderRes.data.data;
-
-      if (!createdOrder?.id) {
-        throw new Error('Không thể khởi tạo đơn hàng từ máy chủ.');
+      // 1. Chỉ tạo order một lần. Khi retry thanh toán, dùng lại order hiện có.
+      let currentOrderId = orderId;
+      if (!currentOrderId) {
+        const orderRes = await api.post('/orders', {
+          items: items.map((item) => ({
+            productId: item.productId,
+            size: item.size,
+            qty: item.quantity,
+            toppings: item.toppings?.flatMap((t) =>
+              Array(t.quantity).fill(t.name),
+            ) || [],
+            lineTotal: item.lineTotal,
+          })),
+          ...(appliedPromo?.code ? { promoCode: appliedPromo.code } : {}),
+        });
+        currentOrderId = orderRes.data.data?.id;
+        if (!currentOrderId) {
+          throw new Error('Không thể khởi tạo đơn hàng từ máy chủ.');
+        }
+        setOrderId(currentOrderId);
       }
 
-      // 2. Tạo Idempotency-Key chống thanh toán trùng lặp
-      const idempotencyKey =
-        typeof crypto !== 'undefined' && crypto.randomUUID
-          ? crypto.randomUUID()
-          : `checkout-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      // 2. Cùng một thao tác thanh toán luôn dùng cùng key, kể cả khi request timeout.
+      if (!paymentAttemptRef.current) {
+        paymentAttemptRef.current =
+          typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `checkout-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      }
 
-      // 3. Gửi request xử lý thanh toán: POST /api/checkout
+      // 3. Contract hiện có là POST /checkout (CheckoutController), không phải /payments.
       const paymentRes = await api.post(
         '/checkout',
         {
-          orderId: createdOrder.id,
+          orderId: currentOrderId,
           method,
-          promoCode: appliedPromo?.code,
+          ...(appliedPromo?.code ? { promoCode: appliedPromo.code } : {}),
         },
         {
           headers: {
-            'idempotency-key': idempotencyKey,
+            'Idempotency-Key': paymentAttemptRef.current,
           },
         },
       );
 
-      const paymentData = paymentRes.data;
-      if (!paymentData.success && !paymentData.isDuplicate) {
+      const paymentData = paymentRes.data as {
+        success?: boolean;
+        isDuplicate?: boolean;
+        message?: string;
+      };
+      const orderRes = await api.get(`/orders/${currentOrderId}`);
+      const confirmedOrder = orderRes.data.data;
+
+      // Response duplicate không có field success; xác minh trạng thái order là nguồn sự thật.
+      if (paymentData.success !== true && confirmedOrder?.status !== 'PAID') {
+        // Một response thất bại đã được backend xác nhận là một attempt mới ở lần retry sau.
+        if (paymentData.success === false || confirmedOrder?.status === 'PAYMENT_FAILED') {
+          paymentAttemptRef.current = null;
+        }
         throw new Error(paymentData.message || 'Giao dịch thanh toán không thành công.');
       }
 
-      const now = new Date();
-      const datePrefix = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}`;
-
-      // 4. Xuất hóa đơn điện tử thực tế từ dữ liệu trả về của Server
-      setReceiptData({
-        orderId: createdOrder.id,
-        invoiceNo: `BL-${datePrefix}-${createdOrder.id.slice(-6).toUpperCase()}`,
-        paymentId: paymentData.payment?.id || `PAY-${createdOrder.id.slice(-6).toUpperCase()}`,
-        paidAt: new Date(paymentData.payment?.createdAt || now).toLocaleString('vi-VN', {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric',
-        }),
-        items: [...items],
-        subtotal,
-        discount: discountAmount,
-        promoCode: appliedPromo?.code || createdOrder.promoCode || null,
-        finalTotal: paymentData.payment?.amount ?? finalTotal,
-        pointsEarned: paymentData.pointsEarned ?? Math.floor(finalTotal / 1000),
-        method,
-      });
-
-      // 5. Dọn dẹp giỏ hàng sau khi hoàn tất
+      // 4. Chỉ dọn cart sau khi GET detail xác nhận PAID từ backend.
       clearCart();
+      router.push(`/orders/${currentOrderId}?confirmed=1`);
     } catch (err: unknown) {
       let message = 'Có lỗi xảy ra trong quá trình thanh toán đơn hàng. Vui lòng thử lại!';
       if (
@@ -252,21 +247,6 @@ export default function CheckoutPage() {
 
   // URL QR MoMo / VietQR động
   const vietQrUrl = `https://api.vietqr.io/image/970422-0909090909-compact2.png?amount=${finalTotal}&addInfo=BREWLITE%20CAFE&accountName=BREWLITE%20COFFEE`;
-
-  // 1. NẾU ĐÃ THANH TOÁN THÀNH CÔNG → HIỂN THỊ HÓA ĐƠN ĐIỆN TỬ
-  if (receiptData) {
-    return (
-      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col items-center px-4 py-8">
-        <ReceiptInvoice
-          data={receiptData}
-          onReset={() => {
-            setReceiptData(null);
-            clearCart();
-          }}
-        />
-      </main>
-    );
-  }
 
   // Chờ đọc xong dữ liệu giỏ hàng từ localStorage để tránh giật giao diện
   if (!hasHydrated) {

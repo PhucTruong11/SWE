@@ -12,12 +12,12 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
 
 const STATUS_BADGE_CLASS: Record<OrderStatus, string> = {
   PENDING: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-400',
-  PAID: 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-400',
-  PREPARING: 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-400',
-  READY: 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-400',
-  COMPLETED: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400',
-  CANCELLED: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400',
-  PAYMENT_FAILED: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400',
+  PAID: 'bg-primary/20 text-primary',
+  PREPARING: 'bg-purple-100 text-purple-800',
+  READY: 'bg-green-100 text-green-800',
+  COMPLETED: 'bg-surface text-text/60 border border-primary/15',
+  CANCELLED: 'bg-red-100 text-red-700',
+  PAYMENT_FAILED: 'bg-red-100 text-red-700',
 };
 
 const STEPS: { status: OrderStatus; label: string }[] = [
@@ -70,7 +70,7 @@ export function OrderStatusStepper({ status }: { status: OrderStatus }) {
                   'flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold',
                   isCompleted
                     ? 'bg-primary text-white'
-                    : 'bg-gray-200 text-gray-500 dark:bg-gray-800 dark:text-gray-400',
+                    : 'bg-surface border border-primary/20 text-text/40',
                 )}
               >
                 {index + 1}
@@ -80,7 +80,7 @@ export function OrderStatusStepper({ status }: { status: OrderStatus }) {
                   'whitespace-nowrap text-[11px]',
                   isCompleted
                     ? 'font-medium text-text'
-                    : 'text-gray-400 dark:text-gray-500',
+                    : 'text-text/40',
                 )}
               >
                 {step.label}
@@ -92,7 +92,7 @@ export function OrderStatusStepper({ status }: { status: OrderStatus }) {
                   'mx-1 h-0.5 flex-1',
                   index < currentIndex
                     ? 'bg-primary'
-                    : 'bg-gray-200 dark:bg-gray-800',
+                    : 'bg-primary/20',
                 )}
               />
             )}

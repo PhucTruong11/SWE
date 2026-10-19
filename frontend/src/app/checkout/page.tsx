@@ -290,7 +290,7 @@ export default function CheckoutPage() {
         discount: discountAmount,
         promoCode: appliedPromo?.code || createdOrder.promoCode || null,
         finalTotal: paymentData.payment?.amount ?? finalTotal,
-        pointsEarned: paymentData.pointsEarned ?? Math.floor(finalTotal / 1000),
+        pointsEarned: paymentData.pointsEarned ?? Math.floor(finalTotal / 10000),
         method,
       });
 

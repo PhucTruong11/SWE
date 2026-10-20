@@ -51,7 +51,6 @@ export function Header() {
   const [isMenuOpen, setMenuOpen] = useState(false);
   const [isCartHovered, setIsCartHovered] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isUserMenuHovered, setIsUserMenuHovered] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 

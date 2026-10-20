@@ -11,12 +11,11 @@ import {
 import { formatVND } from '@/lib/utils';
 import type { Order } from '@/types';
 
-const ACTIVE_STATUSES: Order['status'][] = ['PENDING', 'PAID', 'PREPARING'];
+const ACTIVE_STATUSES: Order['status'][] = ['PENDING', 'PAID', 'PREPARING', 'READY'];
 const PAST_STATUSES: Order['status'][] = [
   'COMPLETED',
   'CANCELLED',
   'PAYMENT_FAILED',
-  'READY',
 ];
 
 function formatVietnameseDateTime(value: string): string {
@@ -47,11 +46,18 @@ export default function OrderHistoryPage() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchOrders = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
       const res = await api.get<{ data: Order[] }>('/orders/me');
-      setOrders(res.data.data);
-    } catch {
-      setError('Không thể tải lịch sử đơn hàng');
+      setOrders(Array.isArray(res.data.data) ? res.data.data : []);
+    } catch (requestError: unknown) {
+      const status = (requestError as { response?: { status?: number } }).response?.status;
+      setError(
+        status === 401 || status === 403
+          ? 'Bạn cần đăng nhập để xem lịch sử đơn hàng.'
+          : 'Không thể tải lịch sử đơn hàng.',
+      );
     } finally {
       setLoading(false);
     }
@@ -76,13 +82,19 @@ export default function OrderHistoryPage() {
         <p className="text-sm font-semibold text-rose-600">
           {error}
         </p>
+        <button
+          type="button"
+          onClick={fetchOrders}
+          className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white"
+        >
+          Thử lại
+        </button>
       </div>
     );
   }
 
   const activeOrders = orders.filter((order) => ACTIVE_STATUSES.includes(order.status));
   const pastOrders = orders.filter((order) => PAST_STATUSES.includes(order.status));
-  const activeOrder = activeOrders[0];
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-6 pb-24 lg:px-8 lg:pb-8">
@@ -91,39 +103,41 @@ export default function OrderHistoryPage() {
         <p className="mt-1 text-sm text-text/70">Theo dõi trạng thái và lịch sử các món đã đặt</p>
       </div>
 
-      {activeOrder && (
+      {activeOrders.length > 0 && (
         <section className="flex flex-col gap-3">
           <h2 className="text-base font-bold text-text">Đơn hàng đang xử lý</h2>
-          <div className="rounded-2xl border border-primary/20 bg-surface p-5 shadow-sm">
-            <div className="flex flex-col gap-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-base font-black text-text">
-                    #{getOrderCode(activeOrder)}
-                  </p>
-                  <p className="text-xs text-text/60">
-                    {formatVietnameseDateTime(activeOrder.createdAt)}
-                  </p>
+          <div className="grid gap-4 lg:grid-cols-2">
+            {activeOrders.map((order) => (
+              <div key={order.id} className="rounded-2xl border border-primary/20 bg-surface p-5 shadow-sm">
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-base font-black text-text">#{getOrderCode(order)}</p>
+                      <p className="text-xs text-text/60">
+                        {formatVietnameseDateTime(order.createdAt)}
+                      </p>
+                    </div>
+                    <OrderStatusBadge status={order.status} />
+                  </div>
+                  <OrderStatusStepper status={order.status} />
+                  <div className="flex items-center justify-between border-t border-primary/10 pt-3">
+                    <span className="text-sm font-medium text-text/70">
+                      {getItemCount(order)} món
+                    </span>
+                    <span className="text-lg font-black text-primary">
+                      {formatVND(order.total)}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/orders/${order.id}`)}
+                    className="w-full rounded-full bg-primary py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-primary-hover active:scale-[0.99]"
+                  >
+                    Xem chi tiết đơn hàng →
+                  </button>
                 </div>
-                <OrderStatusBadge status={activeOrder.status} />
               </div>
-              <OrderStatusStepper status={activeOrder.status} />
-              <div className="flex items-center justify-between border-t border-primary/10 pt-3">
-                <span className="text-sm font-medium text-text/70">
-                  {getItemCount(activeOrder)} món
-                </span>
-                <span className="text-lg font-black text-primary">
-                  {formatVND(activeOrder.total)}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => router.push(`/orders/${activeOrder.id}`)}
-                className="w-full rounded-full bg-primary py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-primary-hover active:scale-[0.99]"
-              >
-                Xem chi tiết đơn hàng →
-              </button>
-            </div>
+            ))}
           </div>
         </section>
       )}

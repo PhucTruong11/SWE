@@ -37,7 +37,7 @@ export class PromotionsService {
 
     let discountAmount = 0;
     if (promo.discountType === 'PERCENTAGE') {
-      discountAmount = (subtotal * promo.discountValue) / 100;
+      discountAmount = Math.floor((subtotal * promo.discountValue) / 100);
       if (promo.maxDiscount && discountAmount > promo.maxDiscount) {
         discountAmount = promo.maxDiscount;
       }
@@ -51,6 +51,10 @@ export class PromotionsService {
       success: true,
       code: promo.code,
       discountAmount,
+      discountType: promo.discountType,
+      discountValue: promo.discountValue,
+      minOrderValue: promo.minOrderValue,
+      maxDiscount: promo.maxDiscount,
       message: 'Áp dụng mã ưu đãi thành công!',
     };
   }

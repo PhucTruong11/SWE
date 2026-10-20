@@ -1,26 +1,15 @@
 'use client';
 
 import { create } from 'zustand';
+import { getCartItemKey, getCartLineTotal, type CartItem } from '../lib/cart';
+import { recalculatePromo, type AppliedPromo } from '../lib/voucher';
 
-export interface CartItem {
-  id?: string;
-  productId?: string;
-  name: string;
-  size: string;
-  quantity: number;
-  unitPrice: number;
-  basePrice?: number;
-  totalToppingPrice?: number;
-  imageUrl?: string | null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  toppings?: any[];
-  lineTotal?: number;
-}
+export type { CartItem } from '../lib/cart';
 
 interface CartStore {
   items: CartItem[];
   currentUserId: string | null;
-  appliedPromo: { code: string; discount: number; description: string } | null;
+  appliedPromo: AppliedPromo | null;
 
   initUserCart: (userId: string | null) => void;
   addItem: (item: CartItem) => void;
@@ -29,7 +18,7 @@ interface CartStore {
   clearCart: () => void;
   totalPrice: () => number;
   totalItems: () => number;
-  applyPromo: (promo: { code: string; discount: number; description: string }) => void;
+  applyPromo: (promo: AppliedPromo) => void;
   removePromo: () => void;
 }
 
@@ -38,27 +27,60 @@ const getCartKey = (userId: string | null) => {
   return userId ? `brewlite_cart_user_${userId}` : `brewlite_cart_guest`;
 };
 
-// Hàm gộp danh sách món từ Khách vào Tài khoản (cộng dồn số lượng nếu trùng món + size)
+// Chỉ gộp khi cùng sản phẩm, size và số lượng từng loại topping.
 const mergeCartItems = (existingItems: CartItem[], guestItems: CartItem[]): CartItem[] => {
-  const merged = [...existingItems];
+  const merged: CartItem[] = [];
 
-  guestItems.forEach((guestItem) => {
+  [...existingItems, ...guestItems].forEach((guestItem) => {
     const existingIndex = merged.findIndex(
-      (item) => item.name === guestItem.name && item.size === guestItem.size
+      (item) => getCartItemKey(item) === getCartItemKey(guestItem)
     );
 
     if (existingIndex > -1) {
+      const quantity = merged[existingIndex].quantity + guestItem.quantity;
       merged[existingIndex] = {
         ...merged[existingIndex],
-        quantity: merged[existingIndex].quantity + guestItem.quantity,
+        quantity,
+        lineTotal: getCartLineTotal({ ...merged[existingIndex], quantity }),
       };
     } else {
-      merged.push(guestItem);
+      merged.push({ ...guestItem, lineTotal: getCartLineTotal(guestItem) });
     }
   });
 
   return merged;
 };
+
+const readCartItems = (key: string): CartItem[] => {
+  try {
+    const saved = localStorage.getItem(key);
+    const parsed: unknown = saved ? JSON.parse(saved) : [];
+    if (!Array.isArray(parsed)) return [];
+
+    return mergeCartItems([], parsed.filter((item): item is CartItem =>
+      item !== null && typeof item === 'object' &&
+      typeof item.name === 'string' && typeof item.size === 'string' &&
+      Number.isSafeInteger(item.quantity) && item.quantity > 0 &&
+      Number.isFinite(item.unitPrice) && item.unitPrice >= 0 &&
+      (item.toppings === undefined || (Array.isArray(item.toppings) &&
+        item.toppings.every((topping: unknown) => typeof topping === 'string' ||
+          (topping !== null && typeof topping === 'object' &&
+            'name' in topping && typeof topping.name === 'string'))))
+    ));
+  } catch (error) {
+    console.error('Lỗi khi đọc giỏ hàng:', error);
+    return [];
+  }
+};
+
+const resetCheckoutTimer = () => {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem('brewlite_checkout_deadline');
+  localStorage.removeItem('brewlite_checkout_renew_count');
+};
+
+const promoForItems = (promo: AppliedPromo | null, items: CartItem[]) =>
+  recalculatePromo(promo, items.reduce((total, item) => total + getCartLineTotal(item), 0));
 
 // Hàm lưu dữ liệu vào localStorage
 const saveToStorage = (userId: string | null, items: CartItem[]) => {
@@ -77,30 +99,13 @@ export const useCartStore = create<CartStore>((set, get) => ({
     if (typeof window === 'undefined') return;
 
     const guestKey = getCartKey(null);
-    const guestSaved = localStorage.getItem(guestKey);
-    let guestItems: CartItem[] = [];
-
-    if (guestSaved) {
-      try {
-        guestItems = JSON.parse(guestSaved);
-      } catch (e) {
-        console.error('Lỗi khi đọc giỏ hàng khách:', e);
-      }
-    }
+    const guestItems = readCartItems(guestKey);
+    const appliedPromo = get().currentUserId === userId ? get().appliedPromo : null;
 
     if (userId) {
       // NGƯỜI DÙNG ĐĂNG NHẬP
       const userKey = getCartKey(userId);
-      const userSaved = localStorage.getItem(userKey);
-      let userItems: CartItem[] = [];
-
-      if (userSaved) {
-        try {
-          userItems = JSON.parse(userSaved);
-        } catch (e) {
-          console.error('Lỗi khi đọc giỏ hàng người dùng:', e);
-        }
-      }
+      let userItems = readCartItems(userKey);
 
       // Nếu có món trong giỏ hàng Khách -> Gộp vào giỏ hàng User và dọn dẹp giỏ khách
       if (guestItems.length > 0) {
@@ -109,72 +114,46 @@ export const useCartStore = create<CartStore>((set, get) => ({
         localStorage.removeItem(guestKey); // Xóa giỏ hàng khách sau khi đã gộp thành công
       }
 
-      set({ currentUserId: userId, items: userItems });
+      set({ currentUserId: userId, items: userItems, appliedPromo: promoForItems(appliedPromo, userItems) });
     } else {
       // KHÁCH VẮNG LAI / ĐĂNG XUẤT
-      set({ currentUserId: null, items: guestItems });
+      set({ currentUserId: null, items: guestItems, appliedPromo: promoForItems(appliedPromo, guestItems) });
     }
   },
 
   addItem: (newItem) => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('brewlite_checkout_deadline');
-      localStorage.removeItem('brewlite_checkout_renew_count');
-    }
-    const currentItems = get().items;
+    if (!Number.isSafeInteger(newItem.quantity) || newItem.quantity <= 0) return;
+    resetCheckoutTimer();
+    const updatedItems = mergeCartItems(get().items, [newItem]);
 
-    const existingIndex = currentItems.findIndex(
-      (item) => item.name === newItem.name && item.size === newItem.size
-    );
-
-    let updatedItems: CartItem[];
-    if (existingIndex > -1) {
-      updatedItems = [...currentItems];
-      updatedItems[existingIndex].quantity += newItem.quantity;
-      if (updatedItems[existingIndex].unitPrice) {
-        updatedItems[existingIndex].lineTotal = updatedItems[existingIndex].unitPrice * updatedItems[existingIndex].quantity;
-      }
-    } else {
-      updatedItems = [...currentItems, newItem];
-    }
-
-    set({ items: updatedItems });
+    set({ items: updatedItems, appliedPromo: promoForItems(get().appliedPromo, updatedItems) });
     saveToStorage(get().currentUserId, updatedItems);
   },
 
   removeItem: (index) => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('brewlite_checkout_deadline');
-      localStorage.removeItem('brewlite_checkout_renew_count');
-    }
+    if (!get().items[index]) return;
+    resetCheckoutTimer();
     const updatedItems = get().items.filter((_, i) => i !== index);
-    set({ items: updatedItems });
+    set({ items: updatedItems, appliedPromo: promoForItems(get().appliedPromo, updatedItems) });
     saveToStorage(get().currentUserId, updatedItems);
   },
 
   updateQuantity: (index, quantity) => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('brewlite_checkout_deadline');
-      localStorage.removeItem('brewlite_checkout_renew_count');
-    }
+    if (!get().items[index] || !Number.isSafeInteger(quantity)) return;
     if (quantity <= 0) {
       get().removeItem(index);
       return;
     }
-    const updatedItems = [...get().items];
-    updatedItems[index].quantity = quantity;
-    if (updatedItems[index].unitPrice) {
-      updatedItems[index].lineTotal = updatedItems[index].unitPrice * quantity;
-    }
-    set({ items: updatedItems });
+    resetCheckoutTimer();
+    const updatedItems = get().items.map((item, i) => i === index
+      ? { ...item, quantity, lineTotal: getCartLineTotal({ ...item, quantity }) }
+      : item);
+    set({ items: updatedItems, appliedPromo: promoForItems(get().appliedPromo, updatedItems) });
     saveToStorage(get().currentUserId, updatedItems);
   },
 
   clearCart: () => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('brewlite_checkout_deadline');
-      localStorage.removeItem('brewlite_checkout_renew_count');
-    }
+    resetCheckoutTimer();
     set({ items: [], appliedPromo: null });
     if (typeof window !== 'undefined') {
       const key = getCartKey(get().currentUserId);
@@ -183,17 +162,14 @@ export const useCartStore = create<CartStore>((set, get) => ({
   },
 
   totalPrice: () => {
-    return get().items.reduce((total, item) => {
-      const itemPrice = item.unitPrice ? item.unitPrice * item.quantity : (item.lineTotal || 0);
-      return total + itemPrice;
-    }, 0);
+    return get().items.reduce((total, item) => total + getCartLineTotal(item), 0);
   },
 
   totalItems: () => {
     return get().items.reduce((total, item) => total + item.quantity, 0);
   },
 
-  applyPromo: (promo) => set({ appliedPromo: promo }),
+  applyPromo: (promo) => set({ appliedPromo: promoForItems(promo, get().items) }),
   removePromo: () => set({ appliedPromo: null }),
 }));
 

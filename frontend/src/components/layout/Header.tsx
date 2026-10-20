@@ -7,17 +7,7 @@ import { Sidebar } from './Sidebar';
 import { useAuth } from '@/hooks/useAuth';
 import { useCategories } from '@/hooks/useCategories';
 import { useCartStore, useHasCartHydrated } from '@/stores/cart.store';
-
-// Kiểu dữ liệu tối thiểu cho 1 dòng sản phẩm trong popup giỏ hàng
-interface CartPreviewItem {
-  name: string;
-  size: string;
-  quantity: number;
-  imageUrl?: string;
-  toppings?: (string | { name: string })[];
-  lineTotal?: number;
-  unitPrice?: number;
-}
+import { formatCartToppings, getCartItemKey, getCartLineTotal } from '@/lib/cart';
 
 const MenuIcon = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -59,7 +49,7 @@ export function Header() {
   const { categories } = useCategories();
   const router = useRouter();
 
-  const cartItems = useCartStore((s) => s.items) as CartPreviewItem[];
+  const cartItems = useCartStore((s) => s.items);
   const cartCount = useCartStore((s) => s.totalItems());
   const cartTotalPrice = useCartStore((s) => s.totalPrice());
   const removeItem = useCartStore((s) => s.removeItem);
@@ -194,7 +184,7 @@ export function Header() {
                   <>
                     <div className="my-2 flex max-h-72 flex-col divide-y divide-primary/10 overflow-y-auto pr-1">
                       {cartItems.map((item, idx) => (
-                        <div key={idx} className="group/item relative flex items-center gap-3 py-2.5 pr-5">
+                        <div key={getCartItemKey(item)} className="group/item relative flex items-center gap-3 py-2.5 pr-5">
                           <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-primary/10 bg-background">
                             {item.imageUrl ? (
                               // eslint-disable-next-line @next/next/no-img-element
@@ -218,14 +208,14 @@ export function Header() {
 
                             {item.toppings && item.toppings.length > 0 && (
                               <p className="truncate text-[10px] text-text/50">
-                                + {item.toppings.map((t) => (typeof t === 'string' ? t : t.name)).join(', ')}
+                                + {formatCartToppings(item.toppings)}
                               </p>
                             )}
                           </div>
 
                           <div className="text-right">
                             <span className="text-xs font-black text-primary">
-                              {(item.lineTotal || (item.unitPrice ?? 0) * item.quantity || 0).toLocaleString('vi-VN')}đ
+                              {getCartLineTotal(item).toLocaleString('vi-VN')}đ
                             </span>
                           </div>
 

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { formatVND } from '@/lib/utils';
+import { formatCartToppings, getCartItemKey, getCartLineTotal } from '@/lib/cart';
 import type { CartItem } from '@/types';
 import type { AppliedPromo } from '@/lib/voucher';
 import { calculateVoucherDiscount } from '@/lib/voucher';
@@ -47,7 +48,7 @@ export function OrderSummary({
   const durationLabel = durationSeconds >= 60 ? `${Math.floor(durationSeconds / 60)} phút` : `${durationSeconds} giây`;
   const triggerCheckout = onCheckout || onPayment;
   const totalItemsCount = items.reduce((s, i) => s + (Number(i.quantity) || 1), 0);
-  const itemsSubtotal = propSubtotal ?? items.reduce((sum, item) => sum + (item.lineTotal ?? 0), 0);
+  const itemsSubtotal = propSubtotal ?? items.reduce((sum, item) => sum + getCartLineTotal(item), 0);
 
   const handleApplyVoucher = () => {
     setVoucherError(null);
@@ -61,6 +62,7 @@ export function OrderSummary({
         code: voucherInput.trim().toUpperCase(),
         discount: result.discount,
         description: result.description,
+        rules: result.rules,
       });
     }
     setVoucherInput('');
@@ -74,18 +76,18 @@ export function OrderSummary({
 
       {/* Danh sách món tóm tắt */}
       <div className="divide-y divide-gray-100 max-h-60 overflow-y-auto pr-1">
-        {items.map((item, idx) => (
-          <div key={idx} className="py-2.5 flex items-start justify-between text-xs">
+        {items.map((item) => (
+          <div key={getCartItemKey(item)} className="py-2.5 flex items-start justify-between text-xs">
             <div>
               <span className="font-bold text-[#1E3932]">
                 {item.quantity}x {item.name}
               </span>
               <p className="text-gray-500 mt-0.5">
-                Size {item.size} {item.toppings && item.toppings.length > 0 ? `• ${item.toppings.map((t) => t.name).join(', ')}` : ''}
+                Size {item.size} {item.toppings && item.toppings.length > 0 ? `• ${formatCartToppings(item.toppings)}` : ''}
               </p>
             </div>
             <span className="font-semibold text-[#1E3932]">
-              {formatVND(item.lineTotal ?? 0)}
+              {formatVND(getCartLineTotal(item))}
             </span>
           </div>
         ))}

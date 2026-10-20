@@ -27,7 +27,6 @@ function MenuContent({
         <div className="flex h-full flex-col">
             <nav className="flex flex-col gap-1 p-4 text-base font-semibold">
                 {NAV_ITEMS.map(({ href, label, icon: Icon, exact }) => {
-                    // Mục đang mở thì tô sáng
                     const active = exact ? pathname === href : pathname.startsWith(href);
                     return (
                         <Link
@@ -74,13 +73,24 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const { user, loading, logout } = useAuth();
     const [drawerOpen, setDrawerOpen] = useState(false);
 
-    // Chưa đăng nhập thì chuyển về trang login (áp dụng cho mọi trang /admin/*)
-    // TODO(Role): đổi thành kiểm tra user.role === 'ADMIN'
+    // KIỂM TRA PHÂN QUYỀN VÀO TRANG ADMIN
     useEffect(() => {
-        if (!loading && !user) router.push('/auth/login?redirect=/admin');
+        if (!loading) {
+            if (!user) {
+                router.push('/auth/login?redirect=/admin');
+            } else {
+                const userRole = String((user as any)?.role || '').toUpperCase();
+                if (userRole !== 'ADMIN') {
+                    router.replace('/');
+                }
+            }
+        }
     }, [loading, user, router]);
 
-    if (loading || !user) {
+    // Kiểm tra hiển thị
+    const userRole = String((user as any)?.role || '').toUpperCase();
+
+    if (loading || !user || userRole !== 'ADMIN') {
         return (
             <div className="flex min-h-screen items-center justify-center">
                 <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import api from '@/lib/api';
@@ -90,7 +90,7 @@ function OrderItemRow({ item }: { item: OrderItem }) {
   );
 }
 
-export default function OrderDetailPage() {
+function OrderDetailContent() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -180,15 +180,10 @@ export default function OrderDetailPage() {
       } catch (requestError: unknown) {
         if (stopped) return;
 
-        const status = (requestError as { response?: { status?: number } }).response?.status;
-        // Quyền bị thu hồi hoặc order không còn tồn tại: dừng im lặng.
-        if (status === 401 || status === 403 || status === 404) {
-          stopped = true;
-          return;
-        }
-
-        // Lỗi mạng/5xx tạm thời: giữ dữ liệu gần nhất và thử lại sau 5 giây.
-        timer = setTimeout(pollOrder, 5000);
+        // Mọi lỗi polling đều dừng im lặng, giữ nguyên dữ liệu gần nhất.
+        // Lần tải trang tiếp theo vẫn có thể lấy lại trạng thái mới từ backend.
+        void requestError;
+        stopped = true;
       }
     };
 
@@ -310,5 +305,19 @@ export default function OrderDetailPage() {
       </div>
       <CartStickyBar />
     </main>
+  );
+}
+
+export default function OrderDetailPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center text-text/60">
+          Đang tải...
+        </div>
+      }
+    >
+      <OrderDetailContent />
+    </Suspense>
   );
 }

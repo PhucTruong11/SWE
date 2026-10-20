@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { Suspense, useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCartStore, useHasCartHydrated } from '@/stores/cart.store';
 import api from '@/lib/api';
@@ -14,7 +14,7 @@ import {
 } from '@/components/checkout';
 import type { AppliedPromo } from '@/lib/voucher';
 
-export default function CheckoutPage() {
+function CheckoutContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { items, clearCart, appliedPromo, applyPromo, removePromo } = useCartStore();
@@ -396,5 +396,19 @@ export default function CheckoutPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function CheckoutPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center text-text/60">
+          Đang tải...
+        </div>
+      }
+    >
+      <CheckoutContent />
+    </Suspense>
   );
 }

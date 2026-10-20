@@ -224,7 +224,7 @@ function OrderDetailContent() {
         <div className="rounded-2xl border border-primary/20 bg-primary/10 p-4 text-primary">
           <p className="font-bold">Thanh toán thành công</p>
           <p className="mt-1 text-sm text-text/70">
-            Đơn hàng đã được backend xác nhận và đang chờ quầy pha chế.
+            Đơn hàng đã được xác nhận và đang chờ quầy pha chế.
           </p>
         </div>
       )}

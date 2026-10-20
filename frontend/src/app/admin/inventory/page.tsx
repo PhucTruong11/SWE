@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { formatVND } from '@/lib/utils';
@@ -194,9 +195,11 @@ export default function AdminInventoryPage() {
                                             <td className="px-5 py-4">
                                                 <div className="flex items-center gap-3">
                                                     {item.imageUrl ? (
-                                                        <img
+                                                        <Image
                                                             src={item.imageUrl}
                                                             alt={item.name}
+                                                            width={48}
+                                                            height={48}
                                                             className="h-12 w-12 rounded-xl object-cover border border-primary/10"
                                                         />
                                                     ) : (

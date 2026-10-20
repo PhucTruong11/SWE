@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useRef } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useCartStore, useHasCartHydrated } from '@/stores/cart.store';
 import api from '@/lib/api';
 import {
@@ -16,6 +16,7 @@ import type { AppliedPromo } from '@/lib/voucher';
 
 export default function CheckoutPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { items, clearCart, appliedPromo, applyPromo, removePromo } = useCartStore();
   const currentPromo: AppliedPromo | null = appliedPromo;
   const hasHydrated = useHasCartHydrated();
@@ -287,32 +288,7 @@ export default function CheckoutPage() {
         throw new Error(paymentData.message || 'Giao dịch thanh toán không thành công.');
       }
 
-      const now = new Date();
-      const datePrefix = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}`;
-
-      // 4. Xuất hóa đơn điện tử thực tế từ dữ liệu trả về của Server
-      setReceiptData({
-        orderId: createdOrder.id,
-        invoiceNo: `BL-${datePrefix}-${createdOrder.id.slice(-6).toUpperCase()}`,
-        paymentId: paymentData.payment?.id || `PAY-${createdOrder.id.slice(-6).toUpperCase()}`,
-        paidAt: new Date(paymentData.payment?.createdAt || now).toLocaleString('vi-VN', {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric',
-        }),
-        items: [...items],
-        subtotal,
-        discount: discountAmount,
-        promoCode: appliedPromo?.code || createdOrder.promoCode || null,
-        finalTotal: paymentData.payment?.amount ?? finalTotal,
-        pointsEarned: paymentData.pointsEarned ?? Math.floor(finalTotal / 1000),
-        method,
-      });
-
-      // 5. Dọn dẹp giỏ hàng, deadline và lượt gia hạn sau khi hoàn tất
+      // 4. Dọn dẹp giỏ hàng, deadline và lượt gia hạn sau khi backend xác nhận PAID
       if (typeof window !== 'undefined') {
         localStorage.removeItem(CHECKOUT_DEADLINE_KEY);
         localStorage.removeItem(CHECKOUT_RENEW_COUNT_KEY);
@@ -345,25 +321,6 @@ export default function CheckoutPage() {
 
   // URL QR MoMo / VietQR động
   const vietQrUrl = `https://api.vietqr.io/image/970422-0909090909-compact2.png?amount=${finalTotal}&addInfo=BREWLITE%20CAFE&accountName=BREWLITE%20COFFEE`;
-
-  // 1. NẾU ĐÃ THANH TOÁN THÀNH CÔNG → HIỂN THỊ HÓA ĐƠN ĐIỆN TỬ
-  if (receiptData) {
-    return (
-      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col items-center px-4 py-8">
-        <ReceiptInvoice
-          data={receiptData}
-          onReset={() => {
-            if (typeof window !== 'undefined') {
-              localStorage.removeItem(CHECKOUT_DEADLINE_KEY);
-              localStorage.removeItem(CHECKOUT_RENEW_COUNT_KEY);
-            }
-            setReceiptData(null);
-            clearCart();
-          }}
-        />
-      </main>
-    );
-  }
 
   // Chờ đọc xong dữ liệu giỏ hàng từ localStorage để tránh giật giao diện
   if (!hasHydrated) {

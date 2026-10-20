@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import api from '@/lib/api';
@@ -24,6 +24,22 @@ interface OrderItem {
 }
 
 type OrderWithItems = Omit<Order, 'items'> & { items: OrderItem[] };
+
+const ACTIVE_ORDER_STATUSES: Order['status'][] = [
+  'PENDING',
+  'PAID',
+  'PREPARING',
+  'READY',
+];
+
+function isOrderStatus(value: unknown): value is Order['status'] {
+  return [
+    ...ACTIVE_ORDER_STATUSES,
+    'COMPLETED',
+    'PAYMENT_FAILED',
+    'CANCELLED',
+  ].includes(value as Order['status']);
+}
 
 function formatVietnameseDateTime(iso: string): string {
   return new Intl.DateTimeFormat('vi-VN', {
@@ -85,12 +101,25 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState<OrderWithItems | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const orderRequestRef = useRef(0);
 
   const fetchOrder = useCallback(async (id: string) => {
+    const requestId = ++orderRequestRef.current;
     try {
       const res = await api.get<{ data: OrderWithItems }>(`/orders/${id}`);
-      setOrder(res.data.data);
+      const nextOrder = res.data.data;
+      if (
+        requestId !== orderRequestRef.current ||
+        !nextOrder ||
+        nextOrder.id !== id ||
+        !isOrderStatus(nextOrder.status)
+      ) {
+        return;
+      }
+      setOrder(nextOrder);
+      setError(null);
     } catch (requestError: unknown) {
+      if (requestId !== orderRequestRef.current) return;
       const status = (requestError as { response?: { status?: number } }).response?.status;
       setError(
         status === 401 || status === 403
@@ -100,7 +129,7 @@ export default function OrderDetailPage() {
             : 'Không thể tải thông tin đơn hàng. Vui lòng thử lại.',
       );
     } finally {
-      setLoading(false);
+      if (requestId === orderRequestRef.current) setLoading(false);
     }
   }, []);
 
@@ -115,6 +144,61 @@ export default function OrderDetailPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchOrder(orderId);
   }, [orderId, fetchOrder]);
+
+  useEffect(() => {
+    if (
+      !orderId ||
+      !order ||
+      order.id !== orderId ||
+      !ACTIVE_ORDER_STATUSES.includes(order.status)
+    ) {
+      return;
+    }
+
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const pollOrder = async () => {
+      try {
+        const res = await api.get<{ data: OrderWithItems }>(`/orders/${orderId}`);
+        if (stopped) return;
+
+        const nextOrder = res.data.data;
+        if (
+          !nextOrder ||
+          nextOrder.id !== orderId ||
+          !isOrderStatus(nextOrder.status)
+        ) {
+          stopped = true;
+          return;
+        }
+
+        setOrder(nextOrder);
+        if (ACTIVE_ORDER_STATUSES.includes(nextOrder.status)) {
+          timer = setTimeout(pollOrder, 5000);
+        }
+      } catch (requestError: unknown) {
+        if (stopped) return;
+
+        const status = (requestError as { response?: { status?: number } }).response?.status;
+        // Quyền bị thu hồi hoặc order không còn tồn tại: dừng im lặng.
+        if (status === 401 || status === 403 || status === 404) {
+          stopped = true;
+          return;
+        }
+
+        // Lỗi mạng/5xx tạm thời: giữ dữ liệu gần nhất và thử lại sau 5 giây.
+        timer = setTimeout(pollOrder, 5000);
+      }
+    };
+
+    // Silent polling chỉ bắt đầu sau khi đã tải order hợp lệ lần đầu.
+    timer = setTimeout(pollOrder, 5000);
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [orderId, order]);
 
   const orderCode = useMemo(
     () => order?.id.slice(0, 8).toUpperCase() ?? '',
@@ -141,6 +225,14 @@ export default function OrderDetailPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-6 pb-24 lg:pb-8 lg:px-8">
+      {isConfirmation && order.status === 'PAID' && (
+        <div className="rounded-2xl border border-primary/20 bg-primary/10 p-4 text-primary">
+          <p className="font-bold">Thanh toán thành công</p>
+          <p className="mt-1 text-sm text-text/70">
+            Đơn hàng đã được backend xác nhận và đang chờ quầy pha chế.
+          </p>
+        </div>
+      )}
       <div>
         <h1 className="text-2xl font-extrabold tracking-tight text-text">
           Đơn hàng #{orderCode}
@@ -155,10 +247,12 @@ export default function OrderDetailPage() {
         <OrderStatusBadge status={order.status} />
       </div>
 
-      {order.status === 'PENDING' && (
+      {(order.status === 'PENDING' || order.status === 'PAYMENT_FAILED') && (
         <div className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50/80 p-5 shadow-sm">
           <p className="text-sm font-bold text-amber-900">
-            ⏳ Đơn hàng đang chờ thanh toán
+            {order.status === 'PAYMENT_FAILED'
+              ? 'Thanh toán thất bại. Bạn có thể thử lại với đơn hàng này.'
+              : '⏳ Đơn hàng đang chờ thanh toán'}
           </p>
           <button
             type="button"

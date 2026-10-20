@@ -106,36 +106,38 @@ export default function OrderHistoryPage() {
       {activeOrders.length > 0 && (
         <section className="flex flex-col gap-3">
           <h2 className="text-base font-bold text-text">Đơn hàng đang xử lý</h2>
-          <div className="rounded-2xl border border-primary/20 bg-surface p-5 shadow-sm">
-            <div className="flex flex-col gap-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-base font-black text-text">
-                    #{getOrderCode(activeOrder)}
-                  </p>
-                  <p className="text-xs text-text/60">
-                    {formatVietnameseDateTime(activeOrder.createdAt)}
-                  </p>
+          <div className="grid gap-4 lg:grid-cols-2">
+            {activeOrders.map((order) => (
+              <div key={order.id} className="rounded-2xl border border-primary/20 bg-surface p-5 shadow-sm">
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-base font-black text-text">#{getOrderCode(order)}</p>
+                      <p className="text-xs text-text/60">
+                        {formatVietnameseDateTime(order.createdAt)}
+                      </p>
+                    </div>
+                    <OrderStatusBadge status={order.status} />
+                  </div>
+                  <OrderStatusStepper status={order.status} />
+                  <div className="flex items-center justify-between border-t border-primary/10 pt-3">
+                    <span className="text-sm font-medium text-text/70">
+                      {getItemCount(order)} món
+                    </span>
+                    <span className="text-lg font-black text-primary">
+                      {formatVND(order.total)}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/orders/${order.id}`)}
+                    className="w-full rounded-full bg-primary py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-primary-hover active:scale-[0.99]"
+                  >
+                    Xem chi tiết đơn hàng →
+                  </button>
                 </div>
-                <OrderStatusBadge status={activeOrder.status} />
               </div>
-              <OrderStatusStepper status={activeOrder.status} />
-              <div className="flex items-center justify-between border-t border-primary/10 pt-3">
-                <span className="text-sm font-medium text-text/70">
-                  {getItemCount(activeOrder)} món
-                </span>
-                <span className="text-lg font-black text-primary">
-                  {formatVND(activeOrder.total)}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => router.push(`/orders/${activeOrder.id}`)}
-                className="w-full rounded-full bg-primary py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-primary-hover active:scale-[0.99]"
-              >
-                Xem chi tiết đơn hàng →
-              </button>
-            </div>
+            ))}
           </div>
         </section>
       )}

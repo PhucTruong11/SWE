@@ -4,6 +4,7 @@ import { Suspense, useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCartStore, useHasCartHydrated } from '@/stores/cart.store';
 import api from '@/lib/api';
+import { getCartLineTotal, toOrderItem } from '@/lib/cart';
 import {
   CountdownTimer,
   CheckoutMethods,
@@ -112,7 +113,7 @@ function CheckoutContent() {
   }, [isExpired, canRenew, currentPromo, removePromo]);
 
   // Tính toán số tiền thực tế từ giỏ hàng kèm giảm giá Voucher
-  const subtotal = items.reduce((sum, item) => sum + (item.lineTotal ?? 0), 0);
+  const subtotal = items.reduce((sum, item) => sum + getCartLineTotal(item), 0);
   const discountAmount = appliedPromo ? appliedPromo.discount : 0;
   const finalTotal = Math.max(0, subtotal - discountAmount);
   const pointsEarned = Math.floor(finalTotal / 10000); // 10.000đ = 1 điểm (đồng bộ với backend)
@@ -230,15 +231,7 @@ function CheckoutContent() {
       let currentOrderId = orderId;
       if (!currentOrderId) {
         const orderRes = await api.post('/orders', {
-          items: items.map((item) => ({
-            productId: item.productId,
-            size: item.size,
-            qty: item.quantity,
-            toppings: item.toppings?.flatMap((t) =>
-              Array(t.quantity).fill(t.name),
-            ) || [],
-            lineTotal: item.lineTotal,
-          })),
+          items: items.map(toOrderItem),
           ...(appliedPromo?.code ? { promoCode: appliedPromo.code } : {}),
         });
         currentOrderId = orderRes.data.data?.id;

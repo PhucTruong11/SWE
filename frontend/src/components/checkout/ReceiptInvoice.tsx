@@ -3,6 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { formatVND } from '@/lib/utils';
+import { formatCartToppings, getCartLineTotal } from '@/lib/cart';
 import type { CartItem } from '@/types';
 
 export interface ReceiptData {
@@ -84,13 +85,13 @@ export function ReceiptInvoice({ data, onReset }: ReceiptInvoiceProps) {
                       Size {item.size}
                     </span>
                     {item.toppings && item.toppings.length > 0 && (
-                      <span>+ {item.toppings.map((t) => (typeof t === 'string' ? t : t.name)).join(', ')}</span>
+                      <span>+ {formatCartToppings(item.toppings)}</span>
                     )}
                   </div>
                 </div>
                 <div className="w-12 text-center text-gray-700 font-medium">x{item.quantity}</div>
                 <div className="w-24 text-right font-semibold text-[#1E3932]">
-                  {formatVND(item.lineTotal ?? 0)}
+                  {formatVND(getCartLineTotal(item))}
                 </div>
               </div>
             ))}

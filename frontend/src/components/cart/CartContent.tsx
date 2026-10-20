@@ -5,6 +5,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { useCartStore } from '@/stores/cart.store';
+import { getCartItemKey, toOrderItem } from '@/lib/cart';
 import { CartItemRow } from './CartItemRow';
 import Link from 'next/link';
 import { ShoppingBag, ArrowRight, LogIn, Loader2, AlertCircle, CheckCircle2, ChevronDown, Tag } from 'lucide-react';
@@ -124,7 +125,13 @@ export function CartContent({ onClose }: CartContentProps) {
       applyPromo({
         code: json.code,
         discount: json.discountAmount,
-        description: json.message || 'Khuyến mãi'
+        description: json.message || 'Khuyến mãi',
+        rules: {
+          discountType: json.discountType,
+          discountValue: json.discountValue,
+          minOrderValue: json.minOrderValue,
+          maxDiscount: json.maxDiscount,
+        },
       });
       setPromoMsg({ type: 'success', text: json.message || 'Áp dụng mã ưu đãi thành công!' });
     } catch {
@@ -149,15 +156,7 @@ export function CartContent({ onClose }: CartContentProps) {
       const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
       const payload = {
-        items: items.map((item) => ({
-          // 1. Sử dụng item.id hoặc item.productId (ép kiểu an toàn nếu type CartItem dùng `id`)
-          productId: (item as any).productId || item.id,
-          size: item.size,
-          qty: item.quantity,
-          // 2. Xử lý an toàn cho toppings (kiểm tra t là string hay object trước khi lấy name)
-          toppings: item.toppings?.map((t) => (typeof t === 'string' ? t : t.name)) ?? [],
-          lineTotal: item.lineTotal,
-        })),
+        items: items.map(toOrderItem),
         promoCode: appliedPromo?.code || null,
       };
 
@@ -221,7 +220,7 @@ export function CartContent({ onClose }: CartContentProps) {
             </h2>
             <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
               {items.map((item, index) => (
-                <CartItemRow key={index} item={item} index={index} />
+                <CartItemRow key={getCartItemKey(item)} item={item} index={index} />
               ))}
             </div>
           </div>
@@ -291,7 +290,7 @@ export function CartContent({ onClose }: CartContentProps) {
             </div>
 
             {/* Thông báo kết quả Áp dụng Mã */}
-            {promoMsg && (
+            {promoMsg && (promoMsg.type === 'error' || appliedPromo) && (
               <div
                 className={`mb-4 flex items-center gap-1.5 text-xs font-medium ${promoMsg.type === 'success' ? 'text-green-600' : 'text-red-500'
                   }`}

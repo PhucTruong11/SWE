@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import { Trash2, Minus, Plus } from 'lucide-react';
 import { useCartStore, type CartItem } from '@/stores/cart.store';
+import { formatCartToppings, getCartLineTotal } from '@/lib/cart';
 
 interface CartItemRowProps {
   item: CartItem;
@@ -51,15 +52,15 @@ export function CartItemRow({ item, index }: CartItemRowProps) {
           <p className="mt-0.5 text-sm font-medium text-gray-500">Size {item.size}</p>
 
           {item.toppings && item.toppings.length > 0 && (
-            <p className="text-xs text-gray-400 mt-0.5 line-clamp-1" title={item.toppings.map(t => typeof t === 'string' ? t : t.name).join(', ')}>
-              + {item.toppings.map(t => typeof t === 'string' ? t : t.name).join(', ')}
+            <p className="text-xs text-gray-400 mt-0.5 line-clamp-1" title={formatCartToppings(item.toppings)}>
+              + {formatCartToppings(item.toppings)}
             </p>
           )}
         </div>
 
         {/* 3. Giá tiền của dòng này */}
         <p className="font-bold text-primary text-lg">
-          {(item.lineTotal || (item.unitPrice * item.quantity)).toLocaleString('vi-VN')}đ
+          {getCartLineTotal(item).toLocaleString('vi-VN')}đ
         </p>
       </div>
 

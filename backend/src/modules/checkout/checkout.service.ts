@@ -333,7 +333,17 @@ export class CheckoutService {
       if (gatewayResult.success) {
         // 🔒 6b: Optimistic Locking - Trừ tồn kho và chống bán lố (Overselling)
         // Nếu 2 người cùng tranh mua 1 ly nước cuối cùng, chỉ 1 người thành công
+        const stockItems = new Map<string, (typeof order.items)[number]>();
         for (const item of order.items) {
+          const existing = stockItems.get(item.productId);
+          stockItems.set(item.productId, existing
+            ? { ...existing, qty: existing.qty + item.qty }
+            : { ...item });
+        }
+
+        // Mỗi sản phẩm chỉ cập nhật version một lần dù có nhiều dòng tùy chọn.
+        // Cố định thứ tự khóa sản phẩm để giảm deadlock giữa các giỏ hàng.
+        for (const item of [...stockItems.values()].sort((a, b) => a.productId.localeCompare(b.productId))) {
           if (!item.product) continue;
 
           // Kiểm tra và trừ kho nguyên tử (Atomic Update)

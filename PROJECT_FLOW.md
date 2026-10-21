@@ -1,889 +1,264 @@
-# BrewLite – Project Flow Document
+# BrewLite: kiến trúc và luồng hệ thống
 
-> **Version:** 2.0  
-> **Cập nhật:** 2026-09-22  
-> **Product Vision:** *"BrewLite giúp khách hàng đặt và thanh toán đồ uống không dùng tiền mặt chỉ trong vài chạm, giảm thời gian xếp hàng và nhận đơn nhanh tại quầy."*
+Cập nhật: 21/10/2026.
 
----
+Tài liệu mô tả mã nguồn đang có và các quy tắc nghiệp vụ cần đạt. Các phần chưa hoàn thiện được ghi rõ để tránh nhầm giữa thiết kế mong muốn và hành vi hiện tại. Hướng dẫn chạy nằm trong [README.md](README.md); kế hoạch thực hiện nằm trong [ASSIGNMENT2_PLAN.md](ASSIGNMENT2_PLAN.md).
 
-## Mục lục
+## 1. Phạm vi sản phẩm
 
-1. [Tổng quan dự án](#1-tổng-quan-dự-án)
-2. [Kiến trúc hệ thống](#2-kiến-trúc-hệ-thống)
-3. [Database Schema (ERD)](#3-database-schema-erd)
-4. [API Specification](#4-api-specification)
-5. [Luồng nghiệp vụ & State Machine](#5-luồng-nghiệp-vụ--state-machine)
-6. [Cấu trúc thư mục dự án](#6-cấu-trúc-thư-mục-dự-án)
-7. [Sprint Planning (3 Sprints)](#7-sprint-planning-3-sprints)
-8. [Non-functional Requirements & Solutions](#8-non-functional-requirements--solutions)
-9. [Development Conventions](#9-development-conventions)
-10. [Definition of Done](#10-definition-of-done)
+Luồng cốt lõi: xem menu, chọn size/topping, quản lý giỏ, đăng nhập, tạo đơn, thanh toán mô phỏng, theo dõi đơn và nhận đồ uống tại quầy.
 
----
+| Vai trò | Công việc |
+| --- | --- |
+| Khách chưa đăng nhập | Xem menu, chọn món, lưu giỏ trên trình duyệt |
+| Khách có tài khoản | Đăng nhập, thanh toán, xem hồ sơ và lịch sử đơn |
+| Nhân viên/quản lý | Theo dõi đơn, chuyển trạng thái, quản lý tồn kho và khuyến mãi |
+| Nhóm phát triển | Hoàn thiện nghiệp vụ, kiểm thử, quản lý tài liệu và triển khai |
 
-## 1. Tổng quan dự án
+Mã nguồn đã có màn hình admin và kho; đây không còn là phần hoàn toàn ngoài phạm vi như tài liệu cũ. Tuy nhiên, quyền nhân viên/admin chưa được phân tách đầy đủ. Cổng thanh toán thật, vận chuyển và quản trị nguyên liệu chi tiết chưa thuộc MVP đã thống nhất ở đây.
 
-### 1.1 Product Vision
+Giao diện mobile-first đang được phát triển bằng Next.js. Không coi PWA là hoàn tất khi chưa có cấu hình và kiểm chứng riêng.
 
-BrewLite là ứng dụng đặt cà phê không dùng tiền mặt, giúp khách hàng:
-- Duyệt menu → Chọn sản phẩm (size, topping) → Thêm giỏ hàng → Thanh toán online → Nhận đồ tại quầy
+## 2. Kiến trúc đang chạy ở local
 
-### 1.2 Phạm vi MVP
+![Kiến trúc local và ranh giới các thành phần](docs/assets/architecture-local.svg)
 
-| Trong phạm vi | Ngoài phạm vi |
-|---|---|
-| Khách hàng đặt & thanh toán đơn | Dashboard admin/quản lý |
-| Xem menu, chọn size/topping | Giao hàng delivery |
-| Đăng ký / Đăng nhập (JWT) | Chat/hỗ trợ khách hàng |
-| Lịch sử đơn hàng | Quản lý kho chi tiết |
-| Mock Payment Gateway | Tích hợp cổng thanh toán thật |
-| Khuyến mãi & Điểm thưởng cơ bản | CRM / Marketing automation |
+| Thành phần | Trách nhiệm | Vị trí hiện tại |
+| --- | --- | --- |
+| Next.js 16, cổng 3000 | Trang sản phẩm, giỏ, tài khoản, checkout, đơn và admin | frontend/src |
+| Zustand | Giữ giỏ đang hoạt động và voucher | frontend/src/stores/cart.store.ts |
+| localStorage | Lưu giỏ riêng cho khách hoặc từng tài khoản; lưu timer checkout | Trình duyệt |
+| Axios/TanStack Query | Gọi API, gửi cookie và quản lý dữ liệu từ server | frontend/src/lib và hooks |
+| NestJS 12, cổng 3001 | REST API, DTO validation, xác thực, nghiệp vụ và cron | backend/src |
+| Prisma/PostgreSQL 16 | Đọc/ghi dữ liệu, transaction và kiểm soát stock/version | backend/prisma |
+| Cổng thanh toán mô phỏng | Trả kết quả thanh toán trong CheckoutService | Cùng process backend |
 
-### 1.3 Stakeholders
+Trên máy host, PostgreSQL dùng localhost:5433; trong container database vẫn nghe cổng 5432. Khi bổ sung API vào Compose, API sẽ kết nối tên service db:5432 thay vì localhost:5433.
 
-| Vai trò | Mô tả |
-|---|---|
-| **Khách hàng** | Đặt đồ uống, thanh toán không tiền mặt, theo dõi đơn |
-| **Nhân viên/Barista** | Tiếp nhận và cập nhật trạng thái (ngoài MVP) |
-| **Product Owner** | Xác định yêu cầu, ưu tiên backlog, nghiệm thu |
-| **Giảng viên** | Đánh giá quy trình & sản phẩm |
-| **Nhóm phát triển** | Phân tích, thiết kế, lập trình, kiểm thử |
+Backend chưa gọi một cổng thanh toán bên ngoài bằng HTTP. Hàm callMockGateway hiện mô phỏng độ trễ và mặc định thành công; nhánh thất bại phải có cách kiểm thử chủ động.
 
----
+### 2.1. Các module backend
 
-## 2. Kiến trúc hệ thống
+| Module | Trách nhiệm |
+| --- | --- |
+| Products | Menu, chi tiết sản phẩm và topping |
+| Auth | Đăng ký, OTP email, đăng nhập, hồ sơ và địa chỉ |
+| Orders | Tạo đơn, tính lại tiền từ DB, lịch sử và chi tiết |
+| Checkout | Voucher cho đơn, xử lý thanh toán, thời hạn và dọn đơn quá hạn |
+| Promotions | Danh sách và kiểm tra mã ưu đãi |
+| Admin | Danh sách đơn, chuyển trạng thái, cập nhật kho và tạo mã |
+| Email | Gửi OTP qua SMTP |
+| Prisma | Cung cấp Prisma client cho các module |
 
-### 2.1 Architecture Overview
+## 3. Mô hình dữ liệu hiện tại
 
-```mermaid
-graph LR
-    subgraph Client
-        A["Next.js<br/>(Frontend SSR/CSR)"]
-    end
-    
-    subgraph Server
-        B["NestJS<br/>(REST API)"]
-    end
-    
-    subgraph Data
-        C[("PostgreSQL")]
-    end
-    
-    subgraph External
-        D["Mock Payment<br/>Gateway"]
-    end
-    
-    A -->|"REST/JSON<br/>+ JWT Cookie"| B
-    B -->|"Prisma ORM"| C
-    B -->|"HTTP POST"| D
-    D -->|"callback/response"| B
-```
+Nguồn chính xác là [schema.prisma](backend/prisma/schema.prisma).
 
-### 2.2 Tech Stack
+| Model | Dữ liệu và quan hệ chính |
+| --- | --- |
+| User | Email duy nhất, passwordHash, loyaltyPoints; có nhiều Order và Address |
+| EmailVerification | Một bản ghi xác minh cho mỗi user; codeHash, hạn OTP và số lần thử |
+| Address | Thuộc User; thông tin liên hệ và địa chỉ mặc định |
+| Product | Tên, danh mục, allowToppings, stock, version, isAvailable |
+| ProductPrice | Thuộc Product; duy nhất theo cặp productId/size |
+| Topping | Tên duy nhất, giá và trạng thái bán |
+| Order | Thuộc User; tổng sau giảm, discount, promoCode, status và điểm đã nhận |
+| OrderItem | Thuộc Order và Product; size, qty, lineTotal, snapshot tên topping |
+| Payment | Thuộc Order; idempotencyKey duy nhất, số tiền, phương thức và kết quả |
+| Promotion | Mã duy nhất; kiểu giảm, điều kiện, trần giảm, thời gian và isActive |
 
-| Layer | Công nghệ | Ghi chú |
-|---|---|---|
-| **Frontend** | Next.js 15 (App Router), TypeScript, Tailwind CSS | SSR cho SEO, CSR cho tương tác |
-| **State Management** | Zustand (Cart), React Query (Server state) | Nhẹ, đơn giản, hiệu quả |
-| **Backend** | NestJS (TypeScript), REST API | Modular architecture, DI |
-| **Validation** | class-validator, class-transformer | DTO validation |
-| **Authentication** | Passport JWT, bcrypt | HttpOnly Cookie |
-| **Database** | PostgreSQL 16 + Prisma ORM | Type-safe queries |
-| **Payment** | Mock Payment Service | Mô phỏng Momo/VNPay |
-| **DevOps** | Docker Compose, Git | PostgreSQL container (dev) |
-| **Code Quality** | ESLint, Prettier | Thống nhất code style |
+Một topping có thể xuất hiện nhiều lần trong OrderItem.toppings để biểu diễn nhiều phần. Hiện không có bảng liên kết OrderItem–Topping; tên được lưu dạng snapshot.
 
-### 2.3 Communication Flow
+Order.promoCode là chuỗi, chưa có foreign key sang Promotion. Điểm nằm trực tiếp trên User và Order; schema chưa có LoyaltyTransaction như mô hình domain tối thiểu mà Assignment 2 yêu cầu. Nhóm phải giải quyết và ghi quyết định trước khi nghiệm thu thiết kế/dữ liệu.
 
-```
-┌──────────────┐     HTTP/REST      ┌──────────────┐     Prisma      ┌──────────────┐
-│   Next.js    │ ──────────────────► │   NestJS     │ ──────────────► │  PostgreSQL   │
-│  (Port 3000) │ ◄────────────────── │  (Port 3001) │ ◄────────────── │  (Port 5433)  │
-└──────────────┘     JSON + JWT     └──────────────┘     SQL Query   └──────────────┘
-                     (HttpOnly                │
-                      Cookie)                 │ HTTP POST
-                                              ▼
-                                    ┌──────────────┐
-                                    │ Mock Payment │
-                                    │   Gateway    │
-                                    └──────────────┘
-```
+## 4. Luồng khách hàng và giỏ hàng
 
----
+![Luồng chọn món, xác thực và xác nhận đơn](docs/assets/checkout-flow.svg)
 
-## 3. Database Schema (ERD)
+Sơ đồ thể hiện luồng cần đạt; các điểm thiếu trong xác thực/checkout được liệt kê ở mục 8.
 
-### 3.1 Entity Relationship Diagram (7 bảng)
+### 4.1. Xem menu và chọn tùy chọn
 
-```mermaid
-erDiagram
-    USER ||--o{ ORDER : "places"
-    ORDER ||--|{ ORDER_ITEM : "contains"
-    ORDER ||--o{ PAYMENT : "has"
-    PRODUCT ||--o{ ORDER_ITEM : "referenced in"
-    PRODUCT ||--|{ PRODUCT_PRICE : "has prices"
+1. Frontend lấy menu và bảng giá từ Products API.
+2. Khách mở chi tiết, chọn một size thực sự được bán.
+3. Nếu sản phẩm cho phép topping, khách chọn loại và số phần topping.
+4. Frontend tính số tiền dự kiến, rồi thêm món vào giỏ.
 
-    USER {
-        string id PK "UUID"
-        string email UK "unique"
-        string passwordHash "bcrypt"
-        int loyaltyPoints "default 0"
-        datetime createdAt
-        datetime updatedAt
-    }
+Giá size được lưu trực tiếp trong ProductPrice, không tính bằng hệ số S/M/L chung cho mọi sản phẩm.
 
-    PRODUCT {
-        string id PK "UUID"
-        string name
-        string description "mô tả ngắn"
-        string imageUrl
-        string category "phin, tra, freeze, phindi, espresso, other"
-        boolean allowToppings "cho phép thêm topping"
-        int stock "tồn kho"
-        int version "optimistic locking"
-        boolean isAvailable "default true"
-        datetime createdAt
-        datetime updatedAt
-    }
+### 4.2. Định danh một dòng giỏ
 
-    PRODUCT_PRICE {
-        string id PK "UUID"
-        string productId FK
-        enum size "S, M, L"
-        int price "VND"
-    }
+Một dòng được nhận diện bằng sản phẩm, size và số phần của từng loại topping. Thứ tự chọn topping không làm thay đổi định danh.
 
-    TOPPING {
-        string id PK "UUID"
-        string name UK "unique"
-        int price "VND"
-        string imageUrl
-        boolean isAvailable "default true"
-    }
+| Lựa chọn | Kết quả |
+| --- | --- |
+| Cùng sản phẩm, size M, trân châu x1; thêm lại cấu hình đó | Một dòng, cộng số ly |
+| Cùng sản phẩm, size M, trân châu x1 và thạch x1 | Hai dòng |
+| Cùng sản phẩm, size M, trân châu x1 và trân châu x2 | Hai dòng |
+| Cùng topping nhưng size M và L | Hai dòng |
+| Hai sản phẩm khác ID nhưng trùng tên | Hai dòng |
 
-    ORDER {
-        string id PK "UUID"
-        string userId FK
-        enum status "PENDING..CANCELLED"
-        int total "VND"
-        int discount "VND"
-        string promoCode "nullable"
-        int loyaltyPointsEarned
-        datetime createdAt
-        datetime updatedAt
-    }
+Các hàm chung nằm trong [frontend/src/lib/cart.ts](frontend/src/lib/cart.ts). Tiền một dòng bằng đơn giá đã gồm topping nhân số ly. Khi gửi tạo đơn, quantity được đổi thành qty; topping được chuyển thành mảng tên theo contract API.
 
-    ORDER_ITEM {
-        string id PK "UUID"
-        string orderId FK
-        string productId FK
-        enum size "S, M, L"
-        string_array toppings "snapshot tên"
-        int qty
-        int lineTotal "VND"
-    }
+### 4.3. Lưu giỏ và chuyển tài khoản
 
-    PAYMENT {
-        string id PK "UUID"
-        string orderId FK
-        string idempotencyKey UK
-        int amount "VND"
-        enum method "EWALLET, CARD"
-        enum status "PENDING, SUCCESS, FAILED"
-        datetime createdAt
-    }
-```
+Giỏ khách dùng key brewlite_cart_guest; giỏ tài khoản dùng key có tiền tố brewlite_cart_user_ và userId. Khi nhận diện đăng nhập, frontend gộp giỏ khách theo cùng quy tắc tùy chọn rồi xóa giỏ khách đã gộp.
 
-### 3.2 Mô tả chi tiết
+Khi đăng xuất hoặc đổi tài khoản, giỏ đang hiển thị phải chuyển đúng chủ sở hữu. Cần integration/E2E kiểm chứng luồng này cùng xác thực ở backend; việc có giỏ riêng trong localStorage không bảo đảm đơn được gắn đúng user.
 
-**Quy ước chung:**
-- Tất cả `id` dùng UUID v4
-- Giá tiền lưu bằng **đơn vị VND (integer)** – tránh lỗi floating point
-- Timestamp tự động: `createdAt`, `updatedAt`
+### 4.4. Voucher khi giỏ thay đổi
 
-**Tính giá theo size (Bảng `product_prices`):**
+Frontend giữ quy tắc của voucher để tính lại theo tổng mới:
 
-Mỗi sản phẩm có bảng giá riêng theo từng size. Không dùng hệ số nhân vì giá thực tế không tuân theo tỉ lệ cố định.
+- Giữ mã nếu giỏ còn đạt giá trị tối thiểu.
+- Tính lại giảm theo phần trăm hoặc số tiền cố định, áp trần và không giảm vượt tổng giỏ.
+- Bỏ mã khi giỏ trống hoặc không còn đủ điều kiện.
+- Ví dụ: giỏ 150.000đ dùng giảm 10%, trần 15.000đ; xóa một dòng còn 90.000đ thì giữ mã và giảm 9.000đ.
 
-| Sản phẩm | S | M | L |
-|----------|---|---|---|
-| Phin Sữa Đá | 29.000đ | 39.000đ | 45.000đ |
-| Trà Sữa Highlands | — | 65.000đ | 69.000đ |
-| Freeze Trà Xanh | 55.000đ | 65.000đ | 69.000đ |
+Đây là số tiền dự kiến trên UI. Khi tạo/thanh toán đơn, backend phải xác minh lại giá và điều kiện voucher. Hiện logic nhập mã ở checkout vẫn hardcode một số mã, chưa hoàn toàn thống nhất với Promotions API.
 
-> Một số sản phẩm **không có đủ 3 size** (VD: Trà Sữa không có size S). Bảng `product_prices` cho phép linh hoạt này.
+## 5. Xác thực và quyền truy cập
 
-**Topping (Bảng `toppings`):**
+Login ký JWT và đặt cookie access_token với HttpOnly, SameSite=Lax, thời hạn 7 ngày; Secure được bật trong production. JwtStrategy đọc cookie, hoặc Bearer token dự phòng, rồi tìm user trong database.
 
-Bảng riêng lưu 15 loại topping kèm giá. Chỉ những Product có `allowToppings = true` mới hiển thị topping trên FE.
-Khi khách đặt hàng, tên topping được **snapshot** (copy) vào cột `toppings String[]` trong `order_items` để giữ nguyên thông tin tại thời điểm đặt.
+Axios gửi cookie bằng withCredentials. Các API được gắn JwtAuthGuard mới thực thi bước xác minh đó; chỉ gửi cookie không tự tạo req.user.
 
-| Topping | Giá |
-|---------|-----|
-| Trân Châu Dừa, Trân Châu Khoai Môn, Trân Châu Trắng | 9.000đ |
-| Thạch Cà Phê, Thạch Trà Xanh, Thạch Vải, Thạch Đào | 9.000đ |
-| Kem Sữa Mặn, Kem Tươi, Củ Năng, Đậu Đỏ | 9.000đ |
-| Hạt Sen, Trái Vải, Đào Lát | 15.000đ |
-| Shot Espresso | 10.000đ |
+| Nhóm API | Hiện trạng trong code | Quy tắc cần đạt |
+| --- | --- | --- |
+| Menu, topping, khuyến mãi | Public | Cho phép xem trước khi đăng nhập |
+| Hồ sơ và địa chỉ | Có JwtAuthGuard | Chỉ thao tác dữ liệu của chính user |
+| Đơn hàng | Chưa gắn guard; có fallback guest sang user đầu tiên | Bắt buộc xác thực và kiểm tra chủ đơn |
+| Checkout/payments | Chưa gắn guard và kiểm tra userId cho từng orderId | Chỉ chủ đơn hoặc vai trò được cấp quyền mới được truy cập |
+| Admin | Có JwtAuthGuard, chưa có kiểm tra role | Chỉ nhân viên/quản lý được cấp quyền |
 
-### 3.3 Indexes (Tối ưu truy vấn)
+Frontend chặn điều hướng không thay thế việc kiểm tra quyền tại API. Schema User chưa có role; bổ sung phân quyền cần thay đổi schema, migration, guard và UI tương ứng.
 
-| Bảng | Index | Mục đích |
-|------|-------|----------|
-| `orders` | `@@index([userId])` | Tra cứu lịch sử mua hàng nhanh |
-| `orders` | `@@index([createdAt])` | Sắp xếp đơn mới nhất nhanh |
-| `payments` | `@@index([orderId])` | Tra cứu thanh toán theo đơn |
-| `product_prices` | `@@unique([productId, size])` | Đảm bảo mỗi sản phẩm chỉ có 1 giá cho mỗi size |
+## 6. API đang có
 
----
+Base URL local: http://localhost:3001/api. Mọi đường dẫn dưới đây nằm sau /api.
 
-## 4. API Specification
+| Nhóm | Method và đường dẫn | Nội dung |
+| --- | --- | --- |
+| Products | GET /products, GET /products/:id | Menu và chi tiết, có prices |
+| Products | GET /products/toppings | Topping đang bán |
+| Auth | POST /auth/register, /auth/verify-email, /auth/resend-verification | Đăng ký và OTP |
+| Auth | POST /auth/login, /auth/logout | Đăng nhập/đăng xuất |
+| Auth | GET /auth/me; PATCH /auth/profile | Hồ sơ |
+| Auth | POST /auth/addresses; PATCH /auth/addresses/:id/default; DELETE /auth/addresses/:id | Quản lý địa chỉ |
+| Orders | POST /orders; GET /orders/me; GET /orders/:id | Tạo và tra cứu đơn |
+| Promotions | GET /promotions; POST /promotions/apply | Xem và kiểm tra voucher theo subtotal |
+| Checkout | POST /checkout | Thanh toán mô phỏng |
+| Checkout | POST /checkout/apply-voucher | Áp voucher cho đơn có sẵn |
+| Checkout | GET /checkout/order/:orderId, GET /checkout/status/:orderId | Lịch sử thanh toán và thời gian còn lại |
+| Admin | GET /admin/orders, /admin/orders/counts | Quản lý đơn và thống kê |
+| Admin | PATCH /admin/orders/:id/status | Chuyển trạng thái |
+| Admin | GET /admin/products; PATCH /admin/products/:id/stock, /admin/products/:id/availability | Quản lý kho |
+| Admin | POST /admin/promotions | Tạo mã khuyến mãi |
 
-### 4.1 Base URL
+CheckoutController cũng nhận tiền tố /payments, vì vậy /payments và các route con tương ứng đang là alias. Frontend hiện gọi /checkout; module PaymentsService cũ chưa chứa logic thanh toán chính.
 
-```
-Development: http://localhost:3001/api
-```
+Health endpoint phục vụ readiness/database chưa có. Không coi GET /api trả “Hello World!” là kiểm tra sức khỏe đầy đủ.
 
-### 4.2 Endpoints
+### 6.1. Payload tạo đơn
 
-#### 🟢 Products (Public)
-
-| Method | Endpoint | Mô tả | Auth |
-|--------|----------|--------|------|
-| `GET` | `/products` | Danh sách sản phẩm (menu) | ❌ |
-| `GET` | `/products?category=phin` | Lọc theo danh mục | ❌ |
-| `GET` | `/products/:id` | Chi tiết một sản phẩm | ❌ |
-| `GET` | `/products/toppings` | Danh sách topping | ❌ |
-
-**GET /products Response:** *(bao gồm bảng giá theo size)*
-```json
-{
-  "data": [
-    {
-      "id": "uuid",
-      "name": "Phin Sữa Đá",
-      "description": "Iced Coffee with Condensed Milk",
-      "imageUrl": "/images/phin-sua-da.jpg",
-      "category": "phin",
-      "allowToppings": false,
-      "stock": 100,
-      "isAvailable": true,
-      "prices": [
-        { "size": "S", "price": 29000 },
-        { "size": "M", "price": 39000 },
-        { "size": "L", "price": 45000 }
-      ]
-    }
-  ]
-}
-```
-
-**GET /products/toppings Response:**
-```json
-{
-  "data": [
-    { "id": "uuid", "name": "Trân Châu Dừa", "price": 9000, "imageUrl": "/images/toppings/tran-chau-dua.jpg" },
-    { "id": "uuid", "name": "Hạt Sen", "price": 15000, "imageUrl": "/images/toppings/hat-sen.jpg" }
-  ]
-}
-```
-
-**Danh mục (`category`) hợp lệ:** `phin`, `tra`, `freeze`, `phindi`, `espresso`, `other`
-
-#### 🔵 Authentication (Public)
-
-| Method | Endpoint | Mô tả | Auth |
-|--------|----------|--------|------|
-| `POST` | `/auth/register` | Đăng ký tài khoản | ❌ |
-| `POST` | `/auth/login` | Đăng nhập, set JWT cookie | ❌ |
-| `POST` | `/auth/logout` | Xóa JWT cookie | ✅ |
-
-**POST /auth/register Request:**
-```json
-{
-  "email": "user@example.com",
-  "password": "StrongP@ss1"
-}
-```
-
-**POST /auth/login Response:** (Set HttpOnly Cookie)
-```json
-{
-  "user": {
-    "id": "uuid",
-    "email": "user@example.com",
-    "loyaltyPoints": 0
-  }
-}
-```
-
-#### 🟡 Orders (Protected)
-
-| Method | Endpoint | Mô tả | Auth |
-|--------|----------|--------|------|
-| `POST` | `/orders` | Tạo đơn hàng (PENDING) | ✅ |
-| `GET` | `/orders/me` | Lịch sử đơn của user | ✅ |
-| `GET` | `/orders/:id` | Chi tiết một đơn | ✅ |
-
-**POST /orders Request:**
-```json
+~~~json
 {
   "items": [
     {
-      "productId": "uuid",
+      "productId": "uuid-san-pham",
       "size": "M",
-      "toppings": ["Trân châu"],
-      "qty": 1
+      "qty": 2,
+      "toppings": ["Trân châu", "Trân châu"],
+      "lineTotal": 100000
     }
   ],
   "promoCode": "WELCOME10"
 }
-```
+~~~
 
-**POST /orders Response:**
-```json
+DTO hiện vẫn yêu cầu lineTotal; backend tính lại giá từ ProductPrice và Topping thay vì tin số tiền client gửi. Ví dụ trên là hình dạng dữ liệu, không phải fixture có UUID hay giá sẵn trong DB.
+
+### 6.2. Payload thanh toán
+
+~~~http
+POST /api/checkout
+Content-Type: application/json
+Idempotency-Key: <uuid-cua-lan-thanh-toan>
+~~~
+
+~~~json
 {
-  "data": {
-    "id": "uuid",
-    "status": "PENDING",
-    "total": 59000,
-    "discount": 5900,
-    "items": [...],
-    "createdAt": "2026-09-21T12:00:00Z"
-  }
-}
-```
-
-#### 🔴 Payments (Protected)
-
-| Method | Endpoint | Mô tả | Auth |
-|--------|----------|--------|------|
-| `POST` | `/payments` | Thanh toán đơn (idempotent) | ✅ |
-
-**POST /payments Request:**
-```json
-{
-  "orderId": "uuid",
+  "orderId": "uuid-don-hang",
   "method": "EWALLET"
 }
-```
+~~~
 
-**Headers:**
-```
-Idempotency-Key: <uuid-v4-generated-by-client>
-```
+method nhận EWALLET hoặc CARD. Cùng một thao tác được gửi lại sau timeout phải giữ key để chống xử lý lặp. Response thanh toán hiện có payment, isDuplicate và thông tin kết quả; không có cùng wrapper data như Products/Orders. Frontend kiểm tra lại đơn bằng GET /orders/:id trước khi xác nhận thành công.
 
-**POST /payments Response (Success):**
-```json
-{
-  "data": {
-    "id": "uuid",
-    "orderId": "uuid",
-    "amount": 53100,
-    "method": "EWALLET",
-    "status": "SUCCESS"
-  },
-  "order": {
-    "id": "uuid",
-    "status": "PAID"
-  }
-}
-```
+## 7. Tạo đơn, thanh toán và trạng thái
 
-### 4.3 Error Response Format
+### 7.1. Tạo đơn
 
-```json
-{
-  "statusCode": 400,
-  "message": "Validation failed",
-  "errors": [
-    {
-      "field": "email",
-      "message": "email must be a valid email"
-    }
-  ]
-}
-```
+OrdersService nhận các dòng giỏ, lấy danh sách productId duy nhất, kiểm tra sản phẩm/size và tổng số ly của mỗi sản phẩm so với kho. Service tính lại giá từng dòng, áp mã nếu có và tạo Order PENDING cùng OrderItem trong transaction.
 
-### 4.4 Authentication Flow
+Kho chưa được giữ/trừ khi tạo PENDING. Kiểm tra kho lúc tạo đơn không bảo đảm kho vẫn đủ khi khách bấm thanh toán sau đó.
 
-```mermaid
-sequenceDiagram
-    participant C as Client (Next.js)
-    participant S as Server (NestJS)
-    participant DB as PostgreSQL
+### 7.2. Thanh toán
 
-    C->>S: POST /auth/login { email, password }
-    S->>DB: Find user by email
-    DB-->>S: User record
-    S->>S: Verify bcrypt hash
-    S->>S: Sign JWT (userId, email)
-    S-->>C: Set-Cookie: jwt=<token>; HttpOnly; Path=/
-    Note over C,S: Subsequent requests include cookie automatically
-    C->>S: GET /orders/me (Cookie: jwt=<token>)
-    S->>S: JwtAuthGuard → extract & verify token
-    S->>DB: Query orders WHERE userId = token.userId
-    DB-->>S: Orders list
-    S-->>C: 200 OK { data: [...] }
-```
+CheckoutService hiện thực các bước chính:
 
----
+1. Kiểm tra voucher nếu request có mã.
+2. Tra payment theo Idempotency-Key để xử lý yêu cầu gửi lại tuần tự.
+3. Lấy đơn, chặn đơn rỗng, trạng thái không phù hợp và đơn quá hạn.
+4. Mở transaction, khóa dòng Order bằng SELECT FOR UPDATE và kiểm tra lại trạng thái/tổng tiền.
+5. Gọi hàm thanh toán mô phỏng; đơn 0đ có nhánh hoàn tất riêng.
+6. Nếu thành công, trừ tổng số ly của mỗi sản phẩm bằng điều kiện stock/version, tạo Payment, đổi Order sang PAID và cộng điểm.
+7. Nếu thất bại, lưu trạng thái thanh toán thất bại và PAYMENT_FAILED.
 
-## 5. Luồng nghiệp vụ & State Machine
+Một sản phẩm có nhiều dòng tùy chọn chỉ được cập nhật stock/version một lần trong cùng lượt thanh toán. Điểm được tính bằng phần nguyên của tổng tiền đã giảm chia 10.000.
 
-### 5.1 Happy Path Flow
+Idempotency tuần tự đã có đường xử lý, nhưng cần bổ sung kiểm tra cùng key cho khác đơn và trường hợp hai request đồng thời. Mô phỏng chưa chứng minh việc thu tiền thực; nếu tích hợp gateway thật, cần thiết kế lại tính nhất quán giữa gateway và transaction DB.
 
-```mermaid
-flowchart TD
-    A["🏠 Mở App"] --> B["📋 Xem Menu"]
-    B --> C["☕ Chọn sản phẩm\n(size, topping)"]
-    C --> D["🛒 Thêm vào giỏ hàng"]
-    D --> E{"Mua thêm?"}
-    E -->|"Có"| B
-    E -->|"Không"| F["👀 Xem giỏ & tổng tiền"]
-    F --> G{"Đã đăng nhập?"}
-    G -->|"Chưa"| H["🔐 Đăng nhập / Đăng ký"]
-    H --> I
-    G -->|"Rồi"| I["💳 Thanh toán\n(Ví / Thẻ)"]
-    I --> J{"Thanh toán\nthành công?"}
-    J -->|"✅ Thành công"| K["✓ Xác nhận đơn\n(Mã đơn, status: PAID)"]
-    J -->|"❌ Thất bại"| L["⚠️ PAYMENT_FAILED\nGiỏ hàng giữ nguyên"]
-    L --> I
-    K --> M["🥤 Nhận đồ uống tại quầy"]
+### 7.3. Máy trạng thái đơn hàng
 
-    style A fill:#e8f5e9
-    style K fill:#e8f5e9
-    style M fill:#c8e6c9
-    style L fill:#ffebee
-```
+![Các chuyển trạng thái hiện có của đơn hàng](docs/assets/order-lifecycle.svg)
 
-### 5.2 Order State Machine
+Nguồn quy tắc là [orders-state.ts](backend/src/modules/orders/orders-state.ts).
 
-```mermaid
-stateDiagram-v2
-    [*] --> PENDING: Tạo đơn (POST /orders)
-    
-    PENDING --> PAID: Thanh toán OK
-    PENDING --> PAYMENT_FAILED: Thanh toán lỗi
-    PENDING --> CANCELLED: Hủy đơn
-    
-    PAYMENT_FAILED --> PAID: Thử lại thanh toán
-    PAYMENT_FAILED --> CANCELLED: Hủy đơn
-    
-    PAID --> PREPARING: Barista nhận đơn
-    PAID --> CANCELLED: Hủy đơn
-    
-    PREPARING --> READY: Pha xong
-    
-    READY --> COMPLETED: Giao khách
-    
-    COMPLETED --> [*]
-    CANCELLED --> [*]
-```
+| Trạng thái | Được chuyển sang |
+| --- | --- |
+| PENDING | PAID, PAYMENT_FAILED, CANCELLED |
+| PAYMENT_FAILED | PAID, CANCELLED |
+| PAID | PREPARING, CANCELLED |
+| PREPARING | READY |
+| READY | COMPLETED |
+| COMPLETED, CANCELLED | Không có trạng thái tiếp theo |
 
-### 5.3 Allowed Transitions Map
+Admin dùng assertTransition để chặn chuyển sai. Checkout xử lý trạng thái bằng các kiểm tra riêng; cần test để hai đường không mâu thuẫn.
 
-```typescript
-// backend/src/modules/orders/order-state.ts
-const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-  PENDING:        ['PAID', 'PAYMENT_FAILED', 'CANCELLED'],
-  PAYMENT_FAILED: ['PAID', 'CANCELLED'],
-  PAID:           ['PREPARING', 'CANCELLED'],
-  PREPARING:      ['READY'],
-  READY:          ['COMPLETED'],
-  COMPLETED:      [],  // terminal state
-  CANCELLED:      [],  // terminal state
-};
+Code cho phép PAID → CANCELLED nhưng chưa có quy trình hoàn tiền/hoàn kho tương ứng đầy đủ. Nhóm cần thống nhất quy tắc này trước nghiệm thu, không coi việc đổi trạng thái là đã hoàn tiền.
 
-function assertTransition(current: OrderStatus, next: OrderStatus): void {
-  if (!ALLOWED_TRANSITIONS[current].includes(next)) {
-    throw new BadRequestException(
-      `Cannot transition from ${current} to ${next}`
-    );
-  }
-}
-```
+### 7.4. Hết hạn và gia hạn
 
-### 5.4 Payment Idempotency Flow
+Hạn thanh toán backend hiện là 2 phút tính từ createdAt. Cron quét đơn PENDING quá hạn mỗi 30 giây. UI có timer và một lần gia hạn bằng localStorage, nhưng gia hạn UI chưa cập nhật tuổi đơn/backend; đây là phần cần sửa và kiểm thử.
 
-```mermaid
-flowchart TD
-    A["Client gửi POST /payments\n+ Header: Idempotency-Key"] --> B{"Key đã tồn tại\ntrong DB?"}
-    B -->|"Không"| C["Xử lý thanh toán"]
-    C --> D{"Mock Payment\nthành công?"}
-    D -->|"Thành công"| E["Lưu Payment (SUCCESS)\nĐơn → PAID\nCộng loyalty points"]
-    D -->|"Thất bại"| F["Lưu Payment (FAILED)\nĐơn → PAYMENT_FAILED"]
-    B -->|"Có"| G{"Payment status?"}
-    G -->|"SUCCESS"| H["Trả về kết quả cũ\n(không xử lý lại)"]
-    G -->|"FAILED"| I["Cho phép thử lại\n(với Key mới)"]
+## 8. Những khoảng trống cần giải quyết
 
-    style E fill:#c8e6c9
-    style F fill:#ffebee
-    style H fill:#e3f2fd
-```
+| Vấn đề | Tác động / công việc tiếp theo |
+| --- | --- |
+| Guest fallback và thiếu guard ở Orders/Checkout | Có thể gắn đơn sai user hoặc truy cập đơn không thuộc tài khoản |
+| Chưa có role admin | Tài khoản thông thường có thể gọi API quản trị sau khi đăng nhập |
+| Idempotency chưa đầy đủ ở nhánh đồng thời | Cần trả kết quả nhất quán và không lặp tiền/kho/điểm |
+| Voucher có nhiều đường xử lý | Thống nhất quy tắc theo backend, gồm trạng thái và khoảng ngày hiệu lực |
+| Topping không hợp lệ bị bỏ qua khi tính giá | Phải từ chối topping ngừng bán/không cho phép, không lưu món không tính đúng tiền |
+| Gia hạn UI và backend lệch nhau | Đồng bộ thời hạn hoặc thiết kế tạo đơn thay thế an toàn |
+| Seed xóa dữ liệu, user seed không đăng nhập được | Tách fixture test khỏi dữ liệu vận hành; không chạy seed mỗi lần deploy |
+| Log OTP và JWT fallback phục vụ dev | Loại bỏ hành vi không phù hợp trước production |
+| Thiếu migration/health/Compose đủ dịch vụ | Hoàn thiện nền tảng kiểm thử và vận hành |
+| Bộ test và CI chưa đủ | Thực hiện kế hoạch Task 4.4 và 5.2 |
 
-### 5.5 Optimistic Locking Flow (Kiểm soát tồn kho)
+## 9. Liên kết với Assignment 2
 
-```mermaid
-sequenceDiagram
-    participant U1 as User A
-    participant U2 as User B  
-    participant API as NestJS
-    participant DB as PostgreSQL
+Task 4 kiểm chứng MVP menu, quản lý tài liệu và CI cho PR. Task 5 hoàn thiện luồng đặt/thanh toán, test nghiệp vụ/API/trình duyệt, Docker, CD và bàn giao production.
 
-    Note over DB: Product X: stock=1, version=1
-    
-    U1->>API: POST /orders (Product X, qty=1)
-    U2->>API: POST /orders (Product X, qty=1)
-    
-    API->>DB: BEGIN TRANSACTION (User A)
-    API->>DB: UPDATE product SET stock=0, version=2<br/>WHERE id=X AND stock>=1 AND version=1
-    DB-->>API: affected_rows = 1 ✅
-    API->>DB: INSERT order... COMMIT
-    
-    API->>DB: BEGIN TRANSACTION (User B)
-    API->>DB: UPDATE product SET stock=0, version=2<br/>WHERE id=X AND stock>=1 AND version=1
-    DB-->>API: affected_rows = 0 ❌ (version changed!)
-    API->>DB: ROLLBACK
-    API-->>U2: 409 Conflict - Sản phẩm hết hàng
-```
-
----
-
-## 6. Cấu trúc thư mục dự án
-
-```
-brewlite/
-├── 📁 frontend/                      # Next.js Application
-│   ├── 📁 public/                    # Static assets
-│   │   └── 📁 images/               # Product images
-│   ├── 📁 src/
-│   │   ├── 📁 app/                   # App Router (pages)
-│   │   │   ├── layout.tsx            # Root layout
-│   │   │   ├── page.tsx              # Home → redirect /menu
-│   │   │   ├── 📁 menu/             # Menu page
-│   │   │   │   └── page.tsx
-│   │   │   ├── 📁 product/
-│   │   │   │   └── 📁 [id]/         # Product detail page
-│   │   │   │       └── page.tsx
-│   │   │   ├── 📁 cart/             # Cart page
-│   │   │   │   └── page.tsx
-│   │   │   ├── 📁 checkout/         # Checkout/Payment page
-│   │   │   │   └── page.tsx
-│   │   │   ├── 📁 order/
-│   │   │   │   └── 📁 [id]/         # Order confirmation page
-│   │   │   │       └── page.tsx
-│   │   │   ├── 📁 orders/           # Order history page
-│   │   │   │   └── page.tsx
-│   │   │   └── 📁 auth/
-│   │   │       ├── 📁 login/        # Login page
-│   │   │       │   └── page.tsx
-│   │   │       └── 📁 register/     # Register page
-│   │   │           └── page.tsx
-│   │   ├── 📁 components/
-│   │   │   ├── 📁 ui/               # Reusable UI components
-│   │   │   │   ├── Button.tsx
-│   │   │   │   ├── Card.tsx
-│   │   │   │   ├── Input.tsx
-│   │   │   │   └── Badge.tsx
-│   │   │   ├── 📁 layout/           # Layout components
-│   │   │   │   ├── Header.tsx
-│   │   │   │   └── Footer.tsx
-│   │   │   ├── 📁 product/          # Product-specific components
-│   │   │   │   ├── ProductCard.tsx
-│   │   │   │   └── ProductGrid.tsx
-│   │   │   └── 📁 cart/             # Cart-specific components
-│   │   │       ├── CartItem.tsx
-│   │   │       └── CartSummary.tsx
-│   │   ├── 📁 lib/
-│   │   │   ├── api.ts               # Axios instance + interceptors
-│   │   │   └── utils.ts             # Helper functions
-│   │   ├── 📁 stores/
-│   │   │   └── cart.store.ts         # Zustand cart store
-│   │   ├── 📁 hooks/
-│   │   │   ├── useAuth.ts           # Auth hook
-│   │   │   └── useProducts.ts       # React Query hooks
-│   │   └── 📁 types/
-│   │       └── index.ts             # Shared TypeScript types
-│   ├── .env.example
-│   ├── next.config.ts
-│   ├── tailwind.config.ts
-│   ├── tsconfig.json
-│   └── package.json
-│
-├── 📁 backend/                       # NestJS Application
-│   ├── 📁 prisma/
-│   │   ├── schema.prisma            # Database schema
-│   │   └── 📁 seed/
-│   │       └── seed.ts              # Seed data (menu items)
-│   ├── 📁 src/
-│   │   ├── 📁 modules/
-│   │   │   ├── 📁 prisma/           # PrismaModule (shared)
-│   │   │   │   ├── prisma.module.ts
-│   │   │   │   └── prisma.service.ts
-│   │   │   ├── 📁 products/         # ProductModule
-│   │   │   │   ├── products.module.ts
-│   │   │   │   ├── products.controller.ts
-│   │   │   │   ├── products.service.ts
-│   │   │   │   └── dto/
-│   │   │   ├── 📁 auth/             # AuthModule
-│   │   │   │   ├── auth.module.ts
-│   │   │   │   ├── auth.controller.ts
-│   │   │   │   ├── auth.service.ts
-│   │   │   │   ├── jwt.strategy.ts
-│   │   │   │   ├── jwt-auth.guard.ts
-│   │   │   │   └── dto/
-│   │   │   ├── 📁 orders/           # OrderModule
-│   │   │   │   ├── orders.module.ts
-│   │   │   │   ├── orders.controller.ts
-│   │   │   │   ├── orders.service.ts
-│   │   │   │   ├── order-state.ts   # State Machine
-│   │   │   │   └── dto/
-│   │   │   └── 📁 payments/         # PaymentModule
-│   │   │       ├── payments.module.ts
-│   │   │       ├── payments.controller.ts
-│   │   │       ├── payments.service.ts
-│   │   │       ├── mock-payment.service.ts
-│   │   │       └── dto/
-│   │   ├── 📁 common/
-│   │   │   ├── 📁 decorators/       # Custom decorators
-│   │   │   │   └── current-user.decorator.ts
-│   │   │   ├── 📁 filters/          # Exception filters
-│   │   │   │   └── http-exception.filter.ts
-│   │   │   └── 📁 interceptors/
-│   │   │       └── transform.interceptor.ts
-│   │   ├── app.module.ts
-│   │   └── main.ts
-│   ├── 📁 test/
-│   │   ├── orders.e2e-spec.ts       # Order state machine tests
-│   │   └── payments.e2e-spec.ts     # Idempotency tests
-│   ├── .env.example
-│   ├── nest-cli.json
-│   ├── tsconfig.json
-│   └── package.json
-│
-├── 📁 docker/
-│   ├── docker-compose.dev.yml       # Dev: PostgreSQL only
-│   └── docker-compose.yml           # Prod: All 3 services (Sprint 3)
-│
-├── PROJECT_FLOW.md                   # ← Tài liệu này
-├── README.md                         # Hướng dẫn chạy dự án
-├── .gitignore
-└── .env.example                      # Template biến môi trường
-```
-
----
-
-## 7. Sprint Planning (3 Sprints)
-
-### Sprint 1: Nền tảng & Hiển thị Menu (Task 1-4)
-
-**Sprint Goal:** *"Khách hàng có thể xem menu và chi tiết sản phẩm trên trình duyệt"*
-
-| Task | Story | Tiêu chí chấp nhận | Ưu tiên |
-|------|-------|---------------------|---------|
-| **1** | Khởi tạo dự án | Monorepo chạy được "Hello", Git, README, .env.example | P0 |
-| **2** | API danh sách sản phẩm | `GET /products` trả JSON từ DB, có seed data | P0 |
-| **3** | Trang Menu (Frontend) | Gọi API, render grid sản phẩm, loading/empty state | P0 |
-| **4** | Chi tiết & tùy chọn | Chọn size S/M/L, topping, tính giá theo tùy chọn | P1 |
-
-**Deliverable:** Trang menu hoạt động, hiển thị sản phẩm từ database.
-
----
-
-### Sprint 2: Giỏ hàng, Đơn hàng & Auth (Task 5-7)
-
-**Sprint Goal:** *"Khách hàng đăng nhập và đặt đơn hàng được"*
-
-| Task | Story | Tiêu chí chấp nhận | Ưu tiên |
-|------|-------|---------------------|---------|
-| **5** | Giỏ hàng (Cart) | Thêm/sửa/xóa, Zustand store, tính tổng, badge count | P0 |
-| **6** | API tạo đơn hàng | `POST /orders` validate & lưu PENDING, trả mã đơn | P0 |
-| **7** | Đăng ký / Đăng nhập | Register, Login, bcrypt, JWT cookie, guard routes | P0 |
-
-**Deliverable:** User flow hoàn chỉnh từ menu → giỏ → đăng nhập → tạo đơn.
-
----
-
-### Sprint 3: Thanh toán, Bàn giao & Nghiệp vụ nâng cao (Task 8-10)
-
-**Sprint Goal:** *"Hệ thống thanh toán hoạt động, đóng gói Docker, demo end-to-end"*
-
-| Task | Story | Tiêu chí chấp nhận | Ưu tiên |
-|------|-------|---------------------|---------|
-| **8** | Thanh toán không tiền mặt | Mock payment, `POST /payments`, PAID/PAYMENT_FAILED | P0 |
-| **9** | Xác nhận, lịch sử & bàn giao | Màn hình xác nhận, `GET /orders/me`, docker-compose full, README | P0 |
-| **10** | Nghiệp vụ backend | State Machine, Idempotency, Optimistic Locking, Loyalty points | P1 |
-
-**Deliverable:** Sản phẩm hoàn chỉnh, docker-compose chạy full, demo E2E.
-
----
-
-## 8. Non-functional Requirements & Solutions
-
-### 8.1 Hiệu năng (API < 500ms)
-
-| Vấn đề | Giải pháp | Trạng thái |
-|--------|-----------|---------|
-| API GET /products chậm | Next.js ISR/SSG cache menu | Sprint 1 |
-| N+1 query Prisma | Eager loading `include: { prices: true }` | ✅ Đã áp dụng |
-| Response lớn | Pagination cho /orders/me | Sprint 3 |
-| Truy vấn chậm theo userId/orderId | Database Indexes (`@@index`) | ✅ Đã áp dụng |
-
-### 8.2 Bảo mật
-
-| Vấn đề | Giải pháp | Trạng thái |
-|--------|-----------|---------|
-| Token bị đánh cắp (XSS) | JWT trong HttpOnly Cookie, SameSite=Strict | Sprint 2 |
-| SQL Injection | Prisma parameterized queries (mặc định) | ✅ Mặc định |
-| Password leak | bcrypt hash với salt rounds = 10 | Sprint 2 |
-| Invalid input | class-validator trên mọi DTO | Sprint 1 |
-| CORS | Whitelist `localhost:3000` cho dev | ✅ Đã áp dụng |
-| Email chưa xác thực | OTP 6 số qua Email (Nodemailer) – hết hạn sau 3 phút | Sprint 2 |
-| Quên mật khẩu | OTP reset password qua Email | Sprint 2 |
-
-### 8.3 Tính toàn vẹn dữ liệu
-
-| Vấn đề | Giải pháp | Trạng thái |
-|--------|-----------|---------|
-| Double payment | Idempotency-Key header + `@@unique` constraint trên `Payment.idempotencyKey` | ✅ Schema đã có |
-| Race condition tồn kho | Optimistic Locking (`version` field) + transaction | ✅ Schema đã có |
-| Invalid state transition | Order State Machine (`assertTransition`) | Sprint 3 |
-| Đơn PENDING treo lâu | Timeout 5 phút – tự hủy đơn bằng `@nestjs/schedule` Cron Job | Sprint 3 |
-| Giá size không đúng | Bảng `product_prices` riêng, `@@unique([productId, size])` | ✅ Đã áp dụng |
-| Topping lộn xộn | Bảng `toppings` riêng + `allowToppings` flag trên Product | ✅ Đã áp dụng |
-
-### 8.4 Tương thích trình duyệt
-
-- Target: Chrome, Firefox, Safari, Edge (latest 2 versions)
-- Responsive design: Mobile-first (wireframe hiển thị dạng mobile)
-- Tailwind CSS đảm bảo cross-browser compatibility
-
-### 8.5 Luồng Timeout Hủy Đơn Hàng (5 phút)
-
-Khi khách hàng tạo đơn nhưng không thanh toán quá lâu, hệ thống tự động hủy đơn để hoàn trả tồn kho.
-
-```mermaid
-sequenceDiagram
-    participant U as User (Frontend)
-    participant B as Backend
-    participant CR as Cron Job (NestJS Schedule)
-    
-    U->>B: Tạo Order & Lấy mã QR
-    B-->>U: Trả về QR + expiresAt (VD: 10:05 AM)
-    U->>U: Hiển thị đồng hồ đếm ngược 05:00
-    
-    loop Mỗi 1 phút
-        CR->>B: Tìm Order (status=PENDING & expiresAt < NOW)
-        B->>B: Đổi trạng thái thành CANCELLED
-        B->>B: Hoàn lại tồn kho cho Product
-    end
-    
-    alt Không thanh toán sau 5 phút
-        U->>U: Đồng hồ về 00:00 → UI "Đơn bị hủy"
-    else Thanh toán thành công trong 5 phút
-        U->>B: Thanh toán thành công
-        B->>B: Đổi status = PAID, hủy timeout
-    end
-```
-
-### 8.6 Luồng Xác thực OTP qua Email
-
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant B as Backend
-    participant M as Email Server (Nodemailer)
-    
-    U->>B: POST /auth/register (Email, Password)
-    B->>B: Tạo User (isVerified=false), Sinh OTP 6 số (hết hạn 3 phút)
-    B->>M: Gửi OTP tới Email
-    M-->>U: Nhận Email chứa OTP
-    B-->>U: 201 Created (Yêu cầu xác thực)
-    
-    U->>B: POST /auth/verify-otp (Email, OTP)
-    B->>B: Kiểm tra OTP đúng & chưa hết hạn
-    B->>B: Đổi isVerified = true, xóa otpCode
-    B-->>U: 200 OK (Đăng nhập thành công)
-```
-
----
-
-## 9. Development Conventions
-
-### 9.1 Git Branching Strategy
-
-```
-main                    ← Production-ready (protected)
-├── develop             ← Integration branch
-│   ├── feature/task-1  ← Từng task
-│   ├── feature/task-2
-│   ├── feature/task-3
-│   └── ...
-└── hotfix/*            ← Emergency fixes
-```
-
-**Workflow:**
-1. Tạo branch từ `develop`: `git checkout -b feature/task-X develop`
-2. Code & commit thường xuyên
-3. Push & tạo Pull Request → develop
-4. Review (ít nhất 1 member) → Merge
-5. Cuối Sprint: merge `develop` → `main` → Tag version
-
-### 9.2 Commit Message Convention
-
-Sử dụng **Conventional Commits:**
-
-```
-<type>(<scope>): <description>
-
-feat(products): add GET /products endpoint
-fix(cart): correct total calculation with toppings  
-chore(docker): add PostgreSQL dev compose file
-docs(readme): add setup instructions
-test(orders): add state machine unit tests
-refactor(auth): extract JWT strategy to separate file
-```
-
-**Types:** `feat`, `fix`, `chore`, `docs`, `test`, `refactor`, `style`
-
-### 9.3 Code Style
-
-**ESLint + Prettier** cấu hình chung:
-- **Single quotes**, **Trailing commas**, **Semicolons**
-- Max line length: 100 characters
-- Indent: 2 spaces
-
-### 9.4 Naming Conventions
-
-| Đối tượng | Convention | Ví dụ |
-|-----------|-----------|-------|
-| File/Folder | kebab-case | `products.controller.ts` |
-| Class | PascalCase | `ProductsService` |
-| Function/Method | camelCase | `findAll()` |
-| Variable | camelCase | `totalPrice` |
-| Constant | UPPER_SNAKE_CASE | `JWT_SECRET` |
-| Database table | snake_case | `order_items` |
-| Enum | PascalCase + UPPER_SNAKE_CASE values | `OrderStatus.PENDING` |
-| DTO | PascalCase + "Dto" suffix | `CreateOrderDto` |
-| API route | kebab-case, plural | `/products`, `/orders` |
-
----
-
-## 10. Definition of Done
-
-Mỗi task được coi là **DONE** khi thỏa mãn:
-
-- [ ] Code chạy được, không lỗi build
-- [ ] Tuân theo tiêu chí chấp nhận (Acceptance Criteria) của task
-- [ ] Commit trên Git với message rõ ràng (Conventional Commits)
-- [ ] Được review bởi ít nhất 1 thành viên khác
-- [ ] API có validate đầu vào (class-validator)
-- [ ] UI xử lý loading/error state cơ bản
-- [ ] Có hướng dẫn chạy trong README
-- [ ] (Task 10) Có unit/integration test chứng minh logic
-
----
-
-> **Ghi chú:** Tài liệu này là "living document" – sẽ được cập nhật qua từng Sprint khi có thay đổi yêu cầu hoặc thiết kế.
+Tài liệu này là bản mô tả tổng quan phục vụ nhóm, chưa thay thế SRS, activity/sequence/class diagram, ADR, deployment diagram hay ma trận truy vết trong docs. Các SVG tại docs/assets là minh họa tổng quan; bộ sơ đồ nghiệm thu phải có tệp nguồn và bản kết xuất, thống nhất với yêu cầu và schema.

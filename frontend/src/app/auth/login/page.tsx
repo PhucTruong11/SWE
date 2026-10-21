@@ -14,9 +14,36 @@ function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [isNotRegistered, setIsNotRegistered] = useState(false); // Trạng thái chưa có tài khoản
+  const [isNotRegistered, setIsNotRegistered] = useState(false);
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const EyeButton = ({ show, toggle }: { show: boolean; toggle: () => void }) => (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.preventDefault();
+        toggle();
+      }}
+      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors focus:outline-none p-1 z-10"
+      aria-label={show ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+    >
+      {show ? (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+          <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+          <path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+          <line x1="2" y1="2" x2="22" y2="22" />
+        </svg>
+      ) : (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z" />
+          <circle cx="12" cy="12" r="3" />
+        </svg>
+      )}
+    </button>
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,14 +53,20 @@ function LoginForm() {
     setLoading(true);
 
     try {
-      await api.post('/auth/login', { email, password });
-      window.location.href = redirectUrl;
+      const res = await api.post('/auth/login', { email, password });
+      const user = res.data?.user;
+
+      // Nếu tài khoản có quyền ADMIN -> Chuyển hướng sang trang Admin
+      if (user?.role === 'ADMIN') {
+        window.location.href = '/admin';
+      } else {
+        window.location.href = redirectUrl;
+      }
     } catch (err: any) {
       const status = err.response?.status;
       const errData = err.response?.data;
       const message = errData?.message || '';
 
-      // Kiểm tra nếu Backend trả về 404 hoặc thông báo không tìm thấy tài khoản
       if (status === 404 || message.includes('not found') || message.includes('không tồn tại')) {
         setIsNotRegistered(true);
         setError('Tài khoản này chưa được đăng ký trong hệ thống.');
@@ -61,7 +94,6 @@ function LoginForm() {
           <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-200">
             {error}
             
-            {/* Gợi ý chuyển sang Đăng ký nếu Email chưa tồn tại */}
             {isNotRegistered && (
               <div className="mt-2 pt-2 border-t border-red-200">
                 <Link
@@ -100,15 +132,26 @@ function LoginForm() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Mật khẩu</label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none"
-            />
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-gray-700">Mật khẩu</label>
+              <Link
+                href="/auth/forgot-password"
+                className="text-xs font-semibold text-primary hover:underline"
+              >
+                Quên mật khẩu?
+              </Link>
+            </div>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none"
+              />
+              <EyeButton show={showPassword} toggle={() => setShowPassword(!showPassword)} />
+            </div>
           </div>
 
           <button

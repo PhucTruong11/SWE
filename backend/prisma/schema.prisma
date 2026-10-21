@@ -41,6 +41,11 @@ enum ProductSize {
   L
 }
 
+enum Role {
+  USER
+  ADMIN
+}
+
 // ==========================================
 // Models
 // ==========================================
@@ -51,6 +56,7 @@ model User {
   fullName          String?            // Họ và tên
   phone             String?            // Số điện thoại liên hệ
   passwordHash      String
+  role              Role               @default(USER)
   loyaltyPoints     Int                @default(0)
   emailVerifiedAt   DateTime?          // null = chưa xác minh email
   createdAt         DateTime           @default(now())
@@ -208,4 +214,16 @@ model Promotion {
   updatedAt      DateTime  @updatedAt
 
   @@map("promotions")
+}
+
+model PasswordReset {
+  id         String   @id @default(uuid())
+  email      String   @unique
+  codeHash   String   // Hash của mã OTP 6 số
+  expiresAt  DateTime // Hạn sử dụng (10 phút)
+  attempts   Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("password_resets")
 }

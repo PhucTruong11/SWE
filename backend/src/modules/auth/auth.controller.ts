@@ -12,6 +12,7 @@ import {
   Res,
   UnauthorizedException,
   UseGuards,
+  Request,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { AuthService } from './auth.service.js';
@@ -23,6 +24,7 @@ import { UpdateProfileDto } from './dto/update-profile.dto.js';
 import { CreateAddressDto } from './dto/address.dto.js';
 import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
+import { ForgotPasswordDto, ResetPasswordDto, ChangePasswordDto, } from './dto/auth-password.dto.js';
 
 @Controller('auth')
 export class AuthController {
@@ -70,6 +72,22 @@ export class AuthController {
     });
 
     return result;
+  }
+
+  @Post('forgot-password')
+  forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(dto);
+  }
+
+  @Post('reset-password')
+  resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('change-password')
+  changePassword(@CurrentUser() user: any, @Body() dto: ChangePasswordDto) {
+    return this.authService.changePassword(user.id, dto);
   }
 
   // Lấy thông tin user hiện tại (kèm họ tên, SĐT, danh sách địa chỉ)

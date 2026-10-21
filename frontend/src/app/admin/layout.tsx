@@ -27,15 +27,15 @@ function MenuContent({
         <div className="flex h-full flex-col">
             <nav className="flex flex-col gap-1 p-4 text-base font-semibold">
                 {NAV_ITEMS.map(({ href, label, icon: Icon, exact }) => {
-                    // Mục đang mở thì tô sáng
                     const active = exact ? pathname === href : pathname.startsWith(href);
                     return (
                         <Link
                             key={href}
                             href={href}
                             onClick={onNavigate}
-                            className={`flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-white/10 ${active ? 'bg-white/15' : ''
-                                }`}
+                            className={`flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-white/10 ${
+                                active ? 'bg-white/15' : ''
+                            }`}
                         >
                             <Icon size={18} />
                             <span>{label}</span>
@@ -74,13 +74,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const { user, loading, logout } = useAuth();
     const [drawerOpen, setDrawerOpen] = useState(false);
 
-    // Chưa đăng nhập thì chuyển về trang login (áp dụng cho mọi trang /admin/*)
-    // TODO(Role): đổi thành kiểm tra user.role === 'ADMIN'
-    useEffect(() => {
-        if (!loading && !user) router.push('/auth/login?redirect=/admin');
-    }, [loading, user, router]);
+    // Lấy role bằng cách kiểm tra ép kiểu an toàn (tránh dùng `any`)
+    const userRole = String((user as { role?: string } | null)?.role || '').toUpperCase();
 
-    if (loading || !user) {
+    // KIỂM TRA PHÂN QUYỀN VÀO TRANG ADMIN
+    useEffect(() => {
+        if (!loading) {
+            if (!user) {
+                router.push('/auth/login?redirect=/admin');
+            } else if (userRole !== 'ADMIN') {
+                router.replace('/');
+            }
+        }
+    }, [loading, user, userRole, router]);
+
+    if (loading || !user || userRole !== 'ADMIN') {
         return (
             <div className="flex min-h-screen items-center justify-center">
                 <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
@@ -136,8 +144,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 />
             )}
             <aside
-                className={`fixed right-0 top-0 z-50 flex h-full w-72 flex-col bg-primary text-white transition-transform duration-300 lg:hidden ${drawerOpen ? 'translate-x-0' : 'translate-x-full'
-                    }`}
+                className={`fixed right-0 top-0 z-50 flex h-full w-72 flex-col bg-primary text-white transition-transform duration-300 lg:hidden ${
+                    drawerOpen ? 'translate-x-0' : 'translate-x-full'
+                }`}
             >
                 <div className="flex items-center justify-between border-b border-white/15 p-4">
                     <p className="truncate text-sm font-semibold">{user.email}</p>

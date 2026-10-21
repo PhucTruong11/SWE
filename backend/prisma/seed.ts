@@ -1,4 +1,6 @@
 import { PrismaClient, ProductSize } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
+
 
 const prisma = new PrismaClient();
 
@@ -562,6 +564,34 @@ async function main() {
   console.log(`   Header: Idempotency-Key: <random-uuid>`);
   console.log('────────────────────────────────────────');
   console.log(`   Promotions:     ${promotions.length}`);
+
+// --- TẠO ADMIN MẶC ĐỊNH ---
+  const adminEmail = 'admin@brewlite.com';
+  const adminPassword = '@Admin123';
+
+  const existingAdmin = await prisma.user.findUnique({
+    where: { email: adminEmail },
+  });
+
+  if (!existingAdmin) {
+    const passwordHash = await bcrypt.hash(adminPassword, 10);
+
+    await prisma.user.create({
+      data: {
+        email: adminEmail,
+        passwordHash: passwordHash,
+        fullName: 'System Administrator',
+        role: 'ADMIN' as any, // Dùng 'ADMIN' ép type đơn giản, không bị đụng lỗi import Role
+        emailVerifiedAt: new Date(),
+      },
+    });
+
+    console.log('✅ Đã khởi tạo tài khoản Admin mặc định thành công!');
+    console.log(`   Email: ${adminEmail}`);
+    console.log(`   Password: ${adminPassword}`);
+  } else {
+    console.log('ℹ️ Tài khoản Admin đã tồn tại.');
+  }
 }
 
 

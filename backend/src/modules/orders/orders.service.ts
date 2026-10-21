@@ -25,7 +25,7 @@ export class OrdersService {
         }
 
         // Lấy thông tin + giá thực tế của từng sản phẩm từ Database
-        const productIds = dto.items.map((item) => item.productId);
+        const productIds = [...new Set(dto.items.map((item) => item.productId))];
         const products = await this.prisma.product.findMany({
             where: { id: { in: productIds }, isAvailable: true },
             include: { prices: true },
@@ -35,12 +35,16 @@ export class OrdersService {
             throw new BadRequestException('Một số sản phẩm không tồn tại hoặc đã ngừng kinh doanh');
         }
 
-        // Kiểm tra tồn kho đủ số lượng không
+        // Tồn kho dùng chung cho mọi size/topping của cùng một sản phẩm.
+        const requestedQuantities = new Map<string, number>();
         for (const item of dto.items) {
-            const product = products.find((p) => p.id === item.productId);
-            if (product!.stock < item.qty) {
+            requestedQuantities.set(item.productId, (requestedQuantities.get(item.productId) ?? 0) + item.qty);
+        }
+        for (const product of products) {
+            const requestedQuantity = requestedQuantities.get(product.id)!;
+            if (product.stock < requestedQuantity) {
                 throw new BadRequestException(
-                    `Sản phẩm "${product!.name}" chỉ còn ${product!.stock} phần, không đủ ${item.qty} phần yêu cầu`,
+                    `Sản phẩm "${product.name}" chỉ còn ${product.stock} phần, không đủ ${requestedQuantity} phần yêu cầu`,
                 );
             }
         }

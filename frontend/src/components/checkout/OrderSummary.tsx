@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import Link from 'next/link';
 import { formatVND } from '@/lib/utils';
+import { formatCartToppings, getCartItemKey, getCartLineTotal } from '@/lib/cart';
 import type { CartItem } from '@/types';
 import type { AppliedPromo } from '@/lib/voucher';
-import { calculateVoucherDiscount } from '@/lib/voucher';
 
 interface OrderSummaryProps {
   items: CartItem[];
@@ -38,33 +38,13 @@ export function OrderSummary({
   onRenew,
   onReturnToCart,
   appliedPromo,
-  onApplyPromo,
+  onApplyPromo: _onApplyPromo,
   onRemovePromo,
 }: OrderSummaryProps) {
-  const [voucherInput, setVoucherInput] = useState('');
-  const [voucherError, setVoucherError] = useState<string | null>(null);
-
   const durationLabel = durationSeconds >= 60 ? `${Math.floor(durationSeconds / 60)} phút` : `${durationSeconds} giây`;
   const triggerCheckout = onCheckout || onPayment;
   const totalItemsCount = items.reduce((s, i) => s + (Number(i.quantity) || 1), 0);
-  const itemsSubtotal = propSubtotal ?? items.reduce((sum, item) => sum + (item.lineTotal ?? 0), 0);
-
-  const handleApplyVoucher = () => {
-    setVoucherError(null);
-    const result = calculateVoucherDiscount(voucherInput, itemsSubtotal);
-    if (!result.valid) {
-      setVoucherError(result.message);
-      return;
-    }
-    if (onApplyPromo) {
-      onApplyPromo({
-        code: voucherInput.trim().toUpperCase(),
-        discount: result.discount,
-        description: result.description,
-      });
-    }
-    setVoucherInput('');
-  };
+  const itemsSubtotal = propSubtotal ?? items.reduce((sum, item) => sum + getCartLineTotal(item), 0);
 
   return (
     <div className="rounded-2xl bg-white p-6 shadow-sm border border-emerald-900/10">
@@ -74,24 +54,24 @@ export function OrderSummary({
 
       {/* Danh sách món tóm tắt */}
       <div className="divide-y divide-gray-100 max-h-60 overflow-y-auto pr-1">
-        {items.map((item, idx) => (
-          <div key={idx} className="py-2.5 flex items-start justify-between text-xs">
+        {items.map((item) => (
+          <div key={getCartItemKey(item)} className="py-2.5 flex items-start justify-between text-xs">
             <div>
               <span className="font-bold text-[#1E3932]">
                 {item.quantity}x {item.name}
               </span>
               <p className="text-gray-500 mt-0.5">
-                Size {item.size} {item.toppings && item.toppings.length > 0 ? `• ${item.toppings.map((t) => t.name).join(', ')}` : ''}
+                Size {item.size} {item.toppings && item.toppings.length > 0 ? `• ${formatCartToppings(item.toppings)}` : ''}
               </p>
             </div>
             <span className="font-semibold text-[#1E3932]">
-              {formatVND(item.lineTotal ?? 0)}
+              {formatVND(getCartLineTotal(item))}
             </span>
           </div>
         ))}
       </div>
 
-      {/* Khối Áp dụng Voucher tại Checkout */}
+      {/* Khối Hiển thị Voucher tại Checkout (Chỉ hiển thị, không cho nhập) */}
       {appliedPromo ? (
         <div className="mt-4 flex items-center justify-between rounded-xl bg-emerald-50/90 border border-emerald-200 px-3.5 py-2.5 text-xs text-emerald-900">
           <div>
@@ -106,45 +86,29 @@ export function OrderSummary({
               {appliedPromo.description}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onRemovePromo}
-            className="text-xs text-red-500 hover:text-red-700 hover:underline font-semibold ml-2"
-          >
-            Bỏ mã
-          </button>
-        </div>
-      ) : (
-        <div className="mt-4">
-          <div className="flex gap-2">
-            <input
-              type="text"
-              placeholder="Nhập mã ưu đãi của bạn"
-              value={voucherInput}
-              onChange={(e) => {
-                setVoucherInput(e.target.value.toUpperCase());
-                if (voucherError) setVoucherError(null);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleApplyVoucher();
-              }}
-              className={`flex-1 rounded-xl border p-2 text-xs uppercase outline-none transition-colors ${
-                voucherError
-                  ? 'border-red-400 bg-red-50/40 focus:border-red-500'
-                  : 'border-gray-200 bg-[#FAF6EE] focus:border-primary'
-              }`}
-            />
+          {onRemovePromo && (
             <button
               type="button"
-              onClick={handleApplyVoucher}
-              className="rounded-xl bg-primary px-3.5 py-2 text-xs font-bold text-white hover:bg-primary-hover shadow-sm active:scale-95 transition-all"
+              onClick={onRemovePromo}
+              className="text-xs text-red-500 hover:text-red-700 hover:underline font-semibold ml-2"
             >
-              Áp dụng
+              Bỏ mã
             </button>
-          </div>
-          {voucherError && (
-            <p className="mt-1 text-[11px] text-red-500 font-medium">⚠️ {voucherError}</p>
           )}
+        </div>
+      ) : (
+        /* Khi chưa có mã: Hiện thông báo và link quay lại giỏ hàng */
+        <div className="mt-4 flex items-center justify-between rounded-xl bg-gray-50 border border-dashed border-gray-200 px-3.5 py-2.5 text-xs text-gray-500">
+          <div className="flex items-center gap-1.5">
+            <span>🎟️</span>
+            <span>Chưa áp dụng mã ưu đãi</span>
+          </div>
+          <Link
+            href="/cart"
+            className="text-xs text-primary font-semibold hover:underline flex items-center gap-0.5"
+          >
+            Chọn mã tại giỏ hàng &rarr;
+          </Link>
         </div>
       )}
 

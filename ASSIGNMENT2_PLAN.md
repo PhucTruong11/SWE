@@ -1,241 +1,262 @@
-# KẾ HOẠCH TRIỂN KHAI TASK 4 VÀ TASK 5 - BREWLITE
-> Môn học: Công nghệ Phần mềm (Software Engineering) - Trường Đại học Sài Gòn  
-> Đề tài: BrewLite – Requirements to Deployment (Ver 1.0)  
-> Phạm vi tài liệu: Kế hoạch hành động chi tiết cho Task 4 và Task 5  
-> Trọng tâm nghiệp vụ: Phân hệ Đặt và Thanh toán đơn hàng (Payment & Checkout)
+# BrewLite: kế hoạch hoàn thiện Assignment 2
 
----
+Cập nhật: 21/10/2026.
 
-## MỤC LỤC
-1. [Mục tiêu và Định hướng trọng tâm](#1-mục-tiêu-và-định-hướng-trọng-tâm)
-2. [Chi tiết triển khai Task 4 - Sprint 1 và Continuous Integration](#2-chi-tiết-triển-khai-task-4---sprint-1-và-continuous-integration)
-   - [Task 4.1: Thiết lập repository và quy trình làm việc](#task-41-thiết-lập-repository-và-quy-trình-làm-việc)
-   - [Task 4.2: Tổ chức và quản lý tài liệu](#task-42-tổ-chức-và-quản-lý-tài-liệu)
-   - [Task 4.3: Rà soát và hoàn thiện MVP Sprint 1](#task-43-rà-soát-và-hoàn-thiện-mvp-sprint-1)
-   - [Task 4.4: Thiết lập quy trình Continuous Integration (CI)](#task-44-thiết-lập-quy-trình-continuous-integration-ci)
-3. [Chi tiết triển khai Task 5 - Sprint 2, Docker, CI/CD và Delivery](#3-chi-tiết-triển-khai-task-5---sprint-2-docker-cicd-và-delivery)
-   - [Task 5.1: Hoàn thiện nghiệp vụ thanh toán end-to-end](#task-51-hoàn-thiện-nghiệp-vụ-thanh-toán-end-to-end)
-   - [Task 5.2: Tích hợp, kiểm thử và đóng gói Docker](#task-52-tích-hợp-kiểm-thử-và-đóng-gói-docker)
-   - [Task 5.3: Thiết lập quy trình Continuous Delivery / Deployment (CD)](#task-53-thiết-lập-quy-trình-continuous-delivery--deployment-cd)
-   - [Task 5.4: Triển khai Production và bàn giao sản phẩm](#task-54-triển-khai-production-và-bàn-giao-sản-phẩm)
-4. [Bảng tổng hợp các hạng mục cần triển khai thêm vào dự án](#4-bảng-tổng-hợp-các-hạng-mục-cần-triển-khai-thêm-vào-dự-án)
+Nguồn yêu cầu: [Assignment2-BrewLite.pdf](Assignment2-BrewLite.pdf), đặc biệt mục 6–9. Tài liệu tập trung Task 4–5 và ghi rõ các điều kiện đầu vào từ Task 1–3. Đây là kế hoạch cần thực hiện, không phải báo cáo các hạng mục đã hoàn thành.
 
----
+Hướng dẫn chạy mã hiện tại nằm trong [README.md](README.md). Kiến trúc và luồng nghiệp vụ đang có nằm trong [PROJECT_FLOW.md](PROJECT_FLOW.md).
 
-## 1. MỤC TIÊU VÀ ĐỊNH HƯỚNG TRỌNG TÂM
+![Pipeline cần hoàn thiện từ PR đến bản phát hành](docs/assets/assignment2-pipeline.svg)
 
-Tài liệu này tập trung lập kế hoạch cụ thể cho hai task thực thi kỹ thuật của Assignment 2:
-* Task 4 (Sprint 1): Chuẩn hóa kho lưu trữ, nạp tài liệu Task 1 đến Task 3 vào hệ thống quản lý phiên bản, kiểm tra MVP đầu tiên cho luồng xem menu, và xây dựng pipeline Continuous Integration (CI) tự động.
-* Task 5 (Sprint 2): Hoàn thiện toàn bộ luồng nghiệp vụ end-to-end với trọng tâm là phân hệ Thanh toán (Payment), thiết lập bộ kiểm thử tự động, đóng gói ứng dụng bằng Docker Compose, xây dựng pipeline Continuous Delivery (CD) và triển khai hệ thống lên môi trường Production có HTTPS.
+## 1. Nguyên tắc thực hiện và mốc nghiệm thu
 
-Toàn bộ các yêu cầu kiểm thử, đóng gói và triển khai được xây dựng xoay quanh luồng nghiệp vụ cốt lõi: Khách hàng chọn món -> Khởi tạo đơn hàng PENDING -> Áp dụng khuyến mãi -> Thanh toán qua cổng mô phỏng có Idempotency-Key -> Trừ tồn kho nguyên tử -> Cập nhật trạng thái PAID -> Hiển thị biên nhận và tra cứu lịch sử đơn hàng.
+Năm task được nghiệm thu theo thứ tự. Việc tái sử dụng mã nguồn Assignment 1 không thay thế tạo phẩm và lịch sử thay đổi của Task 1–3. Phần truy vết của task sau phụ thuộc tạo phẩm task trước.
 
----
+| Mốc | Điều kiện để nghiệm thu |
+| --- | --- |
+| Task 1 | Bối cảnh/phạm vi, stakeholder, SRS có FR/NFR/MoSCoW/tiêu chí kiểm chứng, use-case tổng quát và đặc tả use-case |
+| Task 2 | Activity, sequence và class diagram; có tệp nguồn và bản kết xuất, bao gồm luồng lỗi và các lớp domain tối thiểu |
+| Task 3 | Mô tả kiến trúc, ADR và deployment diagram phản ánh lựa chọn triển khai thực tế |
+| Task 4 / Sprint 1 | Repo và tài liệu được quản lý bằng Git; MVP menu có test; PR chạy lint/unit test/build và không merge khi check lỗi |
+| Task 5 / Sprint 2 | Luồng đặt/thanh toán hoàn chỉnh, unit/integration/E2E, migration, Compose, CD, production và hồ sơ bàn giao |
 
-## 2. CHI TIẾT TRIỂN KHAI TASK 4 - SPRINT 1 VÀ CONTINUOUS INTEGRATION
+Nhóm có thể chuẩn bị kỹ thuật Docker/CI sớm, nhưng không đánh dấu một task hoàn tất khi thiếu điều kiện nghiệm thu của nó.
 
-### Task 4.1: Thiết lập repository và quy trình làm việc
+## 2. Điểm xuất phát của repository
 
-Mục tiêu: Đảm bảo kho mã nguồn được tổ chức chuyên nghiệp, có cơ chế quản lý phiên bản rõ ràng và đáp ứng các tiêu chuẩn kỹ thuật phần mềm.
+| Hạng mục | Đã có | Khoảng trống |
+| --- | --- | --- |
+| Mã ứng dụng | frontend, backend; menu, auth, giỏ, đơn, checkout và admin | Chưa dùng apps/web, apps/api; còn lỗi tích hợp/quyền |
+| Tài liệu | Ba tài liệu tổng quan, khung docs và SVG minh họa | docs/requirements, diagrams, architecture mới có khung; hai file truy vết/triển khai đang rỗng |
+| CI | Workflow PR vào main | Backend thiếu lint/test; frontend thiếu test; chưa xác minh required checks trên GitHub |
+| Unit/API test | Test state machine, test mẫu và script payment | Chưa đủ test nghiệp vụ, API với DB test và E2E trình duyệt |
+| Database | Prisma schema và seed | Chưa có migration được quản lý; .gitignore đang bỏ qua prisma/migrations |
+| Docker | Compose chạy PostgreSQL | Chưa có Dockerfile web/API và Compose đủ ba dịch vụ |
+| Vận hành | API ứng dụng cơ bản | Chưa có health endpoint kiểm tra DB, CD, production URL và rollback đã kiểm chứng |
 
-Các nội dung cần triển khai thêm vào repository:
-1. Chuẩn hóa cấu trúc thư mục:
-   * Tổ chức rõ ràng các phân vùng: thư mục mã nguồn giao diện (frontend), thư mục mã nguồn dịch vụ backend (backend), thư mục tài liệu kỹ thuật (docs), và thư mục cấu hình luồng tự động (.github/workflows).
-2. Xây dựng chiến lược phân nhánh (Branching Strategy):
-   * Nhánh main: Nhánh lưu trữ mã nguồn chính thức, được bảo vệ bằng Branch Protection Rules (chặn push trực tiếp, bắt buộc phải thông qua Pull Request và vượt qua pipeline kiểm tra tự động).
-   * Nhánh develop: Nhánh tích hợp chung của nhóm trong quá trình phát triển các Sprint.
-   * Các nhánh tính năng (feature branches): Đặt tên theo tiền tố thống nhất, ví dụ feature/payment-gateway, feature/docker-setup, chore/ci-pipeline.
-3. Quy ước thông điệp commit (Conventional Commits):
-   * Thống nhất cú pháp commit bắt buộc cho toàn bộ thành viên trong nhóm: `<type>(<scope>): <mô tả ngắn gọn>`.
-   * Các loại tiền tố quy chuẩn:
-     * feat: Thêm tính năng mới (ví dụ: feat(payment): add mock payment processor).
-     * fix: Sửa lỗi (ví dụ: fix(checkout): correct voucher discount rounding).
-     * test: Thêm hoặc chỉnh sửa kiểm thử tự động (ví dụ: test(payment): add unit tests for idempotency).
-     * docs: Cập nhật tài liệu (ví dụ: docs(traceability): update requirement mapping matrix).
-     * ci: Cấu hình liên quan đến pipeline CI/CD (ví dụ: ci: add automated test execution step).
-4. Thiết lập Issue Board và Product Backlog:
-   * Tạo GitHub Project hoặc Issue Board trên kho lưu trữ của nhóm.
-   * Phân chia rõ hai cột mốc (Milestones):
-     * Milestone Sprint 1: Thiết lập cấu trúc repo, hoàn thiện tài liệu phân tích Task 1 đến Task 3, API danh mục món uống, xây dựng pipeline CI cơ bản.
-     * Milestone Sprint 2: Hoàn thiện tính năng thanh toán, xây dựng bộ test tự động, cấu hình Docker Compose, xây dựng pipeline CD và triển khai Production.
-5. Quy định Định nghĩa hoàn thành (Definition of Done - DoD):
-   * Mã nguồn không còn lỗi linter và đáp ứng kiểm tra cú pháp TypeScript.
-   * Tính năng mới phải có kiểm thử tự động đi kèm và chạy đạt 100%.
-   * Pull Request phải được ít nhất một thành viên khác trong nhóm xem xét (review) và phê duyệt.
-   * Pipeline CI phải chạy thành công trước khi gộp vào nhánh chính.
+Trạng thái docs được đánh giá theo nội dung, không theo việc thư mục đã được tạo. Các tệp mới phải được commit/PR trước khi dùng làm minh chứng.
 
----
+## 3. Task 4: Sprint 1
 
-### Task 4.2: Tổ chức và quản lý tài liệu
+### 3.1. Task 4.1 — Chuẩn hóa repo và quy trình
 
-Mục tiêu: Đưa toàn bộ các tạo phẩm thiết kế từ Task 1 đến Task 3 vào kho mã nguồn để kiểm soát lịch sử thay đổi thông qua Git.
+Chuyển ứng dụng theo cấu trúc trong đề:
 
-Cấu trúc thư mục tài liệu cần tạo mới trong repository:
-* docs/requirements/: Chứa tài liệu bối cảnh phạm vi (context-and-scope.md) và tài liệu đặc tả yêu cầu rút gọn (srs.md).
-* docs/diagrams/: Chứa toàn bộ sơ đồ Activity, Sequence, Class, Deployment ở cả hai định dạng: tệp mã nguồn (PlantUML hoặc Mermaid) và tệp hình ảnh xuất ra (SVG hoặc PNG).
-* docs/architecture/: Chứa tài liệu mô tả kiến trúc tổng thể (system-architecture.md) và thư mục con adr/ chứa các bản ghi quyết định kiến trúc kỹ thuật.
-* docs/traceability-matrix.md: Ma trận truy vết bắt buộc liên kết giữa yêu cầu, use-case, sơ đồ, API và mã kiểm thử.
-* docs/deployment.md: Tài liệu đặc tả kiến trúc triển khai thực tế và quy trình vận hành.
+~~~text
+brewlite/
+|-- apps/
+|   |-- web/                  # Chuyển từ frontend/
+|   |-- api/                  # Chuyển từ backend/
+|-- docs/
+|   |-- requirements/
+|   |-- diagrams/
+|   |-- architecture/
+|   |   |-- adr/
+|   |-- assets/               # Minh họa cho tài liệu tổng quan
+|   |-- traceability-matrix.md
+|   |-- deployment.md
+|-- tests/                    # Integration/E2E cấp hệ thống
+|-- .github/workflows/
+|-- docker-compose.yml
+|-- .env.example
+|-- README.md
+~~~
 
-Quy định quản lý: Mọi cập nhật liên quan đến yêu cầu hoặc thiết kế kiến trúc đều phải được thực hiện thông qua commit và Pull Request có giải trình lý do rõ ràng.
+Có thể giữ unit test cạnh mã nguồn ứng dụng. Không bắt buộc chuyển toàn bộ unit test vào tests ở gốc, và cấu trúc này không tự yêu cầu thêm công cụ monorepo/workspace.
 
----
+Công việc:
 
-### Task 4.3: Rà soát và hoàn thiện MVP Sprint 1
+- [ ] Chuyển frontend thành apps/web, backend thành apps/api, giữ lịch sử Git.
+- [ ] Cập nhật working-directory, cache-dependency-path trong CI; rà README, script, cấu hình test, đường dẫn ảnh và Docker build context.
+- [ ] Giữ các hướng dẫn chạy hiện tại hoạt động trước và sau chuyển đổi; cập nhật lại tài liệu cùng PR.
+- [ ] Đồng bộ .env.example với tên biến thực tế và tạo template riêng nếu cần; không đưa secret thật vào Git.
+- [ ] Thống nhất main là nhánh tích hợp được bảo vệ; dùng feature/fix/docs branch và PR. develop chỉ bổ sung nếu nhóm thực sự cần.
+- [ ] Tạo backlog/issue board và hai milestone Sprint 1, Sprint 2; gắn người phụ trách và tiêu chí nghiệm thu cho từng issue.
+- [ ] Ghi quy ước commit, review và Definition of Done; đồng bộ TEAM_WORKFLOW.md.
 
-Mục tiêu: Đảm bảo luồng xem danh mục sản phẩm hoạt động ổn định trên cả giao diện và API để làm nền tảng cho Sprint 2.
+**Nghiệm thu:** thành viên mới hiểu cấu trúc và chạy được dự án; công việc có issue/PR; cấu hình bảo vệ nhánh và quy trình được kiểm chứng trên GitHub.
 
-Các hạng mục cần rà soát:
-1. Phía Backend:
-   * Đảm bảo API lấy danh sách sản phẩm (GET /api/products) và API chi tiết sản phẩm (GET /api/products/:id) hoạt động chính xác.
-   * Đảm bảo tập lệnh khởi tạo dữ liệu mẫu (prisma/seed.ts) có thể tái tạo đầy đủ danh mục món uống, các kích cỡ (size) và topping kèm theo.
-2. Phía Frontend:
-   * Giao diện danh mục món uống được thiết kế theo định hướng Mobile-first, hiển thị tối ưu trên thiết bị di động và máy tính bảng.
-   * Xử lý đầy đủ ba trạng thái giao diện bắt buộc: Trạng thái đang tải dữ liệu (Loading skeleton), trạng thái danh sách rỗng (Empty state), và trạng thái xảy ra lỗi kết nối (Error banner kèm nút thử lại).
-3. Kiểm thử tối thiểu:
-   * Có ít nhất một kịch bản kiểm thử tự động xác nhận API trả về đúng cấu trúc dữ liệu của sản phẩm.
+### 3.2. Task 4.2 — Đưa tạo phẩm Task 1–3 vào docs
 
----
+| Vị trí | Nội dung cần hoàn thiện |
+| --- | --- |
+| docs/requirements/context-and-scope.md | Stakeholder, vấn đề, in/out-of-scope, giả định, ràng buộc và rủi ro |
+| docs/requirements/srs.md | FR/NFR có ID, MoSCoW, tiêu chí chấp nhận và use-case tổng quát |
+| docs/requirements/use-case-checkout.md | Actor, trigger, tiền/hậu điều kiện, luồng chính/thay thế/ngoại lệ, liên kết FR |
+| docs/diagrams/ | Activity, sequence, class và deployment; mỗi sơ đồ có nguồn cùng SVG/PNG/PDF kết xuất |
+| docs/architecture/system-architecture.md | Kiến trúc, thành phần, ưu/hạn chế và trade-off |
+| docs/architecture/adr/ | Quyết định monorepo, xác thực, giá/topping, transaction/idempotency và nền tảng deploy |
+| docs/traceability-matrix.md | FR → use-case/story → sơ đồ → code/API → test |
+| docs/deployment.md | Chỗ ghi nền tảng thực tế, cấu hình, release, migration, smoke test và rollback |
 
-### Task 4.4: Thiết lập quy trình Continuous Integration (CI)
+Tên file ngoài các vị trí bắt buộc trong đề là đề xuất tổ chức. Không tạo tài liệu rỗng rồi đánh dấu hoàn thành.
 
-Mục tiêu: Tự động hóa quy trình kiểm tra chất lượng mã nguồn mỗi khi có yêu cầu gộp nhánh (Pull Request), ngăn chặn mã nguồn lỗi lọt vào nhánh chính.
+Class diagram tối thiểu cần User, Product, Order, OrderItem, Payment, Promotion và LoyaltyTransaction. Schema hiện chưa có LoyaltyTransaction; cần quyết định hiện thực/sửa thiết kế rõ ràng, không vẽ như bảng đã tồn tại.
 
-Các nội dung cần triển khai thêm vào pipeline CI (.github/workflows/ci.yml):
-1. Bổ sung các bước kiểm tra tự động:
-   * Bước 1: Tải mã nguồn từ repository (Checkout).
-   * Bước 2: Thiết lập môi trường thực thi Node.js phiên bản 20.
-   * Bước 3: Cài đặt thư viện phụ thuộc cho cả Frontend và Backend.
-   * Bước 4: Khởi tạo Prisma Client để đồng bộ lược đồ dữ liệu.
-   * Bước 5: Kiểm tra tiêu chuẩn cú pháp và phong cách mã nguồn (Linting).
-   * Bước 6: Thực thi tự động toàn bộ test suite (Bổ sung lệnh chạy Unit Test, hiện tại pipeline chưa có bước này).
-   * Bước 7: Biên dịch kiểm tra lỗi hệ thống (Build) cho cả NestJS và Next.js.
-2. Quy định bắt buộc:
-   * Cấu hình branch protection rule trên GitHub để cấm thao tác merge nếu pipeline CI có bất kỳ bước nào thất bại.
-3. Kế hoạch chuẩn bị minh chứng nộp bài (Theo yêu cầu mục 6.4 trong đề bài):
-   * Minh chứng 1: Tạo một Pull Request hợp lệ, chụp ảnh màn hình hoặc lưu log chứng minh toàn bộ các bước kiểm tra đều đạt (màu xanh).
-   * Minh chứng 2: Cố tình tạo một thay đổi gây lỗi (ví dụ viết sai một assertion trong file kiểm thử hoặc cố tình vi phạm quy tắc linter), mở Pull Request để pipeline phát hiện lỗi và chặn không cho merge (màu đỏ). Chụp ảnh màn hình làm minh chứng.
+Các SVG ở docs/assets chỉ minh họa ba tài liệu tổng quan, không thay thế bộ sơ đồ UML bắt buộc.
 
----
+**Nghiệm thu:** tạo phẩm có nội dung thống nhất, được commit/PR kèm lý do thay đổi; có thể truy vết yêu cầu đến thiết kế và mã nguồn.
 
-## 3. CHI TIẾT TRIỂN KHAI TASK 5 - SPRINT 2, DOCKER, CI/CD VÀ DELIVERY
+### 3.3. Task 4.3 — Kiểm chứng MVP menu
 
-### Task 5.1: Hoàn thiện nghiệp vụ thanh toán end-to-end
+MVP Sprint 1 tập trung menu. Chức năng checkout sẵn có có thể tiếp tục phát triển, nhưng không thay thế việc kiểm chứng MVP này.
 
-Mục tiêu: Kết nối hoàn chỉnh toàn bộ luồng nghiệp vụ từ chọn món đến thanh toán và tra cứu đơn hàng, tập trung vào phân hệ Thanh toán.
+- [ ] GET /api/products trả danh sách và cấu trúc giá đúng.
+- [ ] GET /api/products/:id trả chi tiết; ID không tồn tại được xử lý đúng.
+- [ ] UI mobile-first có loading, empty và error có thể quan sát/kiểm thử.
+- [ ] Có dữ liệu seed hoặc fixture tái tạo được cho test menu.
+- [ ] Có test tự động cho API và component/luồng chính.
+- [ ] Hướng dẫn chạy local đúng các file, cổng và biến môi trường thực tế.
 
-Nội dung nghiệp vụ cần củng cố và hoàn thiện:
-1. Khởi tạo đơn hàng tạm tính:
-   * Nhận danh sách món, kích cỡ, topping từ giỏ hàng.
-   * Kiểm tra tồn kho tại thời điểm đặt đơn.
-   * Lưu bản ghi đơn hàng với trạng thái ban đầu là PENDING và tính tổng tiền chính xác.
-2. Xử lý thanh toán an toàn:
-   * Tiếp nhận yêu cầu thanh toán kèm mã đơn hàng, phương thức (thẻ ngân hàng, ví điện tử, tiền mặt) và mã giảm giá (voucher).
-   * Tái kiểm tra điều kiện áp dụng mã giảm giá (giá trị đơn tối thiểu, số tiền chiết khấu tối đa) để chống gian lận thay đổi dữ liệu từ phía client.
-   * Gửi thông tin sang dịch vụ thanh toán mô phỏng (Mock Payment Gateway) để xác thực giao dịch.
-   * Áp dụng cơ chế giao dịch cơ sở dữ liệu (Database Transaction): Khi thanh toán thành công, thực hiện đồng thời việc trừ số lượng sản phẩm trong kho và chuyển trạng thái đơn hàng sang PAID.
-3. Cơ chế chống thanh toán trùng lặp (Idempotency):
-   * Tiếp nhận khóa định danh duy nhất (Idempotency-Key) được sinh ra từ Frontend cho mỗi phiên thanh toán.
-   * Nếu client gửi lại cùng một khóa định danh do mạng trễ hoặc người dùng bấm nhiều lần, hệ thống nhận diện và trả về kết quả thanh toán trước đó mà không thực hiện trừ tiền hoặc trừ kho lần thứ hai.
-4. Xác nhận và lịch sử đơn hàng:
-   * Trả về thông tin biên nhận chi tiết sau khi thanh toán hoàn tất.
-   * Cập nhật danh sách đơn hàng đã mua để người dùng có thể tra cứu trạng thái trong mục Lịch sử đơn hàng.
+**Nghiệm thu:** demo được menu từ API thật; test chứng minh dữ liệu và trạng thái UI. Test “Hello World!” không đủ minh chứng nghiệp vụ menu.
 
----
+### 3.4. Task 4.4 — Hoàn thiện CI cho PR
 
-### Task 5.2: Tích hợp, kiểm thử và đóng gói Docker
+Pipeline bắt buộc cho từng ứng dụng:
 
-Mục tiêu: Đảm bảo chất lượng phần mềm qua các cấp độ kiểm thử tự động, cung cấp endpoint giám sát hệ thống, và đóng gói ứng dụng hoạt động nhất quán trên mọi môi trường qua Docker.
+~~~text
+Install → Lint → Unit Test → Build
+~~~
 
-Các hạng mục kỹ thuật cần triển khai thêm:
+| Job | Hiện tại | Cần bổ sung |
+| --- | --- | --- |
+| Backend | npm install → prisma generate → build | Lint và unit test |
+| Frontend | npm install → lint → build | Test runner, test cần thiết và lệnh test |
+| GitHub | Workflow PR vào main | Required status checks và quy tắc không merge khi check thất bại |
 
-1. Xây dựng Endpoint Health Check:
-   * Bổ sung route GET /api/health tại Backend.
-   * Mục đích: Cho phép Docker container, bộ cân bằng tải và pipeline CI/CD kiểm tra tình trạng sống của máy chủ.
-   * Nội dung phản hồi: Trạng thái tổng thể của API, thời gian hoạt động liên tục (uptime), và kết quả kiểm tra kết nối trực tiếp đến cơ sở dữ liệu PostgreSQL.
+Công việc:
 
-2. Xây dựng bộ kiểm thử tự động tập trung vào phân hệ Thanh toán:
-   * Kiểm thử đơn vị (Unit Test - checkout.service.spec.ts):
-     * Kiểm thử hàm tính toán chiết khấu voucher cố định và voucher phần trăm.
-     * Kiểm thử giới hạn mức giảm giá tối đa (maxDiscount).
-     * Kiểm thử điều kiện giá trị đơn hàng tối thiểu (minOrderValue).
-     * Kiểm thử các trường hợp ngoại lệ: mã không tồn tại, mã đã ngừng hoạt động, đơn hàng không đủ điều kiện.
-   * Kiểm thử tích hợp (Integration Test - payment.integration-spec.ts):
-     * Kiểm thử luồng gọi API khởi tạo đơn hàng POST /api/orders.
-     * Kiểm thử gọi API thanh toán POST /api/checkout với thông tin hợp lệ, kiểm tra trạng thái đơn chuyển sang PAID và tồn kho bị trừ tương ứng.
-     * Kiểm thử cơ chế Idempotency với cùng một khóa thanh toán gửi lặp.
-   * Kiểm thử luồng đầu cuối (End-to-End Test):
-     * Kịch bản tự động mô phỏng thao tác: Mở trang chủ -> Chọn sản phẩm -> Thêm vào giỏ -> Mở trang thanh toán -> Xác nhận đặt hàng -> Kiểm tra đơn hàng được ghi nhận trong cơ sở dữ liệu.
+- [ ] Dùng cài đặt theo lockfile, ưu tiên npm ci; đồng bộ Node giữa local và CI.
+- [ ] Chạy lint/test/build cho web và API; generate Prisma trước bước cần client.
+- [ ] Tách unit test khỏi integration/E2E; unit test dùng mock cho phụ thuộc bên ngoài.
+- [ ] Chạy test ở chế độ kết thúc một lần, không dùng watch trong CI.
+- [ ] Để lỗi lint/test/build trả exit code thất bại; không bỏ qua lỗi bằng continue-on-error.
+- [ ] Bật required checks trên nhánh đích để check đỏ không thể merge.
+- [ ] Lưu PR/log của một lần thành công và một lần pipeline phát hiện lỗi.
 
-3. Đóng gói Container với Docker:
-   * Xây dựng backend/Dockerfile: Áp dụng kỹ thuật Multi-stage build (stage biên dịch TypeScript và sinh Prisma Client; stage thực thi production chỉ giữ lại các thư viện cần thiết nhằm tối ưu dung lượng).
-   * Xây dựng frontend/Dockerfile: Áp dụng kỹ thuật Multi-stage build kết hợp tính năng Next.js Standalone nhằm giảm kích thước container xuống dưới mức 150MB.
-   * Xây dựng docker-compose.yml tại thư mục gốc của dự án:
-     * Dịch vụ db: Chạy PostgreSQL 16 Alpine, gắn volume lưu trữ dữ liệu bền vững, có cấu hình healthcheck kiểm tra trạng thái sẵn sàng nhận kết nối.
-     * Dịch vụ api: Chạy Backend NestJS, phụ thuộc vào trạng thái khỏe mạnh của db, tự động thực thi lệnh cập nhật lược đồ dữ liệu (prisma migrate deploy) và nạp dữ liệu mẫu (prisma db seed) trước khi khởi chạy dịch vụ.
-     * Dịch vụ web: Chạy Frontend Next.js, kết nối nội bộ đến dịch vụ api.
-   * Tiêu chí nghiệm thu: Bất kỳ ai tải mã nguồn về chỉ cần thực thi một lệnh "docker compose up --build" là toàn bộ hệ thống gồm 3 thành phần tự động khởi chạy và sử dụng được ngay.
+Script test-payment.ts hiện ghi nhiều FAIL ra console nhưng chưa bảo đảm exit code theo tổng kết quả. Không dùng script đó như bằng chứng quality gate đã chặn lỗi.
 
----
+**Nghiệm thu:** sửa lỗi có chủ đích trong PR làm pipeline đỏ và bị chặn merge; sửa lại thì pipeline xanh. Tên job trong branch rule phải khớp check thực tế.
 
-### Task 5.3: Thiết lập quy trình Continuous Delivery / Deployment (CD)
+## 4. Task 5: Sprint 2
 
-Mục tiêu: Tự động hóa toàn bộ quá trình đóng gói và phát hành phiên bản mới lên môi trường Production mỗi khi có thay đổi được phê duyệt trên nhánh chính.
+### 4.1. Task 5.1 — Hoàn thiện luồng nghiệp vụ
 
-Các nội dung cần triển khai thêm vào pipeline CD (.github/workflows/cd.yml):
-1. Điều kiện kích hoạt:
-   * Tự động chạy khi có sự kiện đẩy mã nguồn lên nhánh main hoặc khi tạo thẻ phiên bản mới (Release Tag theo chuẩn v*.*.*).
-2. Các giai đoạn thực thi trong pipeline:
-   * Giai đoạn 1 - Quality Gate: Chạy kiểm tra lint, toàn bộ unit test và build thử nghiệm để đảm bảo tính toàn vẹn của mã nguồn.
-   * Giai đoạn 2 - Đóng gói Container Image: Tự động đóng gói mã nguồn thành Docker image, gán nhãn bằng mã băm commit SHA và số hiệu phiên bản.
-   * Giai đoạn 3 - Lưu trữ Container Registry: Đẩy image đã đóng gói lên kho lưu trữ GitHub Container Registry (GHCR) hoặc Docker Hub.
-   * Giai đoạn 4 - Triển khai tự động (Deploy): Kích hoạt lệnh triển khai trên nền tảng đám mây bằng cách sử dụng Webhook hoặc Secret Deploy Hook được lưu trữ an toàn trong GitHub Secrets.
-   * Giai đoạn 5 - Thực thi Migration an toàn: Máy chủ production tự động chạy migration để cập nhật cấu trúc bảng dữ liệu trước khi dịch vụ mới bắt đầu nhận request.
-   * Giai đoạn 6 - Kiểm tra sau triển khai (Smoke Test): Pipeline gửi yêu cầu tự động đến endpoint GET /api/health của môi trường live. Nếu kết quả không đạt, gửi cảnh báo tức thì để thực hiện hoàn nguyên.
-3. Cơ chế Rollback:
-   * Xây dựng tài liệu hướng dẫn quy trình khôi phục nhanh về bản phát hành ổn định trước đó khi phiên bản mới gặp sự cố nghiêm trọng trên production.
+| Nhóm việc | Tiêu chí cần đạt |
+| --- | --- |
+| Khách và đăng nhập | Giỏ gộp đúng; đổi tài khoản không lẫn dữ liệu; API gắn đơn đúng user |
+| Quyền truy cập | Orders/Checkout có JWT và kiểm tra chủ đơn; admin có role/guard, không chỉ kiểm tra đăng nhập |
+| Sản phẩm và giỏ | Size/topping hợp lệ; tùy chọn giống nhau mới gộp; tổng số ly theo sản phẩm được kiểm soát |
+| Voucher | Một nguồn quy tắc từ backend; kiểm tra active/ngày hiệu lực/minimum/cap; thay đổi giỏ tính lại tiền |
+| Tạo đơn | Tính lại từ DB, không tin giá client; từ chối giỏ rỗng, size/topping sai hoặc sản phẩm ngừng bán |
+| Thanh toán | Ví/Thẻ mô phỏng, success/failure/retry có thể kiểm thử; không lặp tiền/kho/điểm |
+| Trạng thái và thời hạn | Chặn chuyển sai; hết hạn và gia hạn nhất quán UI/backend; thống nhất hủy đơn đã PAID |
+| Xác nhận và lịch sử | Hiển thị đúng orderId, số tiền, trạng thái và chỉ dữ liệu được cấp quyền |
 
----
+Không coi toàn bộ Task 5 chỉ là “làm payment”. Phần xác thực, giỏ, validate và quyền dữ liệu phải hoàn thiện cùng luồng.
 
-### Task 5.4: Triển khai Production và bàn giao sản phẩm
+### 4.2. Task 5.2 — Kiểm thử, dữ liệu và Docker
 
-Mục tiêu: Đưa ứng dụng lên môi trường vận hành thực tế có thể truy cập công khai, đảm bảo tính an toàn và chuẩn bị đầy đủ hồ sơ bàn giao.
+**Phạm vi kiểm thử đề xuất**
 
-Các tiêu chí bàn giao bắt buộc:
-1. Hạ tầng triển khai thực tế có chứng chỉ HTTPS:
-   * Backend API và PostgreSQL: Triển khai trên nền tảng đám mây Render (cung cấp đường dẫn HTTPS công khai cho API và kiểm tra sức khỏe). Cơ sở dữ liệu PostgreSQL được bảo vệ trong mạng nội bộ, không mở cổng public trực tiếp ra Internet.
-   * Frontend: Triển khai trên nền tảng Vercel (kết nối trực tiếp với kho mã nguồn GitHub, cấu hình biến môi trường kết nối đến Backend Render qua HTTPS).
-2. Bảo mật biến môi trường và thông tin nhạy cảm:
-   * Toàn bộ chuỗi kết nối cơ sở dữ liệu, khóa bí mật JWT, cổng thanh toán tuyệt đối không được xuất hiện trong kho mã nguồn hoặc trong log của CI/CD. Quản lý tập trung qua biến môi trường của nền tảng đám mây và GitHub Secrets.
-3. Phát hành phiên bản và tài liệu bàn giao:
-   * Tạo Release Tag (ví dụ v1.0.0) trên GitHub đính kèm tài liệu tóm tắt các tính năng phát hành (Release Notes).
-   * Cập nhật tệp README.md: Hướng dẫn chi tiết cách chạy ứng dụng ở môi trường cục bộ bằng Docker Compose, hướng dẫn chạy kiểm thử, danh sách URL production, và quy trình thực hiện rollback.
-4. Video minh chứng và Đánh giá quy trình:
-   * Ghi hình video trực tiếp luồng nghiệp vụ từ đầu đến cuối (thời lượng 3 đến 5 phút): Xem danh mục món -> Chọn món và topping -> Thêm giỏ -> Áp dụng mã giảm giá -> Thanh toán -> Xem lịch sử đơn hàng và kiểm tra số lượng tồn kho đã được cập nhật chính xác.
-   * Biên bản họp đánh giá kết quả Sprint 2 (Sprint Review) và đúc kết kinh nghiệm cải tiến quy trình kỹ thuật phần mềm của nhóm (Sprint Retrospective).
+| ID | Mức | Nội dung / kết quả mong đợi |
+| --- | --- | --- |
+| MENU-01 | API/UI | Menu, chi tiết, 404, loading/empty/error |
+| CART-01 | Unit | Gộp đúng sản phẩm/size/topping/số phần, không phụ thuộc thứ tự topping |
+| CART-02 | Unit | Tăng/xóa đúng dòng; tính tiền đúng; giỏ khách/tài khoản tách đúng |
+| PROMO-01 | Unit/API | Mã sai/hết hiệu lực, min/cap, giảm cố định/phần trăm; xóa một dòng vẫn giữ mã nếu đủ điều kiện |
+| AUTH-01 | API | Login đúng/sai, JWT thiếu/hết hạn, người A không đọc/sửa đơn người B; khách và tài khoản thường không dùng API admin |
+| ORDER-01 | Integration | Tạo đơn nhiều biến thể cùng productId; dùng giá DB; tổng lượng không vượt kho |
+| PAY-01 | Integration | Thanh toán thành công, thất bại, thử lại, đơn 0đ và đơn quá hạn |
+| PAY-02 | Integration | Gửi tuần tự/đồng thời cùng key chỉ có một tác động; key cho đơn khác bị xử lý đúng |
+| STOCK-01 | Integration | Nhiều người mua lượng tồn cuối cùng: không có stock âm hoặc bán vượt kho |
+| LOYALTY-01 | Unit/API | Chỉ cộng điểm sau PAID, một lần; chuyển trạng thái sai bị chặn |
+| E2E-01 | Trình duyệt | Menu → chọn size/topping → giỏ → login → thanh toán → xác nhận và thấy đơn trong lịch sử |
 
----
+Các ID trên là đề xuất để đưa vào ma trận truy vết, chưa phải các test đã được tạo/chạy. Task 5 yêu cầu ít nhất một E2E từ menu đến xác nhận; test HTTP endpoint gốc không thay thế E2E đó.
 
-## 4. BẢNG TỔNG HỢP CÁC HẠNG MỤC CẦN TRIỂN KHAI THÊM VÀO DỰ ÁN
+**Database và môi trường test**
 
-Dưới đây là danh sách cụ thể các tập tin và cấu hình nhóm cần tạo mới hoặc bổ sung vào dự án để hoàn thành trọn vẹn Task 4 và Task 5:
+- [ ] Dùng database test riêng, fixture riêng và cơ chế dọn dữ liệu; không trỏ integration test vào dữ liệu dùng thật.
+- [ ] Bỏ quy tắc ignore prisma/migrations; tạo và commit migration có thể tái tạo database mới.
+- [ ] Nếu DB local đã có dữ liệu, thống nhất baseline trước; không reset DB để tạo lịch sử migration.
+- [ ] Dùng migrate dev khi phát triển, migrate deploy khi CI/deploy chạy migration đã được duyệt.
+- [ ] Tách seed/fixture test khỏi dữ liệu production; seed hiện xóa dữ liệu, không gắn vào startup.
+- [ ] Bổ sung GET /api/health và xác định hành vi khi DB không sẵn sàng.
 
-| STT | Nhóm nhiệm vụ | Tên tập tin / Thư mục | Nội dung cần thực hiện | Thuộc Task |
-| :---: | :--- | :--- | :--- | :---: |
-| 1 | Quản lý tài liệu | docs/ | Tạo thư mục docs/ và nạp đầy đủ tài liệu đặc tả, sơ đồ, ma trận truy vết từ Task 1 đến Task 3 | Task 4.2 |
-| 2 | Quy trình dự án | GitHub Projects / Issues | Khởi tạo bảng công việc và phân chia 2 Milestone cho Sprint 1 và Sprint 2 | Task 4.1 |
-| 3 | Tích hợp liên tục | .github/workflows/ci.yml | Bổ sung bước chạy kiểm thử tự động (npm test) cho Backend vào luồng kiểm tra Pull Request | Task 4.4 |
-| 4 | Minh chứng CI | Báo cáo / Ảnh chụp | Thực hiện 1 Pull Request thành công và 1 Pull Request thất bại để chụp ảnh minh chứng khả năng chặn lỗi của CI | Task 4.4 |
-| 5 | Giám sát hệ thống | backend/src/modules/health/ | Cài đặt endpoint GET /api/health kiểm tra trạng thái máy chủ và kết nối cơ sở dữ liệu | Task 5.2 |
-| 6 | Kiểm thử đơn vị | backend/src/modules/checkout/checkout.service.spec.ts | Viết Unit Test cho nghiệp vụ tính toán chiết khấu voucher, kiểm tra điều kiện áp dụng và xử lý ngoại lệ | Task 5.2 |
-| 7 | Kiểm thử tích hợp | backend/test/payment.integration-spec.ts | Viết Integration Test cho luồng tạo đơn hàng, thanh toán trừ kho và kiểm tra tính năng chống trùng lặp Idempotency | Task 5.2 |
-| 8 | Đóng gói Backend | backend/Dockerfile | Xây dựng tệp Dockerfile đa tầng (Multi-stage build) cho dịch vụ NestJS | Task 5.2 |
-| 9 | Đóng gói Frontend | frontend/Dockerfile | Xây dựng tệp Dockerfile đa tầng sử dụng chế độ Next.js Standalone tối ưu kích thước container | Task 5.2 |
-| 10 | Đóng gói hệ thống | docker-compose.yml | Xây dựng tệp Docker Compose ở thư mục gốc liên kết trọn gói 3 dịch vụ database, api, web và tự động chạy migration | Task 5.2 |
-| 11 | Triển khai tự động | .github/workflows/cd.yml | Xây dựng pipeline tự động đóng gói image, đẩy lên registry, trigger deploy lên Cloud và chạy smoke test | Task 5.3 |
-| 12 | Triển khai đám mây | Render và Vercel | Triển khai live hệ thống với URL HTTPS công khai cho cả Frontend và Backend API | Task 5.4 |
-| 13 | Tài liệu vận hành | README.md | Bổ sung hướng dẫn chạy ứng dụng bằng Docker Compose, danh sách live URL, hướng dẫn test và quy trình rollback | Task 5.4 |
-| 14 | Hồ sơ phát hành | GitHub Release v1.0.0 | Gắn nhãn phiên bản, soạn thảo Release Notes, video quay luồng nghiệp vụ và biên bản Sprint Retrospective | Task 5.4 |
+**Đóng gói và kiểm tra trên container**
 
----
-(Kế hoạch chi tiết này được lưu trực tiếp tại file ASSIGNMENT2_PLAN.md ở thư mục gốc để nhóm cùng theo dõi, phân chia công việc và thực hiện tuần tự).
+- [ ] Tạo Dockerfile và .dockerignore cho apps/web, apps/api; build có thể lặp lại từ lockfile.
+- [ ] Tạo docker-compose.yml ở gốc với web, api, db; DB có persistent volume và healthcheck.
+- [ ] API dùng db:5432 trong mạng container; browser dùng URL API mà người dùng truy cập được.
+- [ ] Phân biệt biến frontend tại thời điểm build với biến backend tại runtime.
+- [ ] Chạy migration bằng job/bước riêng có kiểm soát; không để mọi replica tự chạy seed/migration khi khởi động.
+- [ ] Test integration/E2E lại trên hệ thống đã đóng gói; kiểm tra khởi động mới, dữ liệu tồn tại sau restart và health check.
+
+Dockerfile dùng để build image, Compose tổ chức các dịch vụ. Nên làm Docker ngay khi MVP đủ chạy, không chờ “test xong toàn bộ” mới đóng gói. Bộ kiểm tra cần chạy lại trong môi trường container trước phát hành.
+
+**Nghiệm thu:** clone mới, cấu hình môi trường, chạy Compose và test được; có log chứng minh unit/API/E2E, idempotency và chống vượt kho.
+
+### 4.3. Task 5.3 — Thiết lập CD
+
+CI kiểm tra thay đổi trước merge. CD đóng gói/phát hành phiên bản đã đạt quality gate lên môi trường triển khai.
+
+~~~text
+Push vào nhánh phát hành / Tag
+  → Install, Lint, Test và Build
+  → Build Docker image
+  → Kiểm tra integration/E2E trên bản đóng gói
+  → Push image lên registry nếu nền tảng cần
+  → Migration và Deploy có kiểm soát
+  → Health check / Smoke test
+  → Ghi nhận phiên bản hoặc xử lý thất bại
+~~~
+
+Phần integration/E2E trong chuỗi trên là bố trí đề xuất để kiểm chứng bản đóng gói; yêu cầu chính của đề gồm quality gate, image/tag, deploy, migration, smoke test và rollback.
+
+Công việc:
+
+- [ ] Chọn nền tảng triển khai và registry theo quyết định của nhóm, ghi ADR và deployment diagram trước khi nghiệm thu. Chưa mặc định dùng Render, Vercel hay nhà cung cấp khác.
+- [ ] Tạo .github/workflows/cd.yml; trigger và quyền deploy được ghi rõ.
+- [ ] Tag image bằng commit SHA hoặc semantic version; lưu phiên bản đã triển khai.
+- [ ] Deploy đúng image đã kiểm tra, không build lại bản khác ở production.
+- [ ] Lưu credential/connection string/JWT secret trong hệ thống secret của CI hoặc nền tảng; không ghi vào log.
+- [ ] Backup dữ liệu và đánh giá migration tương thích trước khi thực thi.
+- [ ] Chạy smoke test web/API/health sau deploy; lỗi phải làm pipeline thất bại.
+- [ ] Ghi rõ rollback về image/release trước; rollback DB có kế hoạch riêng, không giả định đổi image sẽ hoàn tác schema.
+
+Có thể chọn Continuous Delivery với bước duyệt phát hành hoặc Continuous Deployment tự động sau gate. Phải mô tả đúng cách nhóm triển khai và có minh chứng chạy thực tế.
+
+**Nghiệm thu:** một push/tag đi qua pipeline đến bản chạy thật; có log thành công, cách nhận biết lỗi và cách khôi phục được kiểm chứng.
+
+### 4.4. Task 5.4 — Production và bàn giao
+
+- [ ] Frontend có URL HTTPS truy cập được.
+- [ ] API và health check có URL vận hành rõ ràng; database không mở public trực tiếp.
+- [ ] Secret được cấu hình đúng; JWT fallback, log OTP và dữ liệu test không đi vào production.
+- [ ] Có release/tag, release notes và phiên bản image tương ứng.
+- [ ] docs/deployment.md ghi môi trường, biến cấu hình, migrate, deploy, smoke test, backup và rollback.
+- [ ] README hướng dẫn chạy local, test, build, deploy và rollback; chỉ ghi URL đã hoạt động.
+- [ ] Có video/demo từ menu đến xác nhận đơn, Sprint Review và Sprint Retrospective.
+- [ ] Ma trận truy vết có đường dẫn đến mã nguồn, test và bằng chứng chạy.
+- [ ] Một người ngoài nhóm có thể clone, chạy theo hướng dẫn và kiểm tra URL production.
+
+**Nghiệm thu:** sản phẩm có thể truy cập qua HTTPS và hồ sơ phản ánh đúng bản phát hành. Chỉ chạy Compose trên máy cá nhân chưa đáp ứng yêu cầu production của đề.
+
+## 5. Thứ tự công việc nên thực hiện tiếp
+
+1. Hoàn thiện tạo phẩm Task 1–3 và quyết định nghiệp vụ còn thiếu; review và commit chúng.
+2. Chuẩn hóa apps/web, apps/api và cập nhật mọi đường dẫn liên quan trong cùng PR.
+3. Bổ sung test menu, unit test cần thiết và hoàn thiện CI/required checks để nghiệm thu Task 4.
+4. Sửa tích hợp auth/quyền/checkout; viết unit/API test song song với chức năng.
+5. Tạo migration, fixture test, health endpoint, Dockerfile và Compose; chạy integration/E2E trên container.
+6. Chọn môi trường production, hoàn thiện deployment diagram/ADR và triển khai CD.
+7. Release, deploy, smoke test, xác minh rollback và hoàn tất tài liệu/minh chứng bàn giao.
+
+Đây là thứ tự phụ thuộc và nghiệm thu, không cấm các thành viên chuẩn bị song song các phần độc lập. Mỗi issue cần người phụ trách và bằng chứng hoàn thành; không ấn định lịch Sprint khi nhóm chưa thống nhất ngày.
+
+## 6. Definition of Done chung
+
+Một hạng mục chỉ được đóng khi đáp ứng tiêu chí chấp nhận, được review và có bằng chứng phù hợp: mã chạy được, lint/test/build cần thiết đạt, tài liệu được cập nhật và CI không bỏ qua lỗi. Với thay đổi triển khai, phải kiểm tra trên môi trường đích và có kế hoạch khôi phục.
+
+Các lệnh/đường dẫn apps/web, apps/api trong kế hoạch chỉ áp dụng sau khi chuyển thư mục. Trong lúc repository còn cấu trúc cũ, tiếp tục chạy theo README, không sửa đường dẫn CI trước khi chuyển mã tương ứng.

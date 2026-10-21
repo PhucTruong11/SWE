@@ -4,9 +4,36 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
+// Component Nút Con mắt khai báo BÊN NGOÀI component chính (tránh lỗi ESLint)
+const EyeButton = ({ show, toggle }: { show: boolean; toggle: () => void }) => (
+  <button
+    type="button"
+    onClick={(e) => {
+      e.preventDefault();
+      toggle();
+    }}
+    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors focus:outline-none p-1 z-10"
+    aria-label={show ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+  >
+    {show ? (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+        <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+        <path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+        <line x1="2" y1="2" x2="22" y2="22" />
+      </svg>
+    ) : (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+    )}
+  </button>
+);
+
 export default function ForgotPasswordPage() {
   const router = useRouter();
-  const [step, setStep] = useState<1 | 2>(1); // Step 1: Nhập email, Step 2: Nhập OTP + Pass mới
+  const [step, setStep] = useState<1 | 2>(1);
 
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
@@ -18,35 +45,6 @@ export default function ForgotPasswordPage() {
 
   const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
-  const EyeButton = ({ show, toggle }: { show: boolean; toggle: () => void }) => (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.preventDefault();
-        toggle();
-      }}
-      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors focus:outline-none p-1 z-10"
-      aria-label={show ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
-    >
-      {show ? (
-        // Icon Mắt gạch chéo (Ẩn) - Tối giản
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
-          <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
-          <path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
-          <line x1="2" y1="2" x2="22" y2="22" />
-        </svg>
-      ) : (
-        // Icon Mắt mở (Hiện) - Tối giản
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z" />
-          <circle cx="12" cy="12" r="3" />
-        </svg>
-      )}
-    </button>
-  );
-
-  // BƯỚC 1: GỬI OTP QUÊN MẬT KHẨU (Đã thêm async)
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -56,9 +54,7 @@ export default function ForgotPasswordPage() {
       const res = await fetch(`${backendUrl}/auth/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          email: email.trim().toLowerCase() 
-        }),
+        body: JSON.stringify({ email: email.trim().toLowerCase() }),
       });
       const data = await res.json();
 
@@ -66,14 +62,14 @@ export default function ForgotPasswordPage() {
 
       setMessage({ type: 'success', text: 'Mã OTP đã được gửi đến email của bạn!' });
       setStep(2);
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message });
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Có lỗi xảy ra';
+      setMessage({ type: 'error', text: errorMsg });
     } finally {
       setLoading(false);
     }
   };
 
-  // BƯỚC 2: XÁC NHẬN OTP & ĐẶT LẠI MẬT KHẨU (Đã thêm async)
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -83,22 +79,23 @@ export default function ForgotPasswordPage() {
       const res = await fetch(`${backendUrl}/auth/reset-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          email: email.trim().toLowerCase(), 
-          otp: otp.trim(), 
-          newPassword: newPassword.trim() 
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          otp: otp.trim(),
+          newPassword: newPassword.trim(),
         }),
       });
       const data = await res.json();
 
       if (!res.ok) throw new Error(data.message || 'Đặt lại mật khẩu thất bại!');
 
-      setMessage({ type: 'success', text: 'Đặt lại mật khẩu thành công! Đang chuyển hướng sang Đăng nhập...' });
+      setMessage({ type: 'success', text: 'Đặt lại mật khẩu thành công! Đang chuyển hướng...' });
       setTimeout(() => {
         router.push('/auth/login');
       }, 2000);
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message });
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Có lỗi xảy ra';
+      setMessage({ type: 'error', text: errorMsg });
     } finally {
       setLoading(false);
     }
@@ -175,7 +172,7 @@ export default function ForgotPasswordPage() {
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="Tối thiểu 6 ký tự"
-                  className="w-full rounded-xl border border-primary/15 bg-background p-3 text-sm text-text outline-none focus:border-primary"
+                  className="w-full rounded-xl border border-primary/15 bg-background p-3 pr-10 text-sm text-text outline-none focus:border-primary"
                 />
                 <EyeButton show={showNewPass} toggle={() => setShowNewPass(!showNewPass)} />
               </div>

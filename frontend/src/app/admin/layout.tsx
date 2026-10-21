@@ -33,8 +33,9 @@ function MenuContent({
                             key={href}
                             href={href}
                             onClick={onNavigate}
-                            className={`flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-white/10 ${active ? 'bg-white/15' : ''
-                                }`}
+                            className={`flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-white/10 ${
+                                active ? 'bg-white/15' : ''
+                            }`}
                         >
                             <Icon size={18} />
                             <span>{label}</span>
@@ -73,22 +74,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const { user, loading, logout } = useAuth();
     const [drawerOpen, setDrawerOpen] = useState(false);
 
+    // Lấy role bằng cách kiểm tra ép kiểu an toàn (tránh dùng `any`)
+    const userRole = String((user as { role?: string } | null)?.role || '').toUpperCase();
+
     // KIỂM TRA PHÂN QUYỀN VÀO TRANG ADMIN
     useEffect(() => {
         if (!loading) {
             if (!user) {
                 router.push('/auth/login?redirect=/admin');
-            } else {
-                const userRole = String((user as any)?.role || '').toUpperCase();
-                if (userRole !== 'ADMIN') {
-                    router.replace('/');
-                }
+            } else if (userRole !== 'ADMIN') {
+                router.replace('/');
             }
         }
-    }, [loading, user, router]);
-
-    // Kiểm tra hiển thị
-    const userRole = String((user as any)?.role || '').toUpperCase();
+    }, [loading, user, userRole, router]);
 
     if (loading || !user || userRole !== 'ADMIN') {
         return (
@@ -146,8 +144,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 />
             )}
             <aside
-                className={`fixed right-0 top-0 z-50 flex h-full w-72 flex-col bg-primary text-white transition-transform duration-300 lg:hidden ${drawerOpen ? 'translate-x-0' : 'translate-x-full'
-                    }`}
+                className={`fixed right-0 top-0 z-50 flex h-full w-72 flex-col bg-primary text-white transition-transform duration-300 lg:hidden ${
+                    drawerOpen ? 'translate-x-0' : 'translate-x-full'
+                }`}
             >
                 <div className="flex items-center justify-between border-b border-white/15 p-4">
                     <p className="truncate text-sm font-semibold">{user.email}</p>

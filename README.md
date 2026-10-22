@@ -10,7 +10,7 @@ Sơ đồ công nghệ thể hiện các thành phần đang dùng và đường
 
 ## 1. Hiện trạng dự án
 
-Cập nhật theo mã nguồn ngày 21/10/2026. “Đã có” nghĩa là đã có mã nguồn hoặc cấu hình, không đồng nghĩa đã nghiệm thu đầy đủ.
+Cập nhật theo mã nguồn ngày 22/10/2026. “Đã có” nghĩa là đã có mã nguồn hoặc cấu hình, không đồng nghĩa đã nghiệm thu đầy đủ.
 
 | Hạng mục | Hiện trạng |
 | --- | --- |
@@ -21,7 +21,7 @@ Cập nhật theo mã nguồn ngày 21/10/2026. “Đã có” nghĩa là đã c
 | Admin | Đã có quản lý đơn, kho và khuyến mãi; chưa hoàn thiện phân quyền theo vai trò |
 | Kiểm thử | Có unit test trạng thái đơn và các test mẫu; chưa đủ integration/E2E theo Assignment 2 |
 | CI | Có workflow cho PR vào main; thiếu test ở cả hai ứng dụng và lint backend |
-| Docker | Compose hiện tại chỉ chạy PostgreSQL |
+| Docker | Đã có Dockerfile cho web/API và hai file Compose ghép thành web/API/PostgreSQL; build và chạy local đã kiểm tra |
 | Production/CD | Chưa có cấu hình CD và URL production được xác nhận trong tài liệu |
 | Tài liệu Assignment 2 | Đã tạo khung docs; nội dung Task 1–3, truy vết và vận hành cần bổ sung |
 
@@ -35,7 +35,7 @@ Sơ đồ thể hiện luồng đang có, gồm nhánh khách chưa đăng nhậ
 
 | Thành phần | Công nghệ trong repository |
 | --- | --- |
-| Frontend | Next.js 16.3.5, React 19, TypeScript, Tailwind CSS 4 |
+| Frontend | Next.js 16.4.2, React 19, TypeScript, Tailwind CSS 4 |
 | Trạng thái giao diện | Zustand cho giỏ hàng; TanStack Query cho dữ liệu API |
 | Backend | NestJS 12, TypeScript, Prisma 6 |
 | Xác thực và validate | Passport JWT, cookie HttpOnly, bcrypt, class-validator |
@@ -50,13 +50,17 @@ Các lệnh trong tài liệu sử dụng cấu trúc đang có, chưa giả đ�
 ~~~text
 brewlite/
 |-- frontend/                 # Next.js, mặc định cổng 3000
+|   |-- Dockerfile            # Build image web
 |-- backend/
+|   |-- Dockerfile            # Build image API
 |   |-- src/                  # NestJS, mặc định cổng 3001
 |   |-- prisma/               # Schema và seed
 |   |-- test/                 # Test HTTP mẫu
 |   |-- scripts/              # Script kiểm tra thanh toán
 |-- docker/
 |   |-- docker-compose.dev.yml
+|   |-- docker-compose.app.yml # API và web; ghép với file DB
+|   |-- README.md             # Build, vận hành và kiểm tra Docker
 |-- docs/
 |   |-- assets/               # SVG minh họa cho ba tài liệu tổng quan
 |   |-- requirements/         # Cần bổ sung nội dung Task 1
@@ -78,7 +82,7 @@ Assignment 2 yêu cầu apps/web, apps/api, docs và Compose chạy đủ ba d�
 
 ### 4.1. Chuẩn bị
 
-- Node.js 20.19 trở lên, npm 10 trở lên và Git. Nhóm cần dùng phiên bản Node thống nhất với CI.
+- Node.js 22 và npm 10 (theo hai Dockerfile), cùng Git. Khi chạy trực tiếp trên máy, dùng phiên bản Node tương thích với dependency hiện tại.
 - Docker Desktop đang chạy, có Docker Compose.
 - Cổng 3000, 3001 và 5433 chưa bị ứng dụng khác sử dụng.
 - Kết nối mạng để cài package; frontend hiện dùng next/font để tải Geist từ Google khi build.
@@ -113,14 +117,36 @@ Code hiện đọc backend/.env và frontend/.env.local riêng. Repository chưa
 
 ### 4.3. Khởi động PostgreSQL
 
-Tại thư mục gốc:
+Các lệnh dưới đây dành cho PowerShell trên máy hiện tại. Khi clone ở vị trí khác, thay đường dẫn trong `Set-Location`.
+
+Kiểm tra BrewLite DB:
 
 ~~~powershell
-docker compose -f docker/docker-compose.dev.yml up -d
-docker compose -f docker/docker-compose.dev.yml ps
+Set-Location 'D:\Dev\Subject_Uni\SWE\brewlite'
+docker compose -f .\docker\docker-compose.dev.yml ps
 ~~~
 
-Compose ánh xạ localhost:5433 đến cổng 5432 bên trong container. Dữ liệu được giữ trong volume brewlite_pgdata.
+Tắt BrewLite DB khi không sử dụng:
+
+~~~powershell
+Set-Location 'D:\Dev\Subject_Uni\SWE\brewlite'
+docker compose -f .\docker\docker-compose.dev.yml stop db
+~~~
+
+Bật BrewLite DB:
+
+~~~powershell
+Set-Location 'D:\Dev\Subject_Uni\SWE\brewlite'
+docker compose -f .\docker\docker-compose.dev.yml up -d db
+~~~
+
+Compose ánh xạ localhost:5433 đến cổng 5432 bên trong container. Dữ liệu được giữ trong volume `docker_brewlite_pgdata`.
+
+`stop db` giữ container và dữ liệu; `up -d db` bật lại hoặc tạo container nếu chưa có. Nếu cần xem cả container đã dừng, thêm `-a` vào lệnh `ps`. Backend cần DB đang chạy để đăng nhập, tải menu và xử lý đơn.
+
+PostgreSQL dev có trần 512 MiB RAM, 0,5 CPU, tối đa 256 PID và log rotation 10 MB × 3. Cùng volume này được dùng khi ghép thêm frontend/backend vào Compose. Kiểm tra bằng `docker stats brewlite-db`; không chạy `down -v` nếu cần giữ dữ liệu.
+
+Trên máy dùng chung Docker Desktop với Airflow LaplapTech, database này và dashboard LaplapTech đều là service tùy chọn trong ngân sách 8 GiB. Khi cần mở dashboard, dừng database BrewLite sau khi backend đã ngắt kết nối; khi làm BrewLite, giữ dashboard tắt. Kiểm tra ngân sách bằng `D:/Dev/Project/airflow-platform/check_resources.py` nếu có platform local này.
 
 ### 4.4. Cài backend và chuẩn bị database
 
@@ -165,7 +191,40 @@ npm run dev
 
 Ứng dụng: [http://localhost:3000](http://localhost:3000).
 
-Hiện web và API chạy bằng Node trên máy; Docker chỉ chạy database. Chưa có Dockerfile cho hai ứng dụng và chưa có docker-compose.yml chạy toàn hệ thống.
+Nếu chạy web và API trực tiếp bằng Node, chỉ dùng Compose cho DB như phần 4.3. Không bật đồng thời container web/API vì sẽ tranh cổng 3000/3001.
+
+### 4.6. Chạy toàn bộ hệ thống bằng Docker Compose
+
+Sau khi thay đổi đã được commit, push và merge vào `main`, mỗi thành viên chạy `git switch main` rồi `git pull origin main` trong repository của mình. Docker image và dữ liệu DB không được chia sẻ qua Git, nên mỗi máy tự build image và chuẩn bị DB. Tạo `backend/.env` theo phần 4.2, bật Docker Desktop và dừng web/API đang chạy trực tiếp bằng Node.
+
+Mở PowerShell **tại thư mục gốc `brewlite`** (thư mục chứa `frontend`, `backend`, `docker`), rồi chạy đúng thứ tự sau. Các lệnh này trùng với phần 1–2 của [hướng dẫn Docker](docker/README.md):
+
+~~~powershell
+$brewCompose = @('-f', '.\docker\docker-compose.dev.yml', '-f', '.\docker\docker-compose.app.yml')
+docker compose @brewCompose config --quiet
+docker compose @brewCompose config --services
+docker compose @brewCompose build api
+docker compose @brewCompose build web
+docker compose @brewCompose up -d --wait db
+~~~
+
+**Chỉ trên DB mới** (lần đầu chạy trên máy đó), tạo bảng và nạp dữ liệu mẫu:
+
+~~~powershell
+docker compose @brewCompose run --rm --no-deps api npx prisma db push
+docker compose @brewCompose run --rm --no-deps api npx prisma db seed
+~~~
+
+`seed` xóa dữ liệu cũ; bỏ qua cả hai lệnh này khi DB đã có schema và dữ liệu cần giữ. Cuối cùng, bật đủ ba dịch vụ:
+
+~~~powershell
+docker compose @brewCompose up -d --wait
+docker compose @brewCompose ps
+~~~
+
+Compose đặt `DATABASE_URL` nội bộ là `db:5432`; frontend dùng `/api` và Next.js chuyển tiếp đến `api:3001`. Truy cập [http://localhost:3000](http://localhost:3000) và kiểm tra [menu qua proxy](http://localhost:3000/api/products). Sau các lần pull code tiếp theo, build lại image có code thay đổi rồi chạy `docker compose @brewCompose up -d --wait`; không seed lại.
+
+Đã xác nhận build image API và khởi động cả ba dịch vụ ở local ngày 22/10/2026. Các lệnh build lại từng image, xem log, dừng/bật và xử lý lỗi thường gặp nằm trong [docker/README.md](docker/README.md).
 
 ## 5. Lệnh kiểm tra đang có
 
@@ -193,9 +252,9 @@ Nếu lint đọc cả output .next-e2e/coverage, cần chuẩn hóa ignore ho�
 - Backend: install, generate Prisma client, build.
 - Frontend: install, lint, build.
 
-Task 4 còn yêu cầu unit test cho cả hai ứng dụng, lint backend và required checks để chặn merge khi lint/test/build thất bại. Cấu hình branch protection, issue board và lịch sử chạy trên GitHub cần được xác minh riêng.
+Task 4 còn yêu cầu unit test cho cả hai ứng dụng, lint backend và required checks để chặn merge khi lint/test/build thất bại. Workflow hiện dùng Node 22 và `npm ci`, cùng phiên bản Node chính và cách cài dependency với Dockerfile. Cấu hình branch protection, issue board và lịch sử chạy trên GitHub cần được xác minh riêng.
 
-Task 5 sẽ bổ sung Dockerfile, Compose web/API/DB, migration, health check, integration/E2E và CD. Nên đóng gói sớm, kiểm thử lại trên container, rồi phát hành khi các kiểm tra bắt buộc đạt. Sau deploy vẫn phải chạy smoke test.
+Assignment 1 đã yêu cầu Compose chạy web/API/DB ở Task 9 và test nghiệp vụ ở Task 10. Compose local đã chạy được, nhưng Assignment 2 vẫn cần migration, health endpoint chuyên dụng, integration/E2E và CD. Kiểm thử lại trên container, rồi phát hành khi các kiểm tra bắt buộc đạt. Sau deploy vẫn phải chạy smoke test.
 
 Đã có [mẫu CI](.github/workflows/ci.yml.example), [mẫu CD](.github/workflows/cd.yml.example) và [hướng dẫn bổ sung/kích hoạt](.github/CI_CD_GUIDE.md). Các file `.yml.example` chưa chạy trên GitHub Actions; hoàn thành test frontend, Docker và cấu hình triển khai theo hướng dẫn trước khi bật từng workflow.
 
@@ -210,6 +269,7 @@ Chưa có URL production hoặc hướng dẫn rollback đã được kiểm ch�
 | [Assignment2-BrewLite.pdf](Assignment2-BrewLite.pdf) | Đề Assignment 2, nguồn yêu cầu nghiệm thu |
 | [BrewLite-CongNghePhanMem.pdf](BrewLite-CongNghePhanMem.pdf) | Đề Assignment 1 |
 | [TEAM_WORKFLOW.md](TEAM_WORKFLOW.md) | Hướng dẫn phối hợp Git của nhóm; cần đồng bộ khi đổi cấu trúc |
+| [docker/README.md](docker/README.md) | Build, chạy, kiểm tra và quản lý DB/web/API bằng Compose |
 | [Schema Prisma](backend/prisma/schema.prisma) | Mô hình dữ liệu đang triển khai |
 | [docs/](docs/) | Nơi hoàn thiện tạo phẩm yêu cầu, thiết kế, truy vết và vận hành |
 

@@ -7,10 +7,12 @@ import api from '@/lib/api';
 import { getCartLineTotal, toOrderItem } from '@/lib/cart';
 import { RequireAuth } from '@/components/auth/RequireAuth';
 import {
+  ReceiptInvoice,
   CountdownTimer,
   CheckoutMethods,
   OrderSummary,
   EmptyCheckout,
+  type ReceiptData,
   type CardFormData,
   type CardFormErrors,
 } from '@/components/checkout';
@@ -58,6 +60,9 @@ function CheckoutContent() {
   // Trạng thái xử lý thanh toán
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Dữ liệu HÓA ĐƠN XUẤT SAU KHI THANH TOÁN THÀNH CÔNG
+  const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
 
   // Giữ order/key trong suốt vòng đời thao tác để retry do timeout không tạo request mới.
   const [orderId, setOrderId] = useState<string | null>(
@@ -269,6 +274,12 @@ function CheckoutContent() {
         success?: boolean;
         isDuplicate?: boolean;
         message?: string;
+        payment?: {
+          id: string;
+          createdAt?: string;
+          amount?: number;
+        };
+        pointsEarned?: number;
       };
       const orderRes = await api.get(`/orders/${currentOrderId}`);
       const confirmedOrder = orderRes.data.data;
@@ -282,13 +293,37 @@ function CheckoutContent() {
         throw new Error(paymentData.message || 'Giao dịch thanh toán không thành công.');
       }
 
-      // 4. Dọn dẹp giỏ hàng, deadline và lượt gia hạn sau khi backend xác nhận PAID
+      const now = new Date();
+      const datePrefix = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}`;
+
+      // 4. Xuất hóa đơn điện tử thực tế từ dữ liệu trả về của Server
+      setReceiptData({
+        orderId: currentOrderId,
+        invoiceNo: `BL-${datePrefix}-${currentOrderId.slice(-6).toUpperCase()}`,
+        paymentId: paymentData.payment?.id || `PAY-${currentOrderId.slice(-6).toUpperCase()}`,
+        paidAt: new Date(paymentData.payment?.createdAt || now).toLocaleString('vi-VN', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+        }),
+        items: [...items],
+        subtotal,
+        discount: discountAmount,
+        promoCode: appliedPromo?.code || confirmedOrder?.promoCode || null,
+        finalTotal: paymentData.payment?.amount ?? finalTotal,
+        pointsEarned: paymentData.pointsEarned ?? (confirmedOrder?.loyaltyPointsEarned ?? pointsEarned),
+        method,
+      });
+
+      // 5. Dọn dẹp giỏ hàng, deadline và lượt gia hạn sau khi backend xác nhận PAID
       if (typeof window !== 'undefined') {
         localStorage.removeItem(CHECKOUT_DEADLINE_KEY);
         localStorage.removeItem(CHECKOUT_RENEW_COUNT_KEY);
       }
       clearCart();
-      router.push(`/orders/${currentOrderId}?confirmed=1`);
     } catch (err: unknown) {
       let message = 'Có lỗi xảy ra trong quá trình thanh toán đơn hàng. Vui lòng thử lại!';
       if (
@@ -327,6 +362,21 @@ function CheckoutContent() {
           </svg>
           Đang tải thông tin đơn hàng...
         </div>
+      </main>
+    );
+  }
+
+  // 1. NẾU ĐÃ THANH TOÁN THÀNH CÔNG → HIỂN THỊ HÓA ĐƠN ĐIỆN TỬ
+  if (receiptData) {
+    return (
+      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col items-center px-4 py-8">
+        <ReceiptInvoice
+          data={receiptData}
+          onReset={() => {
+            setReceiptData(null);
+            clearCart();
+          }}
+        />
       </main>
     );
   }

@@ -45,7 +45,7 @@ export function Header() {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 
   const hasHydrated = useHasCartHydrated();
-  const { user, loading, logout } = useAuth();
+  const { user, loading, error: authError, refetchUser, logout } = useAuth();
   const { categories } = useCategories();
   const router = useRouter();
 
@@ -259,6 +259,10 @@ export function Header() {
           {/* KHU VỰC TÀI KHOẢN KHÁCH HÀNG */}
           {loading ? (
             <div className="h-8 w-24 animate-pulse rounded-full bg-primary/10" />
+          ) : authError && !user ? (
+            <button type="button" onClick={() => void refetchUser()} className="text-sm font-semibold text-primary">
+              Kiểm tra lại phiên đăng nhập
+            </button>
           ) : user ? (
             <div ref={userMenuRef} className="relative py-2">
               <button

@@ -3,6 +3,7 @@ import {
   BadRequestException,
   ConflictException,
   NotFoundException,
+  UnauthorizedException,
   Logger,
 } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
@@ -108,17 +109,24 @@ export class CheckoutService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  // ----------------------------------------------------------
-  // applyVoucher: Áp dụng mã giảm giá cho đơn hàng PENDING
-  // ----------------------------------------------------------
-  async applyVoucher(orderId: string, promoCode: string) {
+  private async findOwnedOrder(orderId: string, userId: string) {
+    if (!userId) {
+      throw new UnauthorizedException('Vui lòng đăng nhập để thanh toán');
+    }
     const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
+      where: { id: orderId, userId },
     });
-
     if (!order) {
       throw new NotFoundException(`Không tìm thấy đơn hàng: ${orderId}`);
     }
+    return order;
+  }
+
+  // ----------------------------------------------------------
+  // applyVoucher: Áp dụng mã giảm giá cho đơn hàng PENDING
+  // ----------------------------------------------------------
+  async applyVoucher(orderId: string, promoCode: string, userId: string) {
+    const order = await this.findOwnedOrder(orderId, userId);
 
     if (order.status !== OrderStatus.PENDING) {
       throw new BadRequestException(
@@ -213,39 +221,15 @@ export class CheckoutService {
     orderId: string,
     method: PaymentMethod,
     idempotencyKey: string,
+    userId: string,
     promoCode?: string,
   ) {
-    // Nếu có truyền kèm mã giảm giá, kiểm tra xem đơn đã áp dụng mã này chưa để tránh tính lặp
-    if (promoCode && promoCode.trim()) {
-      const existingOrderForPromo = await this.prisma.order.findUnique({
-        where: { id: orderId },
-        select: { promoCode: true, discount: true },
-      });
-
-      // Chỉ gọi applyVoucher nếu mã gửi lên khác với mã đã lưu trong order
-      if (
-        !existingOrderForPromo ||
-        existingOrderForPromo.promoCode?.toUpperCase() !== promoCode.trim().toUpperCase()
-      ) {
-        await this.applyVoucher(orderId, promoCode);
-      }
+    if (!userId) {
+      throw new UnauthorizedException('Vui lòng đăng nhập để thanh toán');
     }
-    // ── Bước 1: Chống thanh toán trùng lặp (Idempotency Guard) ──
-    const existingPayment = await this.prisma.payment.findUnique({
-      where: { idempotencyKey },
-    });
-
-    if (existingPayment) {
-      return {
-        isDuplicate: true,
-        payment: existingPayment,
-        message: 'Thanh toán này đã được xử lý trước đó',
-      };
-    }
-
-    // ── Bước 2: Kiểm tra đơn hàng tồn tại & lấy chi tiết sản phẩm để trừ kho ──
+    // Xác minh chủ đơn trước khi đọc payment, áp voucher hoặc gọi gateway.
     const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
+      where: { id: orderId, userId },
       include: {
         user: true,
         items: {
@@ -253,9 +237,30 @@ export class CheckoutService {
         },
       },
     });
-
     if (!order) {
       throw new NotFoundException(`Không tìm thấy đơn hàng với id: ${orderId}`);
+    }
+
+    // ── Bước 1: Chống thanh toán trùng lặp (Idempotency Guard) ──
+    const existingPayment = await this.prisma.payment.findUnique({
+      where: { idempotencyKey },
+    });
+
+    if (existingPayment) {
+      if (existingPayment.orderId !== orderId) {
+        throw new ConflictException('Idempotency-Key đã được sử dụng cho đơn hàng khác');
+      }
+      return {
+        isDuplicate: true,
+        payment: existingPayment,
+        message: 'Thanh toán này đã được xử lý trước đó',
+      };
+    }
+
+    // Kiểm tra key trước khi thay đổi voucher của đơn hàng.
+    const cleanPromoCode = promoCode?.trim().toUpperCase();
+    if (cleanPromoCode && order.promoCode?.toUpperCase() !== cleanPromoCode) {
+      await this.applyVoucher(orderId, cleanPromoCode, userId);
     }
 
     // ── Bước 2b: Kiểm tra đơn hàng có sản phẩm hay không (Chặn đơn rỗng) ──
@@ -311,7 +316,10 @@ export class CheckoutService {
         select: { status: true, total: true, userId: true },
       });
 
-      if (!lockedOrder || !ALLOWED_STATUSES.includes(lockedOrder.status)) {
+      if (!lockedOrder || lockedOrder.userId !== userId) {
+        throw new NotFoundException(`Không tìm thấy đơn hàng với id: ${orderId}`);
+      }
+      if (!ALLOWED_STATUSES.includes(lockedOrder.status)) {
         throw new ConflictException('Đơn hàng đã được xử lý bởi một phiên giao dịch khác');
       }
 
@@ -427,7 +435,8 @@ export class CheckoutService {
   // ----------------------------------------------------------
   // getCheckoutsByOrder: Lấy lịch sử thanh toán của 1 đơn hàng
   // ----------------------------------------------------------
-  async getCheckoutsByOrder(orderId: string) {
+  async getCheckoutsByOrder(orderId: string, userId: string) {
+    await this.findOwnedOrder(orderId, userId);
     return this.prisma.payment.findMany({
       where: { orderId },
       orderBy: { createdAt: 'desc' },
@@ -437,15 +446,9 @@ export class CheckoutService {
   // ----------------------------------------------------------
   // getOrderCheckoutStatus: Lấy thông tin thanh toán & đếm ngược thời gian còn lại (GUI cần)
   // ----------------------------------------------------------
-  async getOrderCheckoutStatus(orderId: string) {
-    const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
-      include: { payments: true },
-    });
-
-    if (!order) {
-      throw new NotFoundException(`Không tìm thấy đơn hàng: ${orderId}`);
-    }
+  async getOrderCheckoutStatus(orderId: string, userId: string) {
+    const order = await this.findOwnedOrder(orderId, userId);
+    const payments = await this.prisma.payment.findMany({ where: { orderId } });
 
     const expiresAt = new Date(order.createdAt.getTime() + PAYMENT_TIMEOUT_MS);
     const remainingSeconds = Math.max(
@@ -479,7 +482,7 @@ export class CheckoutService {
       expiresAt,
       remainingSeconds,
       isExpired: remainingSeconds === 0,
-      payments: order.payments,
+      payments,
     };
   }
 

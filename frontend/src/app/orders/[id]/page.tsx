@@ -1,14 +1,18 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { isAxiosError } from 'axios';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import api from '@/lib/api';
+import { RequireAuth } from '@/components/auth/RequireAuth';
 import { CartStickyBar } from '@/components/cart/CartStickyBar';
 import { OrderStatusBadge, OrderStatusStepper } from '@/components/orders/OrderStatus';
 import { formatVND } from '@/lib/utils';
 
 import type { Order } from '@/types';
+import { useAuth } from '@/hooks/useAuth';
 
 interface OrderItem {
   id: string;
@@ -91,6 +95,7 @@ function OrderItemRow({ item }: { item: OrderItem }) {
 }
 
 function OrderDetailContent() {
+  const { user } = useAuth();
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -98,102 +103,37 @@ function OrderDetailContent() {
   const orderId = typeof params?.id === 'string' ? params.id : undefined;
   const isConfirmation = searchParams.get('confirmed') === '1';
 
-  const [order, setOrder] = useState<OrderWithItems | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const orderRequestRef = useRef(0);
-
-  const fetchOrder = useCallback(async (id: string) => {
-    const requestId = ++orderRequestRef.current;
-    try {
-      const res = await api.get<{ data: OrderWithItems }>(`/orders/${id}`);
+  const validOrderId = !!orderId && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(orderId);
+  const { data: order, isPending, error: requestError, refetch } = useQuery({
+    queryKey: ['orders', user?.id, 'detail', orderId],
+    enabled: validOrderId && !!user,
+    queryFn: async ({ signal }) => {
+      const res = await api.get<{ data: OrderWithItems }>(`/orders/${orderId}`, { signal });
       const nextOrder = res.data.data;
-      if (
-        requestId !== orderRequestRef.current ||
-        !nextOrder ||
-        nextOrder.id !== id ||
-        !isOrderStatus(nextOrder.status)
-      ) {
-        return;
+      if (!nextOrder || nextOrder.id !== orderId || !isOrderStatus(nextOrder.status)) {
+        throw new Error('Thông tin đơn hàng không hợp lệ');
       }
-      setOrder(nextOrder);
-      setError(null);
-    } catch (requestError: unknown) {
-      if (requestId !== orderRequestRef.current) return;
-      const status = (requestError as { response?: { status?: number } }).response?.status;
-      setError(
-        status === 401 || status === 403
-          ? 'Bạn không có quyền xem đơn hàng này.'
-          : status === 404
-            ? 'Không tìm thấy đơn hàng.'
-            : 'Không thể tải thông tin đơn hàng. Vui lòng thử lại.',
-      );
-    } finally {
-      if (requestId === orderRequestRef.current) setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!orderId || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(orderId)) {
-      Promise.resolve().then(() => {
-        setLoading(false);
-        setError('Mã đơn hàng không hợp lệ');
-      });
-      return;
-    }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchOrder(orderId);
-  }, [orderId, fetchOrder]);
-
-  useEffect(() => {
-    if (
-      !orderId ||
-      !order ||
-      order.id !== orderId ||
-      !ACTIVE_ORDER_STATUSES.includes(order.status)
-    ) {
-      return;
-    }
-
-    let stopped = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-
-    const pollOrder = async () => {
-      try {
-        const res = await api.get<{ data: OrderWithItems }>(`/orders/${orderId}`);
-        if (stopped) return;
-
-        const nextOrder = res.data.data;
-        if (
-          !nextOrder ||
-          nextOrder.id !== orderId ||
-          !isOrderStatus(nextOrder.status)
-        ) {
-          stopped = true;
-          return;
-        }
-
-        setOrder(nextOrder);
-        if (ACTIVE_ORDER_STATUSES.includes(nextOrder.status)) {
-          timer = setTimeout(pollOrder, 5000);
-        }
-      } catch (requestError: unknown) {
-        if (stopped) return;
-
-        // Mọi lỗi polling đều dừng im lặng, giữ nguyên dữ liệu gần nhất.
-        // Lần tải trang tiếp theo vẫn có thể lấy lại trạng thái mới từ backend.
-        void requestError;
-        stopped = true;
-      }
-    };
-
-    // Silent polling chỉ bắt đầu sau khi đã tải order hợp lệ lần đầu.
-    timer = setTimeout(pollOrder, 5000);
-    return () => {
-      stopped = true;
-      if (timer) clearTimeout(timer);
-    };
-  }, [orderId, order]);
+      return nextOrder;
+    },
+    refetchInterval: (query) => {
+      const error = query.state.error;
+      if (isAxiosError(error) && error.response && error.response.status < 500) return false;
+      const status = query.state.data?.status;
+      return !status || ACTIVE_ORDER_STATUSES.includes(status) ? 5000 : false;
+    },
+    refetchOnWindowFocus: 'always',
+    refetchOnReconnect: 'always',
+    retry: (count, error) => count < 2 && (!isAxiosError(error) || !error.response || error.response.status >= 500),
+  });
+  const loading = validOrderId && isPending;
+  const statusCode = isAxiosError(requestError) ? requestError.response?.status : undefined;
+  const error = !validOrderId
+    ? 'Mã đơn hàng không hợp lệ'
+    : statusCode === 401 || statusCode === 403
+      ? 'Bạn không có quyền xem đơn hàng này.'
+      : statusCode === 404
+        ? 'Không tìm thấy đơn hàng.'
+        : 'Không thể tải thông tin đơn hàng. Vui lòng thử lại.';
 
   const orderCode = useMemo(
     () => order?.id.slice(0, 8).toUpperCase() ?? '',
@@ -208,12 +148,17 @@ function OrderDetailContent() {
     );
   }
 
-  if (error || !order) {
+  if (!order || statusCode === 401 || statusCode === 403 || statusCode === 404) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-2 px-4 text-center">
         <p className="text-sm font-semibold text-rose-600">
           {error ?? 'Không tìm thấy đơn hàng'}
         </p>
+        {validOrderId && (
+          <button type="button" onClick={() => void refetch()} className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white">
+            Thử lại
+          </button>
+        )}
       </div>
     );
   }
@@ -317,7 +262,9 @@ export default function OrderDetailPage() {
         </div>
       }
     >
-      <OrderDetailContent />
+      <RequireAuth>
+        <OrderDetailContent />
+      </RequireAuth>
     </Suspense>
   );
 }

@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
+import { AuthProvider } from '@/components/auth/AuthProvider';
 
 export function Providers({ children }: { children: React.ReactNode }) {
     // Tạo QueryClient bên trong useState để không bị tạo lại mỗi lần re-render
@@ -17,5 +18,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
             }),
     );
 
-    return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+    return (
+        <QueryClientProvider client={queryClient}>
+            <AuthProvider>{children}</AuthProvider>
+        </QueryClientProvider>
+    );
 }

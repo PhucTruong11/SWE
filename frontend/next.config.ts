@@ -1,8 +1,12 @@
 import type { NextConfig } from 'next';
 
 // Tự động cắt bỏ '/api' hoặc dấu '/' ở cuối URL nếu có để chống lặp
-const rawApiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+const rawApiUrl =
+  process.env.API_INTERNAL_URL ??
+  process.env.NEXT_PUBLIC_API_URL ??
+  'http://localhost:3001';
 const backendBaseUrl = rawApiUrl.replace(/\/api\/?$/, '').replace(/\/$/, '');
+
 
 const nextConfig: NextConfig = {
   images: {

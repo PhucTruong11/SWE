@@ -7,6 +7,16 @@ services:
     image: postgres:16-alpine
     container_name: brewlite-db
     restart: unless-stopped
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: 0.5
+    pids_limit: 256
+    stop_grace_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       POSTGRES_USER: brewlite
       POSTGRES_PASSWORD: brewlite
@@ -23,4 +33,5 @@ services:
 
 volumes:
   brewlite_pgdata:
+    name: docker_brewlite_pgdata
     driver: local

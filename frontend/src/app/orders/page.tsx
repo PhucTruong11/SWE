@@ -1,8 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { isAxiosError } from 'axios';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
+import { RequireAuth } from '@/components/auth/RequireAuth';
 import { CartStickyBar } from '@/components/cart/CartStickyBar';
 import {
   OrderStatusBadge,
@@ -10,6 +12,7 @@ import {
 } from '@/components/orders/OrderStatus';
 import { formatVND } from '@/lib/utils';
 import type { Order } from '@/types';
+import { useAuth } from '@/hooks/useAuth';
 
 const ACTIVE_STATUSES: Order['status'][] = ['PENDING', 'PAID', 'PREPARING', 'READY'];
 const PAST_STATUSES: Order['status'][] = [
@@ -39,34 +42,28 @@ function getItemCount(order: Order): number {
   return order.items.reduce((sum, item) => sum + item.qty, 0);
 }
 
-export default function OrderHistoryPage() {
+function OrderHistoryContent() {
   const router = useRouter();
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchOrders = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await api.get<{ data: Order[] }>('/orders/me');
-      setOrders(Array.isArray(res.data.data) ? res.data.data : []);
-    } catch (requestError: unknown) {
-      const status = (requestError as { response?: { status?: number } }).response?.status;
-      setError(
-        status === 401 || status === 403
-          ? 'Bạn cần đăng nhập để xem lịch sử đơn hàng.'
-          : 'Không thể tải lịch sử đơn hàng.',
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchOrders();
-  }, [fetchOrders]);
+  const { user } = useAuth();
+  const { data: orders, isPending: loading, error: requestError, refetch } = useQuery({
+    queryKey: ['orders', user?.id, 'me'],
+    enabled: !!user,
+    queryFn: async ({ signal }) => {
+      const res = await api.get<{ data: Order[] }>('/orders/me', { signal });
+      return Array.isArray(res.data.data) ? res.data.data : [];
+    },
+    refetchInterval: (query) => {
+      const error = query.state.error;
+      return isAxiosError(error) && error.response && error.response.status < 500 ? false : 5000;
+    },
+    refetchOnWindowFocus: 'always',
+    refetchOnReconnect: 'always',
+    retry: (count, error) => count < 2 && (!isAxiosError(error) || !error.response || error.response.status >= 500),
+  });
+  const statusCode = isAxiosError(requestError) ? requestError.response?.status : undefined;
+  const error = statusCode === 401 || statusCode === 403
+    ? 'Bạn cần đăng nhập để xem lịch sử đơn hàng.'
+    : 'Không thể tải lịch sử đơn hàng.';
 
   if (loading) {
     return (
@@ -76,7 +73,7 @@ export default function OrderHistoryPage() {
     );
   }
 
-  if (error) {
+  if (!orders || statusCode === 401 || statusCode === 403) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-2 px-4 text-center">
         <p className="text-sm font-semibold text-rose-600">
@@ -84,7 +81,7 @@ export default function OrderHistoryPage() {
         </p>
         <button
           type="button"
-          onClick={fetchOrders}
+          onClick={() => void refetch()}
           className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white"
         >
           Thử lại
@@ -200,5 +197,13 @@ export default function OrderHistoryPage() {
 
       <CartStickyBar />
     </main>
+  );
+}
+
+export default function OrderHistoryPage() {
+  return (
+    <RequireAuth>
+      <OrderHistoryContent />
+    </RequireAuth>
   );
 }

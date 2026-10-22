@@ -13,10 +13,14 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     const requestUrl = error.config?.url?.split('?')[0];
+    const authFormEndpoints = [
+      '/auth/me', '/auth/login', '/auth/register', '/auth/verify-email',
+      '/auth/resend-verification', '/auth/forgot-password', '/auth/reset-password',
+    ];
     if (
       error.response?.status === 401 &&
       typeof window !== 'undefined' &&
-      !requestUrl?.endsWith('/auth/me')
+      !authFormEndpoints.some((endpoint) => requestUrl?.endsWith(endpoint))
     ) {
       window.dispatchEvent(new Event('unauthorized'));
     }

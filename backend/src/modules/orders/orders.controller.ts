@@ -4,16 +4,17 @@ import {
   Get,
   Param,
   Body,
-  Request,
+  UseGuards,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
 import { OrdersService } from './orders.service.js';
 import { CreateOrderDto } from './dto/create-order.dto.js';
-
-const GUEST_USER_ID = 'guest-user-placeholder';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
+import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 
 @Controller('orders')
+@UseGuards(JwtAuthGuard)
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) { }
 
@@ -22,12 +23,9 @@ export class OrdersController {
   @HttpCode(HttpStatus.CREATED)
   async createOrder(
     @Body() createOrderDto: CreateOrderDto,
-    // Khi Auth xong: thay 2 dòng dưới bằng: @CurrentUser() user: any
-    @Request() req: any,
+    @CurrentUser() user: { id: string },
   ) {
-    // Lấy userId từ JWT token (khi Auth xong) hoặc dùng tạm GUEST_USER_ID
-    const userId = req.user?.id ?? GUEST_USER_ID;
-    const order = await this.ordersService.create(createOrderDto, userId);
+    const order = await this.ordersService.create(createOrderDto, user.id);
     return {
       message: 'Tạo đơn hàng thành công',
       data: order,
@@ -36,17 +34,15 @@ export class OrdersController {
 
   // GET /orders/me - Xem lịch sử đơn hàng của mình
   @Get('me')
-  async getMyOrders(@Request() req: any) {
-    const userId = req.user?.id ?? GUEST_USER_ID;
-    const orders = await this.ordersService.findAllByUser(userId);
+  async getMyOrders(@CurrentUser() user: { id: string }) {
+    const orders = await this.ordersService.findAllByUser(user.id);
     return { data: orders };
   }
 
   // GET /orders/:id - Xem chi tiết 1 đơn hàng
   @Get(':id')
-  async getOrderById(@Param('id') id: string, @Request() req: any) {
-    const userId = req.user?.id ?? GUEST_USER_ID;
-    const order = await this.ordersService.findOne(id, userId);
+  async getOrderById(@Param('id') id: string, @CurrentUser() user: { id: string }) {
+    const order = await this.ordersService.findOne(id, user.id);
     return { data: order };
   }
 }

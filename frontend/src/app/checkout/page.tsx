@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useCartStore, useHasCartHydrated } from '@/stores/cart.store';
 import api from '@/lib/api';
 import { getCartLineTotal, toOrderItem } from '@/lib/cart';
+import { RequireAuth } from '@/components/auth/RequireAuth';
 import {
   CountdownTimer,
   CheckoutMethods,
@@ -401,7 +402,9 @@ export default function CheckoutPage() {
         </div>
       }
     >
-      <CheckoutContent />
+      <RequireAuth>
+        <CheckoutContent />
+      </RequireAuth>
     </Suspense>
   );
 }

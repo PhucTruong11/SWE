@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateOrderDto } from './dto/create-order.dto.js';
 import { PromotionsService } from '../promotions/promotions.service.js';
@@ -12,16 +12,11 @@ export class OrdersService {
 
     // POST /orders - Tạo đơn hàng mới từ giỏ hàng Frontend
     async create(dto: CreateOrderDto, userId: string) {
+        if (!userId) {
+            throw new UnauthorizedException('Vui lòng đăng nhập để đặt hàng');
+        }
         if (!dto.items || dto.items.length === 0) {
             throw new BadRequestException('Giỏ hàng không được rỗng');
-        }
-
-        // Tự động gán user hợp lệ trong DB nếu là khách chưa đăng nhập (guest)
-        if (userId === 'guest-user-placeholder') {
-            const defaultUser = await this.prisma.user.findFirst();
-            if (defaultUser) {
-                userId = defaultUser.id;
-            }
         }
 
         // Lấy thông tin + giá thực tế của từng sản phẩm từ Database
@@ -140,16 +135,12 @@ export class OrdersService {
 
     // GET /orders/me - Lấy danh sách đơn hàng của user đang đăng nhập
     async findAllByUser(userId: string) {
-        let targetUserId = userId;
-        if (targetUserId === 'guest-user-placeholder') {
-            const defaultUser = await this.prisma.user.findFirst();
-            if (defaultUser) {
-                targetUserId = defaultUser.id;
-            }
+        if (!userId) {
+            throw new UnauthorizedException('Vui lòng đăng nhập để xem đơn hàng');
         }
 
         return this.prisma.order.findMany({
-            where: { userId: targetUserId },
+            where: { userId },
             orderBy: { createdAt: 'desc' }, // Đơn mới nhất lên đầu
             include: {
                 items: {
@@ -161,8 +152,11 @@ export class OrdersService {
 
     // GET /orders/:id - Lấy chi tiết 1 đơn hàng
     async findOne(id: string, userId: string) {
+        if (!userId) {
+            throw new UnauthorizedException('Vui lòng đăng nhập để xem đơn hàng');
+        }
         const order = await this.prisma.order.findUnique({
-            where: { id },
+            where: { id, userId },
             include: {
                 items: {
                     include: { product: { select: { name: true, imageUrl: true } } },
@@ -173,12 +167,6 @@ export class OrdersService {
 
         // Kiểm tra đơn hàng có tồn tại không
         if (!order) {
-            throw new NotFoundException(`Không tìm thấy đơn hàng #${id}`);
-        }
-
-        // Kiểm tra đơn hàng có thuộc về user này không (chống xem đơn của người khác)
-        // Nếu là khách vãng lai (guest) thì cho phép xem đơn theo link mã đơn hàng
-        if (userId !== 'guest-user-placeholder' && order.userId !== userId) {
             throw new NotFoundException(`Không tìm thấy đơn hàng #${id}`);
         }
 

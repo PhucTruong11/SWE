@@ -71,7 +71,7 @@ function MenuContent({
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const router = useRouter();
-    const { user, loading, logout } = useAuth();
+    const { user, loading, error, refetchUser, logout } = useAuth();
     const [drawerOpen, setDrawerOpen] = useState(false);
 
     // Lấy role bằng cách kiểm tra ép kiểu an toàn (tránh dùng `any`)
@@ -79,14 +79,25 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
     // KIỂM TRA PHÂN QUYỀN VÀO TRANG ADMIN
     useEffect(() => {
-        if (!loading) {
+        if (!loading && !error) {
             if (!user) {
-                router.push('/auth/login?redirect=/admin');
+                router.replace(`/auth/login?redirect=${encodeURIComponent(pathname)}`);
             } else if (userRole !== 'ADMIN') {
                 router.replace('/');
             }
         }
-    }, [loading, user, userRole, router]);
+    }, [loading, error, user, userRole, pathname, router]);
+
+    if (!loading && error && !user) {
+        return (
+            <div className="flex min-h-screen flex-col items-center justify-center gap-3 px-4 text-center">
+                <p className="text-sm text-red-600">{error}</p>
+                <button type="button" onClick={() => void refetchUser()} className="rounded-lg bg-primary px-4 py-2 font-semibold text-white">
+                    Thử lại
+                </button>
+            </div>
+        );
+    }
 
     if (loading || !user || userRole !== 'ADMIN') {
         return (

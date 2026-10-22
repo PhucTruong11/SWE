@@ -8,12 +8,16 @@ import {
   BadRequestException,
   HttpCode,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import { CheckoutService } from './checkout.service.js';
 import { CreateCheckoutDto } from './dto/create-checkout.dto.js';
 import { ApplyVoucherDto } from './dto/apply-voucher.dto.js';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
+import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 
 @Controller(['checkout', 'payments'])
+@UseGuards(JwtAuthGuard)
 export class CheckoutController {
   constructor(private readonly checkoutService: CheckoutService) {}
 
@@ -23,8 +27,8 @@ export class CheckoutController {
   // ----------------------------------------------------------
   @Post('apply-voucher')
   @HttpCode(HttpStatus.OK)
-  async applyVoucher(@Body() dto: ApplyVoucherDto) {
-    return this.checkoutService.applyVoucher(dto.orderId, dto.promoCode);
+  async applyVoucher(@Body() dto: ApplyVoucherDto, @CurrentUser() user: { id: string }) {
+    return this.checkoutService.applyVoucher(dto.orderId, dto.promoCode, user.id);
   }
 
   // ----------------------------------------------------------
@@ -36,6 +40,7 @@ export class CheckoutController {
   async processCheckout(
     @Body() dto: CreateCheckoutDto,
     @Headers('idempotency-key') idempotencyKey: string,
+    @CurrentUser() user: { id: string },
   ) {
     // Bắt buộc phải có Idempotency-Key để chống thanh toán trùng lặp
     if (!idempotencyKey) {
@@ -49,6 +54,7 @@ export class CheckoutController {
       dto.orderId,
       dto.method,
       idempotencyKey,
+      user.id,
       dto.promoCode,
     );
   }
@@ -58,8 +64,8 @@ export class CheckoutController {
   // Lấy lịch sử thanh toán của 1 đơn hàng
   // ----------------------------------------------------------
   @Get('order/:orderId')
-  async getCheckoutsByOrder(@Param('orderId') orderId: string) {
-    return this.checkoutService.getCheckoutsByOrder(orderId);
+  async getCheckoutsByOrder(@Param('orderId') orderId: string, @CurrentUser() user: { id: string }) {
+    return this.checkoutService.getCheckoutsByOrder(orderId, user.id);
   }
 
   // ----------------------------------------------------------
@@ -67,7 +73,7 @@ export class CheckoutController {
   // Lấy trạng thái đơn hàng & đếm ngược số giây còn lại trước khi hết hạn (cho GUI)
   // ----------------------------------------------------------
   @Get('status/:orderId')
-  async getOrderCheckoutStatus(@Param('orderId') orderId: string) {
-    return this.checkoutService.getOrderCheckoutStatus(orderId);
+  async getOrderCheckoutStatus(@Param('orderId') orderId: string, @CurrentUser() user: { id: string }) {
+    return this.checkoutService.getOrderCheckoutStatus(orderId, user.id);
   }
 }

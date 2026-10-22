@@ -41,6 +41,7 @@ body {
 @media print {
 
   header,
+  footer,
   nav,
   button,
   a,

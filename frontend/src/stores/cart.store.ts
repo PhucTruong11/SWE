@@ -27,6 +27,8 @@ const getCartKey = (userId: string | null) => {
   return userId ? `brewlite_cart_user_${userId}` : `brewlite_cart_guest`;
 };
 
+const getPromoKey = (userId: string | null) => `${getCartKey(userId)}_promo`;
+
 // Chỉ gộp khi cùng sản phẩm, size và số lượng từng loại topping.
 const mergeCartItems = (existingItems: CartItem[], guestItems: CartItem[]): CartItem[] => {
   const merged: CartItem[] = [];
@@ -73,6 +75,26 @@ const readCartItems = (key: string): CartItem[] => {
   }
 };
 
+const readSavedPromo = (userId: string | null): AppliedPromo | null => {
+  try {
+    const saved = localStorage.getItem(getPromoKey(userId));
+    const promo = saved ? JSON.parse(saved) as AppliedPromo | null : null;
+    const rules = promo?.rules;
+    if (!promo || typeof promo.code !== 'string' || !promo.code.trim() ||
+      typeof promo.description !== 'string' || !rules ||
+      !['PERCENTAGE', 'FIXED_AMOUNT'].includes(rules.discountType) ||
+      !Number.isFinite(rules.discountValue) || rules.discountValue < 0 ||
+      (rules.discountType === 'PERCENTAGE' && rules.discountValue > 100) ||
+      !Number.isFinite(rules.minOrderValue) || rules.minOrderValue < 0 ||
+      (rules.maxDiscount != null && (!Number.isFinite(rules.maxDiscount) || rules.maxDiscount < 0))) {
+      return null;
+    }
+    return promo;
+  } catch {
+    return null;
+  }
+};
+
 const resetCheckoutTimer = () => {
   if (typeof window === 'undefined') return;
   localStorage.removeItem('brewlite_checkout_deadline');
@@ -83,10 +105,15 @@ const promoForItems = (promo: AppliedPromo | null, items: CartItem[]) =>
   recalculatePromo(promo, items.reduce((total, item) => total + getCartLineTotal(item), 0));
 
 // Hàm lưu dữ liệu vào localStorage
-const saveToStorage = (userId: string | null, items: CartItem[]) => {
+const saveToStorage = (userId: string | null, items: CartItem[], appliedPromo: AppliedPromo | null) => {
   if (typeof window !== 'undefined') {
     const key = getCartKey(userId);
     localStorage.setItem(key, JSON.stringify(items));
+    if (appliedPromo) {
+      localStorage.setItem(getPromoKey(userId), JSON.stringify(appliedPromo));
+    } else {
+      localStorage.removeItem(getPromoKey(userId));
+    }
   }
 };
 
@@ -100,7 +127,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
 
     const guestKey = getCartKey(null);
     const guestItems = readCartItems(guestKey);
-    const appliedPromo = get().currentUserId === userId ? get().appliedPromo : null;
+    const savedPromo = readSavedPromo(userId);
 
     if (userId) {
       // NGƯỜI DÙNG ĐĂNG NHẬP
@@ -110,14 +137,20 @@ export const useCartStore = create<CartStore>((set, get) => ({
       // Nếu có món trong giỏ hàng Khách -> Gộp vào giỏ hàng User và dọn dẹp giỏ khách
       if (guestItems.length > 0) {
         userItems = mergeCartItems(userItems, guestItems);
-        localStorage.setItem(userKey, JSON.stringify(userItems));
-        localStorage.removeItem(guestKey); // Xóa giỏ hàng khách sau khi đã gộp thành công
       }
 
-      set({ currentUserId: userId, items: userItems, appliedPromo: promoForItems(appliedPromo, userItems) });
+      const appliedPromo = promoForItems(savedPromo, userItems);
+      saveToStorage(userId, userItems, appliedPromo);
+      if (guestItems.length > 0) {
+        localStorage.removeItem(guestKey);
+        localStorage.removeItem(getPromoKey(null));
+      }
+      set({ currentUserId: userId, items: userItems, appliedPromo });
     } else {
       // KHÁCH VẮNG LAI / ĐĂNG XUẤT
-      set({ currentUserId: null, items: guestItems, appliedPromo: promoForItems(appliedPromo, guestItems) });
+      const appliedPromo = promoForItems(savedPromo, guestItems);
+      set({ currentUserId: null, items: guestItems, appliedPromo });
+      saveToStorage(null, guestItems, appliedPromo);
     }
   },
 
@@ -126,16 +159,18 @@ export const useCartStore = create<CartStore>((set, get) => ({
     resetCheckoutTimer();
     const updatedItems = mergeCartItems(get().items, [newItem]);
 
-    set({ items: updatedItems, appliedPromo: promoForItems(get().appliedPromo, updatedItems) });
-    saveToStorage(get().currentUserId, updatedItems);
+    const appliedPromo = promoForItems(get().appliedPromo, updatedItems);
+    set({ items: updatedItems, appliedPromo });
+    saveToStorage(get().currentUserId, updatedItems, appliedPromo);
   },
 
   removeItem: (index) => {
     if (!get().items[index]) return;
     resetCheckoutTimer();
     const updatedItems = get().items.filter((_, i) => i !== index);
-    set({ items: updatedItems, appliedPromo: promoForItems(get().appliedPromo, updatedItems) });
-    saveToStorage(get().currentUserId, updatedItems);
+    const appliedPromo = promoForItems(get().appliedPromo, updatedItems);
+    set({ items: updatedItems, appliedPromo });
+    saveToStorage(get().currentUserId, updatedItems, appliedPromo);
   },
 
   updateQuantity: (index, quantity) => {
@@ -148,8 +183,9 @@ export const useCartStore = create<CartStore>((set, get) => ({
     const updatedItems = get().items.map((item, i) => i === index
       ? { ...item, quantity, lineTotal: getCartLineTotal({ ...item, quantity }) }
       : item);
-    set({ items: updatedItems, appliedPromo: promoForItems(get().appliedPromo, updatedItems) });
-    saveToStorage(get().currentUserId, updatedItems);
+    const appliedPromo = promoForItems(get().appliedPromo, updatedItems);
+    set({ items: updatedItems, appliedPromo });
+    saveToStorage(get().currentUserId, updatedItems, appliedPromo);
   },
 
   clearCart: () => {
@@ -158,6 +194,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
     if (typeof window !== 'undefined') {
       const key = getCartKey(get().currentUserId);
       localStorage.removeItem(key);
+      localStorage.removeItem(getPromoKey(get().currentUserId));
     }
   },
 
@@ -169,8 +206,15 @@ export const useCartStore = create<CartStore>((set, get) => ({
     return get().items.reduce((total, item) => total + item.quantity, 0);
   },
 
-  applyPromo: (promo) => set({ appliedPromo: promoForItems(promo, get().items) }),
-  removePromo: () => set({ appliedPromo: null }),
+  applyPromo: (promo) => {
+    const appliedPromo = promoForItems(promo, get().items);
+    set({ appliedPromo });
+    saveToStorage(get().currentUserId, get().items, appliedPromo);
+  },
+  removePromo: () => {
+    set({ appliedPromo: null });
+    saveToStorage(get().currentUserId, get().items, null);
+  },
 }));
 
 export const useHasCartHydrated = () => true;

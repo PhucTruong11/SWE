@@ -15,7 +15,6 @@ import { VerifyEmailDto } from './dto/verify-email.dto.js';
 import { ResendVerificationDto } from './dto/resend-verification.dto.js';
 import { LoginDto } from './dto/login.dto.js';
 import { UpdateProfileDto } from './dto/update-profile.dto.js';
-import { CreateAddressDto } from './dto/address.dto.js';
 import { ForgotPasswordDto, ResetPasswordDto, ChangePasswordDto } from './dto/auth-password.dto.js';
 
 @Injectable()
@@ -34,9 +33,7 @@ export class AuthService {
     phone: true,
     loyaltyPoints: true,
     createdAt: true,
-    addresses: {
-      orderBy: [{ isDefault: 'desc' as const }, { createdAt: 'desc' as const }],
-    },
+    updatedAt: true,
   };
 
   private hashOtp(otp: string): string {
@@ -357,85 +354,5 @@ export class AuthService {
       select: this.profileSelect,
     });
   }
-
-  async addAddress(userId: string, dto: CreateAddressDto) {
-    if (!userId) {
-      throw new UnauthorizedException('Phiên đăng nhập không hợp lệ');
-    }
-
-    const count = await this.prisma.address.count({ where: { userId } });
-    const isDefault = dto.isDefault === true || count === 0;
-
-    return this.prisma.$transaction(async (tx) => {
-      if (isDefault) {
-        await tx.address.updateMany({
-          where: { userId, isDefault: true },
-          data: { isDefault: false },
-        });
-      }
-
-      return tx.address.create({
-        data: {
-          userId,
-          recipientName: String(dto.recipientName || '').trim(),
-          phone: String(dto.phone || '').trim(),
-          detailAddress: String(dto.detailAddress || '').trim(),
-          ward: dto.ward ? String(dto.ward).trim() : null,
-          district: dto.district ? String(dto.district).trim() : null,
-          city: dto.city ? String(dto.city).trim() : null,
-          isDefault,
-        },
-      });
-    });
-  }
-
-  private async findOwnedAddress(userId: string, addressId: string) {
-    if (!userId) {
-      throw new UnauthorizedException('Phiên đăng nhập không hợp lệ');
-    }
-
-    const address = await this.prisma.address.findFirst({
-      where: { id: addressId, userId },
-    });
-    if (!address) throw new NotFoundException('Không tìm thấy địa chỉ');
-    return address;
-  }
-
-  async setDefaultAddress(userId: string, addressId: string) {
-    await this.findOwnedAddress(userId, addressId);
-
-    await this.prisma.$transaction([
-      this.prisma.address.updateMany({
-        where: { userId, isDefault: true },
-        data: { isDefault: false },
-      }),
-      this.prisma.address.update({
-        where: { id: addressId },
-        data: { isDefault: true },
-      }),
-    ]);
-
-    return { message: 'Đã đặt làm địa chỉ mặc định' };
-  }
-
-  async deleteAddress(userId: string, addressId: string) {
-    const address = await this.findOwnedAddress(userId, addressId);
-
-    await this.prisma.address.delete({ where: { id: addressId } });
-
-    if (address.isDefault) {
-      const next = await this.prisma.address.findFirst({
-        where: { userId },
-        orderBy: { createdAt: 'desc' },
-      });
-      if (next) {
-        await this.prisma.address.update({
-          where: { id: next.id },
-          data: { isDefault: true },
-        });
-      }
-    }
-
-    return { message: 'Đã xóa địa chỉ thành công' };
-  }
+  
 }

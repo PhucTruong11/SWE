@@ -21,7 +21,6 @@ import { VerifyEmailDto } from './dto/verify-email.dto.js';
 import { ResendVerificationDto } from './dto/resend-verification.dto.js';
 import { LoginDto } from './dto/login.dto.js';
 import { UpdateProfileDto } from './dto/update-profile.dto.js';
-import { CreateAddressDto } from './dto/address.dto.js';
 import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import { ForgotPasswordDto, ResetPasswordDto, ChangePasswordDto, } from './dto/auth-password.dto.js';
@@ -102,27 +101,6 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   updateProfile(@CurrentUser() user: any, @Body() dto: UpdateProfileDto) {
     return this.authService.updateProfile(this.uid(user), dto);
-  }
-
-  // Thêm địa chỉ giao hàng mới
-  @Post('addresses')
-  @UseGuards(JwtAuthGuard)
-  addAddress(@CurrentUser() user: any, @Body() dto: CreateAddressDto) {
-    return this.authService.addAddress(this.uid(user), dto);
-  }
-
-  // Đặt địa chỉ làm mặc định
-  @Patch('addresses/:id/default')
-  @UseGuards(JwtAuthGuard)
-  setDefaultAddress(@CurrentUser() user: any, @Param('id', ParseUUIDPipe) id: string) {
-    return this.authService.setDefaultAddress(this.uid(user), id);
-  }
-
-  // Xóa địa chỉ
-  @Delete('addresses/:id')
-  @UseGuards(JwtAuthGuard)
-  deleteAddress(@CurrentUser() user: any, @Param('id', ParseUUIDPipe) id: string) {
-    return this.authService.deleteAddress(this.uid(user), id);
   }
 
   @Post('logout')

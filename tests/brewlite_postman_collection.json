@@ -1,0 +1,371 @@
+{
+  "info": {
+    "_postman_id": "9a8f4c20-7b31-4d1e-8e6f-1234567890ab",
+    "name": "BrewLite API Tests",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Authentication",
+      "item": [
+        {
+          "name": "1.1 Login Admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@brewlite.com\",\n  \"password\": \"@Admin123\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3001/api/auth/login",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "1.2 Login Sai Mật Khẩu (401)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@brewlite.com\",\n  \"password\": \"sai_mat_khau\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3001/api/auth/login",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "1.3 Get Current User Info",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:3001/api/auth/me",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "auth", "me"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Products & Toppings",
+      "item": [
+        {
+          "name": "2.1 Lấy toàn bộ Sản phẩm",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3001/api/products",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "products"]
+            }
+          }
+        },
+        {
+          "name": "2.2 Lấy danh sách Topping hợp lệ",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3001/api/products/toppings",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "products", "toppings"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Promotions (Vouchers)",
+      "item": [
+        {
+          "name": "3.1 Lấy danh sách Voucher",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3001/api/promotions",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "promotions"]
+            }
+          }
+        },
+        {
+          "name": "3.2 Áp dụng Voucher hợp lệ (COFFEE20K cho 50k)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"COFFEE20K\",\n  \"subtotal\": 50000\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3001/api/promotions/apply",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "promotions", "apply"]
+            }
+          }
+        },
+        {
+          "name": "3.3 Áp dụng Voucher thất bại (Dưới 40k)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"COFFEE20K\",\n  \"subtotal\": 20000\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3001/api/promotions/apply",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "promotions", "apply"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Orders (Giỏ hàng & Đơn)",
+      "item": [
+        {
+          "name": "4.1 Tạo Đơn Hàng Thành Công",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"productId\": \"{{productId}}\",\n      \"size\": \"M\",\n      \"qty\": 2,\n      \"toppings\": [\"Trân Châu Trắng\"],\n      \"lineTotal\": 96000\n    }\n  ],\n  \"promoCode\": \"COFFEE20K\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3001/api/orders",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "orders"]
+            }
+          }
+        },
+        {
+          "name": "4.2 Tạo Đơn Thất Bại - Giỏ Hàng Rỗng (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": []\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3001/api/orders",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "orders"]
+            }
+          }
+        },
+        {
+          "name": "4.3 Tạo Đơn Thất Bại - Topping Không Tồn Tại (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"productId\": \"{{productId}}\",\n      \"size\": \"S\",\n      \"qty\": 1,\n      \"toppings\": [\"Topping_Khong_Ton_Tai_123\"],\n      \"lineTotal\": 50000\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3001/api/orders",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "orders"]
+            }
+          }
+        },
+        {
+          "name": "4.4 Xem Danh Sách Đơn Hàng Của Tôi",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:3001/api/orders/me",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "orders", "me"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Checkout & Payments",
+      "item": [
+        {
+          "name": "5.1 Thanh Toán Đơn Hàng (CARD)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "test-key-uuid-123456"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": \"{{orderId}}\",\n  \"method\": \"CARD\",\n  \"promoCode\": \"COFFEE20K\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3001/api/checkout",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "checkout"]
+            }
+          }
+        },
+        {
+          "name": "5.2 Kiểm Tra Trạng Thái Thanh Toán",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3001/api/checkout/status/{{orderId}}",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "checkout", "status", "{{orderId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Admin Management",
+      "item": [
+        {
+          "name": "6.1 Admin - Thống Kê Số Lượng Đơn",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:3001/api/admin/orders/counts",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "admin", "orders", "counts"]
+            }
+          }
+        },
+        {
+          "name": "6.2 Admin - Danh Sách Kho Sản Phẩm",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:3001/api/admin/products",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "admin", "products"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

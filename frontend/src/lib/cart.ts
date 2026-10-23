@@ -11,6 +11,7 @@ export interface CartItem {
   name: string;
   size: string;
   quantity: number;
+  stock?: number;
   unitPrice: number;
   basePrice?: number;
   totalToppingPrice?: number;

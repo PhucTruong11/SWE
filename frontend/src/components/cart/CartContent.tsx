@@ -27,7 +27,7 @@ interface Promotion {
 export function CartContent({ onClose }: CartContentProps) {
   const router = useRouter();
   const { isAuthenticated, loading: authLoading } = useAuth();
-  const { items, totalPrice, totalItems, clearCart, appliedPromo, applyPromo, removePromo } = useCartStore();
+  const { items, totalPrice, totalItems, clearCart, appliedPromo, applyPromo, removePromo, setProductStocks } = useCartStore();
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -45,6 +45,36 @@ export function CartContent({ onClose }: CartContentProps) {
 
   const subtotal = totalPrice();
   const finalTotal = Math.max(0, subtotal - discountAmount);
+  const productIds = [...new Set(items.map((item) => item.productId ?? item.id).filter((id): id is string => !!id))].sort().join('|');
+  const isOverStock = items.some((item) => {
+    const productId = item.productId ?? item.id;
+    return productId && item.stock !== undefined &&
+      items.reduce((total, row) => (row.productId ?? row.id) === productId ? total + row.quantity : total, 0) > item.stock;
+  });
+
+  useEffect(() => {
+    if (authLoading || !productIds) return;
+    const ids = productIds.split('|');
+    const controller = new AbortController();
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+    fetch(`${backendUrl}/products`, { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error('Không thể tải tồn kho');
+        return response.json();
+      })
+      .then((result: { data: { id: string; stock: number }[] }) => {
+        if (!Array.isArray(result.data)) return;
+        const stocks = Object.fromEntries(ids.map((id) => [id, 0]));
+        for (const product of result.data) {
+          if (Object.hasOwn(stocks, product.id)) stocks[product.id] = product.stock;
+        }
+        setProductStocks(stocks);
+      })
+      .catch((error) => {
+        if (error instanceof Error && error.name !== 'AbortError') console.error('Không thể cập nhật tồn kho giỏ hàng:', error);
+      });
+    return () => controller.abort();
+  }, [authLoading, productIds, setProductStocks]);
 
   // Gọi API lấy danh sách mã ưu đãi đang hoạt động khi component mount
   useEffect(() => {
@@ -331,9 +361,15 @@ export function CartContent({ onClose }: CartContentProps) {
               </div>
             )}
 
+            {isOverStock && (
+              <p role="alert" className="mb-4 text-sm font-medium text-red-600">
+                Số lượng trong giỏ vượt tồn kho hiện tại. Vui lòng giảm số lượng món trước khi thanh toán.
+              </p>
+            )}
+
             <button
               onClick={handleCheckoutClick}
-              disabled={isLoading || authLoading}
+              disabled={isLoading || authLoading || isOverStock}
               className="w-full bg-primary hover:bg-primary-hover disabled:bg-primary/60 disabled:cursor-not-allowed text-white py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-2 transition-all shadow-md hover:shadow-lg active:scale-95"
             >
               {isLoading ? (

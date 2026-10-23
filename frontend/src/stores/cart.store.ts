@@ -12,7 +12,7 @@ interface CartStore {
   appliedPromo: AppliedPromo | null;
 
   initUserCart: (userId: string | null) => void;
-  addItem: (item: CartItem) => void;
+  addItem: (item: CartItem) => boolean;
   removeItem: (index: number) => void;
   updateQuantity: (index: number, quantity: number) => void;
   clearCart: () => void;
@@ -20,6 +20,7 @@ interface CartStore {
   totalItems: () => number;
   applyPromo: (promo: AppliedPromo) => void;
   removePromo: () => void;
+  setProductStocks: (stocks: Record<string, number>) => void;
 }
 
 // Tạo key localStorage độc lập cho từng user hoặc khách
@@ -42,6 +43,7 @@ const mergeCartItems = (existingItems: CartItem[], guestItems: CartItem[]): Cart
       const quantity = merged[existingIndex].quantity + guestItem.quantity;
       merged[existingIndex] = {
         ...merged[existingIndex],
+        stock: guestItem.stock ?? merged[existingIndex].stock,
         quantity,
         lineTotal: getCartLineTotal({ ...merged[existingIndex], quantity }),
       };
@@ -63,6 +65,7 @@ const readCartItems = (key: string): CartItem[] => {
       item !== null && typeof item === 'object' &&
       typeof item.name === 'string' && typeof item.size === 'string' &&
       Number.isSafeInteger(item.quantity) && item.quantity > 0 &&
+      (item.stock === undefined || (Number.isSafeInteger(item.stock) && item.stock >= 0)) &&
       Number.isFinite(item.unitPrice) && item.unitPrice >= 0 &&
       (item.toppings === undefined || (Array.isArray(item.toppings) &&
         item.toppings.every((topping: unknown) => typeof topping === 'string' ||
@@ -139,7 +142,10 @@ export const useCartStore = create<CartStore>((set, get) => ({
         userItems = mergeCartItems(userItems, guestItems);
       }
 
-      const appliedPromo = promoForItems(savedPromo, userItems);
+      // Mã khách vừa chọn được ưu tiên khi chuyển giỏ; nếu không còn đủ điều kiện,
+      // giữ mã hợp lệ đã lưu trong giỏ của tài khoản.
+      const guestPromo = guestItems.length > 0 ? readSavedPromo(null) : null;
+      const appliedPromo = promoForItems(guestPromo, userItems) ?? promoForItems(savedPromo, userItems);
       saveToStorage(userId, userItems, appliedPromo);
       if (guestItems.length > 0) {
         localStorage.removeItem(guestKey);
@@ -155,13 +161,23 @@ export const useCartStore = create<CartStore>((set, get) => ({
   },
 
   addItem: (newItem) => {
-    if (!Number.isSafeInteger(newItem.quantity) || newItem.quantity <= 0) return;
+    if (!Number.isSafeInteger(newItem.quantity) || newItem.quantity <= 0) return false;
+    const productId = newItem.productId ?? newItem.id;
+    if (productId && Number.isSafeInteger(newItem.stock) && newItem.stock! >= 0) {
+      const inCart = get().items.reduce((total, item) =>
+        (item.productId ?? item.id) === productId ? total + item.quantity : total, 0);
+      if (inCart + newItem.quantity > newItem.stock!) return false;
+    }
     resetCheckoutTimer();
-    const updatedItems = mergeCartItems(get().items, [newItem]);
+    const updatedItems = mergeCartItems(get().items, [newItem]).map((item) =>
+      productId && (item.productId ?? item.id) === productId
+        ? { ...item, stock: newItem.stock ?? item.stock }
+        : item);
 
     const appliedPromo = promoForItems(get().appliedPromo, updatedItems);
     set({ items: updatedItems, appliedPromo });
     saveToStorage(get().currentUserId, updatedItems, appliedPromo);
+    return true;
   },
 
   removeItem: (index) => {
@@ -178,6 +194,14 @@ export const useCartStore = create<CartStore>((set, get) => ({
     if (quantity <= 0) {
       get().removeItem(index);
       return;
+    }
+    const selected = get().items[index];
+    const productId = selected.productId ?? selected.id;
+    if (productId && Number.isSafeInteger(selected.stock) && selected.stock! >= 0) {
+      const otherQuantity = get().items.reduce((total, item, itemIndex) =>
+        itemIndex !== index && (item.productId ?? item.id) === productId
+          ? total + item.quantity : total, 0);
+      if (otherQuantity + quantity > selected.stock!) return;
     }
     resetCheckoutTimer();
     const updatedItems = get().items.map((item, i) => i === index
@@ -214,6 +238,18 @@ export const useCartStore = create<CartStore>((set, get) => ({
   removePromo: () => {
     set({ appliedPromo: null });
     saveToStorage(get().currentUserId, get().items, null);
+  },
+  setProductStocks: (stocks) => {
+    const items = get().items.map((item) => {
+      const productId = item.productId ?? item.id;
+      return productId && Object.hasOwn(stocks, productId)
+        ? { ...item, stock: stocks[productId] }
+        : item;
+    });
+    if (items.some((item, index) => item.stock !== get().items[index].stock)) {
+      set({ items });
+      saveToStorage(get().currentUserId, items, get().appliedPromo);
+    }
   },
 }));
 

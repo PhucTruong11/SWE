@@ -11,7 +11,12 @@ interface CartItemRowProps {
 }
 
 export function CartItemRow({ item, index }: CartItemRowProps) {
-  const { updateQuantity, removeItem } = useCartStore();
+  const { items, updateQuantity, removeItem } = useCartStore();
+  const productId = item.productId ?? item.id;
+  const quantityInCart = productId
+    ? items.reduce((total, row) => (row.productId ?? row.id) === productId ? total + row.quantity : total, 0)
+    : item.quantity;
+  const atStockLimit = item.stock !== undefined && quantityInCart >= item.stock;
 
   const handleDecrease = () => {
     updateQuantity(index, item.quantity - 1);
@@ -88,7 +93,9 @@ export function CartItemRow({ item, index }: CartItemRowProps) {
 
           <button
             onClick={handleIncrease}
-            className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-100 text-text hover:bg-gray-200 transition-colors"
+            disabled={atStockLimit}
+            title={atStockLimit ? 'Đã đạt số lượng tồn kho' : 'Thêm một phần'}
+            className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-100 text-text hover:bg-gray-200 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Plus size={14} />
           </button>

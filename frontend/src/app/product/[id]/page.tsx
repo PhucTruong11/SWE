@@ -148,10 +148,11 @@ export default function ProductDetailPage() {
 
         const validQty = Math.min(availableStock, Math.max(1, Number(quantity) || 1));
 
-        addItemToCart({
+        const added = addItemToCart({
             productId: product.id,
             name: product.name,
             size: selectedSize,
+            stock: availableStock,
             basePrice,
             toppings: selectedToppingsSummary,
             totalToppingPrice,
@@ -161,6 +162,10 @@ export default function ProductDetailPage() {
             imageUrl: product.imageUrl,
         });
 
+        if (!added) {
+            alert('Số lượng sản phẩm trong giỏ đã đạt tồn kho hiện tại.');
+            return;
+        }
         setShowSuccessModal(true);
     };
 

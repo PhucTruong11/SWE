@@ -53,6 +53,11 @@ export class OrdersService {
             toppingsFromDb = await this.prisma.topping.findMany({
                 where: { name: { in: uniqueToppingNames }, isAvailable: true }
             });
+            const availableNames = new Set(toppingsFromDb.map((topping) => topping.name));
+            const unavailableName = uniqueToppingNames.find((name) => !availableNames.has(name));
+            if (unavailableName) {
+                throw new BadRequestException(`Topping "${unavailableName}" không tồn tại hoặc đã ngừng bán`);
+            }
         }
 
         // Tính lại tổng tiền từng dòng và tổng đơn hàng
@@ -74,8 +79,6 @@ export class OrdersService {
                     const dbTopping = toppingsFromDb.find(t => t.name === tName);
                     if (dbTopping) {
                         toppingTotal += dbTopping.price;
-                    } else {
-                        // Bỏ qua hoặc báo lỗi, ở đây chọn bỏ qua nếu không tìm thấy (hoặc đã ẩn)
                     }
                 }
             }

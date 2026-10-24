@@ -11,6 +11,7 @@ import { CheckoutModule } from './modules/checkout/checkout.module.js';
 import { EmailModule } from './modules/email/email.module.js';
 import { PromotionsModule } from './modules/promotions/promotions.module.js';
 import { AdminModule } from './modules/admin/admin.module.js';
+import { RewardsModule } from './modules/rewards/rewards.module.js';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { AdminModule } from './modules/admin/admin.module.js';
     EmailModule,
     PromotionsModule,
     AdminModule,
+    RewardsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

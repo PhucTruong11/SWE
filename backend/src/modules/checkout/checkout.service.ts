@@ -9,6 +9,7 @@ import {
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PaymentMethod, OrderStatus, PaymentStatus } from '@prisma/client';
+import { RewardsService } from '../rewards/rewards.service.js';
 
 // Thời hạn thanh toán cho mỗi đơn hàng: 2 phút (120,000 ms)
 export const PAYMENT_TIMEOUT_MS = 2 * 60 * 1000;
@@ -107,7 +108,9 @@ async function callMockGateway(
 export class CheckoutService {
   private readonly logger = new Logger(CheckoutService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService,
+              private readonly rewardsService: RewardsService,
+  ) {}
 
   private async findOwnedOrder(orderId: string, userId: string) {
     if (!userId) {
@@ -135,6 +138,8 @@ export class CheckoutService {
     }
 
     const cleanCode = promoCode.trim().toUpperCase();
+        // Mã đổi điểm: user phải sở hữu voucher
+    await this.rewardsService.assertVoucherUsable(userId, cleanCode);
 
     // 1. Kiểm tra trong DB Promotions trước
     const dbPromo = await this.prisma.promotion.findUnique({
@@ -313,7 +318,7 @@ export class CheckoutService {
       // Kiểm tra lại trạng thái đơn hàng sau khi có lock (phòng trường hợp request trước vừa cập nhật)
       const lockedOrder = await tx.order.findUnique({
         where: { id: orderId },
-        select: { status: true, total: true, userId: true },
+        select: { status: true, total: true, userId: true, promoCode: true },
       });
 
       if (!lockedOrder || lockedOrder.userId !== userId) {
@@ -399,13 +404,20 @@ export class CheckoutService {
           },
         });
 
-        // 6e: Cộng điểm thưởng cho người dùng
-        await tx.user.update({
-          where: { id: lockedOrder.userId },
-          data: {
-            loyaltyPoints: { increment: pointsEarned },
-          },
+        // 6e: Cộng điểm thưởng + ghi lịch sử điểm (chống cộng trùng bằng unique orderId+EARN)
+        await this.rewardsService.earnPoints(tx, {
+          id: orderId,
+          userId: lockedOrder.userId,
+          total: lockedOrder.total,
         });
+
+        // 6f: Đánh dấu voucher đổi điểm đã dùng (cùng transaction)
+        await this.rewardsService.consumeVoucher(
+          tx,
+          lockedOrder.userId,
+          lockedOrder.promoCode,
+          orderId,
+        );
       } else {
         await tx.order.update({
           where: { id: orderId },

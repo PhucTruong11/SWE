@@ -2,12 +2,14 @@ import { Injectable, NotFoundException, BadRequestException, UnauthorizedExcepti
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateOrderDto } from './dto/create-order.dto.js';
 import { PromotionsService } from '../promotions/promotions.service.js';
+import { RewardsService } from '../rewards/rewards.service.js';
 
 @Injectable()
 export class OrdersService {
     constructor(
         private readonly prisma: PrismaService,
-        private readonly promotionsService: PromotionsService
+        private readonly promotionsService: PromotionsService,
+        private readonly rewardsService: RewardsService,
     ) {}
 
     // POST /orders - Tạo đơn hàng mới từ giỏ hàng Frontend
@@ -101,6 +103,8 @@ export class OrdersService {
         let finalDiscount = 0;
 
         if (dto.promoCode) {
+            // Mã đổi điểm: user phải sở hữu voucher
+            await this.rewardsService.assertVoucherUsable(userId, dto.promoCode);
             // Gọi sang service của bạn làm Promo để nó tự xử lý (tách bạch trách nhiệm)
             const promoResult = await this.promotionsService.applyPromotion({
                 code: dto.promoCode,

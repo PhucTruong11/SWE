@@ -46,6 +46,12 @@ enum Role {
   ADMIN
 }
 
+enum PointTransactionType {
+  EARN
+  REDEEM
+  REFUND
+}
+
 // ==========================================
 // Models
 // ==========================================
@@ -63,6 +69,11 @@ model User {
   updatedAt         DateTime           @updatedAt
 
   orders            Order[]
+
+  
+  userVouchers      UserVoucher[]
+  pointTransactions PointTransaction[]
+
   emailVerification EmailVerification?
 
   @@map("users")
@@ -144,6 +155,9 @@ model Order {
   items    OrderItem[]
   payments Payment[]
 
+  userVoucher       UserVoucher?
+  pointTransactions PointTransaction[]
+
   @@index([userId])
   @@index([createdAt])
   @@map("orders")
@@ -192,6 +206,9 @@ model Promotion {
   isActive       Boolean   @default(true)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+  isRewardOnly Boolean       @default(false) // true = chỉ dùng được khi đã đổi điểm
+  rewardItems  RewardItem[]
+  userVouchers UserVoucher[]
 
   @@map("promotions")
 }
@@ -206,4 +223,58 @@ model PasswordReset {
   updatedAt  DateTime @updatedAt
 
   @@map("password_resets")
+}
+
+/// Danh mục quà đổi điểm (mỗi quà gắn với 1 Promotion reward-only)
+model RewardItem {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  pointsCost  Int
+  promotionId String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  promotion    Promotion     @relation(fields: [promotionId], references: [id])
+  userVouchers UserVoucher[]
+
+  @@map("reward_items")
+}
+
+/// Voucher mà user đã đổi bằng điểm. Không có hạn dùng; usedAt = null nghĩa là còn dùng được.
+model UserVoucher {
+  id           String    @id @default(uuid())
+  userId       String
+  promotionId  String
+  rewardItemId String
+  createdAt    DateTime  @default(now())
+  usedAt       DateTime?
+  usedOrderId  String?   @unique
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  promotion  Promotion  @relation(fields: [promotionId], references: [id])
+  rewardItem RewardItem @relation(fields: [rewardItemId], references: [id])
+  usedOrder  Order?     @relation(fields: [usedOrderId], references: [id])
+
+  @@index([userId, promotionId, usedAt])
+  @@map("user_vouchers")
+}
+
+/// Lịch sử cộng/trừ điểm. Unique (orderId, type) để một đơn không bao giờ bị cộng điểm 2 lần.
+model PointTransaction {
+  id            String               @id @default(uuid())
+  userId        String
+  type          PointTransactionType
+  points        Int                  // dương = cộng, âm = trừ
+  balanceAfter  Int
+  orderId       String?
+  userVoucherId String?
+  createdAt     DateTime             @default(now())
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  order Order? @relation(fields: [orderId], references: [id])
+
+  @@unique([orderId, type])
+  @@index([userId, createdAt])
+  @@map("point_transactions")
 }

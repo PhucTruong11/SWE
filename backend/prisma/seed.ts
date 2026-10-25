@@ -414,6 +414,39 @@ const PROMOTIONS = [
   },
 ];
 
+const REWARD_CATALOG = [
+  {
+    code: 'REWARD10K',
+    description: 'Giảm 10.000đ cho đơn hàng bất kỳ',
+    discountType: 'FIXED_AMOUNT',
+    discountValue: 10000,
+    minOrderValue: 0,
+    isActive: true,
+    isRewardOnly: true,
+    pointsCost: 20,
+  },
+  {
+    code: 'REWARD20K',
+    description: 'Giảm 20.000đ cho đơn từ 70.000đ',
+    discountType: 'FIXED_AMOUNT',
+    discountValue: 20000,
+    minOrderValue: 70000,
+    isActive: true,
+    isRewardOnly: true,
+    pointsCost: 40,
+  },
+  {
+    code: 'REWARD50K',
+    description: 'Giảm 50.000đ cho đơn từ 150.000đ',
+    discountType: 'FIXED_AMOUNT',
+    discountValue: 50000,
+    minOrderValue: 150000,
+    isActive: true,
+    isRewardOnly: true,
+    pointsCost: 90,
+  },
+];
+
 // ==========================================
 // Hàm Seed
 // ==========================================
@@ -431,7 +464,9 @@ async function main() {
   await prisma.topping.deleteMany();
   await prisma.user.deleteMany();
   await prisma.promotion.deleteMany(); // thêm cho phần ưu đãi (promo)
-
+  await prisma.pointTransaction.deleteMany();
+  await prisma.userVoucher.deleteMany();
+  await prisma.rewardItem.deleteMany();
   // ── Bước 2: Tạo User mẫu để test Payment ──
   console.log('👤 Đang tạo Users mẫu...');
   const testUser = await prisma.user.create({
@@ -548,6 +583,22 @@ async function main() {
   );
   
   console.log(`   ✅ Đã tạo ${promotions.length} mã ưu đãi`);
+
+   // ── Bước 5b: Tạo voucher đổi điểm + danh mục quà ──
+  console.log('🎁 Đang tạo danh mục đổi điểm...');
+  for (const r of REWARD_CATALOG) {
+    const { pointsCost, ...promoData } = r;
+    const promo = await prisma.promotion.create({ data: promoData });
+    await prisma.rewardItem.create({
+      data: {
+        name: promo.description ?? promo.code,
+        description: promo.description,
+        pointsCost,
+        promotionId: promo.id,
+      },
+    });
+  }
+  console.log(`   ✅ Đã tạo ${REWARD_CATALOG.length} quà đổi điểm`);
 
   // ── Tổng kết ──
   console.log('\n🎉 Seeding hoàn tất!');

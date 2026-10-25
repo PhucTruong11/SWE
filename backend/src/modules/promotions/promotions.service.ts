@@ -9,7 +9,7 @@ export class PromotionsService {
   // Lấy tất cả mã đang active để hiển thị lên UI
   async findAll() {
     return this.prisma.promotion.findMany({
-      where: { isActive: true },
+      where: { isActive: true, isRewardOnly: false },
       orderBy: { minOrderValue: 'asc' },
     });
   }

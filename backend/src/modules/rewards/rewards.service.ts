@@ -45,7 +45,15 @@ export class RewardsService {
     if (!user) throw new NotFoundException('Người dùng không tồn tại');
 
     // Gộp voucher chưa dùng theo mã: REWARD10K x3
-    const grouped = new Map<string, { code: string; description: string | null; count: number }>();
+    const grouped = new Map<string, {
+      code: string;
+      description: string | null;
+      count: number;
+      discountType: string;
+      discountValue: number;
+      minOrderValue: number;
+      maxDiscount: number | null;
+    }>();
     for (const v of unusedVouchers) {
       const cur = grouped.get(v.promotion.code);
       if (cur) cur.count += 1;
@@ -54,6 +62,10 @@ export class RewardsService {
           code: v.promotion.code,
           description: v.promotion.description,
           count: 1,
+          discountType: v.promotion.discountType,
+          discountValue: v.promotion.discountValue,
+          minOrderValue: v.promotion.minOrderValue,
+          maxDiscount: v.promotion.maxDiscount,
         });
     }
 

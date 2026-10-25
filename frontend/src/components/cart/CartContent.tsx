@@ -3,7 +3,9 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
+import api from '@/lib/api';
 import { useCartStore } from '@/stores/cart.store';
 import { getCartItemKey, toOrderItem } from '@/lib/cart';
 import { CartItemRow } from './CartItemRow';
@@ -17,16 +19,27 @@ interface CartContentProps {
 interface Promotion {
   id: string;
   code: string;
-  description?: string;
+  description?: string | null;
   discountType: string;
   discountValue: number;
   minOrderValue: number;
-  maxDiscount?: number;
+  maxDiscount?: number | null;
+  ownedCount?: number;
+}
+
+interface OwnedVoucher {
+  code: string;
+  description: string | null;
+  count: number;
+  discountType: string;
+  discountValue: number;
+  minOrderValue: number;
+  maxDiscount: number | null;
 }
 
 export function CartContent({ onClose }: CartContentProps) {
   const router = useRouter();
-  const { isAuthenticated, loading: authLoading } = useAuth();
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
   const { items, totalPrice, totalItems, clearCart, appliedPromo, applyPromo, removePromo, setProductStocks } = useCartStore();
 
   const [isLoading, setIsLoading] = useState(false);
@@ -42,6 +55,24 @@ export function CartContent({ onClose }: CartContentProps) {
   const [availablePromos, setAvailablePromos] = useState<Promotion[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const { data: ownedVouchers = [], isError: ownedVouchersError } = useQuery({
+    queryKey: ['rewards', 'owned-vouchers', user?.id],
+    queryFn: async (): Promise<OwnedVoucher[]> => {
+      const response = await api.get<{ vouchers: OwnedVoucher[] } | { data: { vouchers: OwnedVoucher[] } }>('/rewards');
+      const overview = 'data' in response.data ? response.data.data : response.data;
+      return overview.vouchers;
+    },
+    enabled: isAuthenticated && !authLoading && items.length > 0,
+    refetchOnMount: 'always',
+  });
+  const selectablePromos: Promotion[] = [
+    ...ownedVouchers.map((voucher) => ({
+      id: `reward-${voucher.code}`,
+      ...voucher,
+      ownedCount: voucher.count,
+    })),
+    ...availablePromos.filter((promo) => !ownedVouchers.some((voucher) => voucher.code === promo.code)),
+  ];
 
   const subtotal = totalPrice();
   const finalTotal = Math.max(0, subtotal - discountAmount);
@@ -293,10 +324,11 @@ export function CartContent({ onClose }: CartContentProps) {
                   <Tag size={12} /> Mã khả dụng
                 </div>
                 <div className="overflow-y-auto max-h-[250px] pr-1 space-y-2">
-                  {availablePromos.length === 0 ? (
+                  {ownedVouchersError && <p className="text-xs text-red-500">Không tải được voucher đã đổi điểm</p>}
+                  {selectablePromos.length === 0 ? (
                     <p className="text-sm text-gray-500">Không có mã ưu đãi</p>
                   ) : (
-                    availablePromos.map((promo) => {
+                    selectablePromos.map((promo) => {
                       const isEligible = subtotal >= promo.minOrderValue;
                       return (
                         <div
@@ -310,6 +342,7 @@ export function CartContent({ onClose }: CartContentProps) {
                               {promo.discountType === 'PERCENTAGE' ? `-${promo.discountValue}%` : `-${promo.discountValue / 1000}k`}
                             </span>
                           </div>
+                          {promo.ownedCount && <p className="text-[11px] font-semibold text-primary">Đã đổi điểm · x{promo.ownedCount}</p>}
                           <p className="text-[11px] text-gray-500">Đơn tối thiểu {promo.minOrderValue.toLocaleString()}đ</p>
                         </div>
                       );
@@ -400,13 +433,14 @@ export function CartContent({ onClose }: CartContentProps) {
 
           <div className="flex-1 overflow-y-auto p-4 bg-background/50 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
             <div className="space-y-3 w-[288px]">
-              {availablePromos.length === 0 ? (
+              {ownedVouchersError && <p className="text-xs text-red-500">Không tải được voucher đã đổi điểm</p>}
+              {selectablePromos.length === 0 ? (
                 <div className="text-center py-10 text-gray-400">
                   <Tag size={40} className="mx-auto mb-2 opacity-50" />
                   <p className="text-sm">Hiện chưa có ưu đãi nào</p>
                 </div>
               ) : (
-                availablePromos.map((promo) => {
+                selectablePromos.map((promo) => {
                   const isEligible = subtotal >= promo.minOrderValue;
                   return (
                     <div
@@ -438,6 +472,7 @@ export function CartContent({ onClose }: CartContentProps) {
                         <div>
                           <div className="font-black text-lg text-primary uppercase tracking-tight">{promo.code}</div>
                           <div className="text-xs font-medium text-text/80 mt-0.5">{promo.description || 'Ưu đãi đặc biệt'}</div>
+                          {promo.ownedCount && <div className="text-xs font-semibold text-primary mt-1">Đã đổi điểm · còn {promo.ownedCount}</div>}
                         </div>
                         <div className="bg-orange-100 text-orange-600 text-xs font-bold px-2 py-1 rounded-lg whitespace-nowrap">
                           {promo.discountType === 'PERCENTAGE' ? `-${promo.discountValue}%` : `-${promo.discountValue / 1000}k`}

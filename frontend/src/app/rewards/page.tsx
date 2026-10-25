@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   Gift, Award, Star, ArrowRight, CheckCircle2, Ticket, Loader2, History, AlertCircle,
@@ -54,20 +54,27 @@ function RewardsContent() {
   const [redeemingId, setRedeemingId] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const load = useCallback(async () => {
-    try {
-      const res = await api.get('/rewards');
-      setOverview(res.data?.data ?? res.data);
-    } catch (err) {
-      setMsg({ type: 'error', text: getErrorMessage(err, 'Không tải được dữ liệu điểm thưởng') });
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    let cancelled = false;
+    api
+      .get('/rewards')
+      .then((res) => {
+        if (!cancelled) setOverview(res.data?.data ?? res.data);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setMsg({ type: 'error', text: getErrorMessage(err, 'Không tải được dữ liệu điểm thưởng') });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
 
   const handleRedeem = async (reward: RewardOption) => {
     if (!overview || redeemingId) return;
@@ -81,7 +88,7 @@ function RewardsContent() {
       const res = await api.post('/rewards/redeem', { rewardItemId: reward.id });
       const data = res.data?.data ?? res.data;
       setMsg({ type: 'success', text: data.message });
-      await load();
+      setReloadKey((k) => k + 1);
     } catch (err) {
       setMsg({ type: 'error', text: getErrorMessage(err, 'Đổi voucher thất bại, vui lòng thử lại') });
     } finally {

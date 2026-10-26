@@ -1,0 +1,103 @@
+\section{User Story}
+
+Các user story dưới đây tương ứng với 10 task trong Product Backlog của Assignment 1, gồm tám story của khách hàng, một story của nhóm phát triển và một story của quản lý cửa hàng. Mỗi story có phát biểu theo mẫu \emph{Là một -- tôi muốn -- để} và các tiêu chí chấp nhận để kiểm thử. Đây là yêu cầu, không tự khẳng định mọi chức năng đã hoàn thành.
+
+\subsection*{US-01 -- Khởi tạo nền tảng (Task 1)}
+\textbf{Là một} thành viên nhóm phát triển, \textbf{tôi muốn} có repository chuẩn với frontend Next.js, backend NestJS, cấu hình môi trường và hướng dẫn chạy, \textbf{để} cả nhóm có thể phát triển và tích hợp mã nguồn trên máy cá nhân.
+
+\textbf{Tiêu chí chấp nhận:}
+\begin{itemize}
+  \item Repository có hai ứng dụng frontend Next.js và backend NestJS; sau khi cài dependencies, cả hai khởi chạy và phản hồi được.
+  \item Có Git, README mô tả cách chạy và tệp \texttt{.env.example} nêu các biến cần thiết, gồm cổng dịch vụ và kết nối cơ sở dữ liệu.
+  \item \texttt{docker-compose.dev.yml} khởi chạy PostgreSQL phục vụ phát triển; các thành viên có thể làm theo README để kết nối ứng dụng.
+\end{itemize}
+
+\subsection*{US-02 -- API danh sách sản phẩm (Task 2)}
+\textbf{Là một} khách hàng, \textbf{tôi muốn} hệ thống cung cấp danh sách đồ uống, \textbf{để} tôi biết quán đang bán những món nào.
+
+\textbf{Tiêu chí chấp nhận:}
+\begin{itemize}
+  \item \texttt{GET /products} trả về JSON từ dữ liệu mẫu hoặc cơ sở dữ liệu.
+  \item Mỗi sản phẩm có mã, tên, giá và ảnh để frontend hiển thị.
+\end{itemize}
+
+\subsection*{US-03 -- Xem menu (Task 3)}
+\textbf{Là một} khách hàng, \textbf{tôi muốn} xem menu đồ uống trên trang web, \textbf{để} chọn món phù hợp.
+
+\textbf{Tiêu chí chấp nhận:}
+\begin{itemize}
+  \item Trang Menu gọi API sản phẩm và hiển thị danh sách dưới dạng lưới.
+  \item Có trạng thái đang tải, danh sách rỗng và thông báo khi tải thất bại.
+\end{itemize}
+
+\subsection*{US-04 -- Chọn tùy chọn sản phẩm (Task 4)}
+\textbf{Là một} khách hàng, \textbf{tôi muốn} xem chi tiết món và chọn size, topping, \textbf{để} đặt đồ uống theo sở thích.
+
+\textbf{Tiêu chí chấp nhận:}
+\begin{itemize}
+  \item Trang chi tiết cho chọn size S/M/L và những topping được phép.
+  \item Giá hiển thị được tính lại theo size và topping đã chọn trước khi thêm vào giỏ.
+\end{itemize}
+
+\subsection*{US-05 -- Quản lý giỏ hàng (Task 5)}
+\textbf{Là một} khách hàng, \textbf{tôi muốn} thêm món, điều chỉnh số lượng hoặc xóa món khỏi giỏ, \textbf{để} kiểm tra đồ uống và tổng tiền trước khi thanh toán.
+
+\textbf{Tiêu chí chấp nhận:}
+\begin{itemize}
+  \item Cùng sản phẩm, cùng size và cùng tập topping được gộp thành một dòng với số lượng tăng tương ứng; khác size hoặc topping được tách thành dòng riêng.
+  \item Có thể tăng, giảm số lượng và xóa dòng; tổng tiền cùng số lượng trên biểu tượng giỏ cập nhật ngay sau mỗi thao tác.
+  \item Không cho tăng tổng số lượng của một sản phẩm trong giỏ vượt quá tồn kho được công bố.
+  \item Khi khách vãng lai đăng nhập, các món trong giỏ khách được chuyển vào giỏ tài khoản và gộp đúng theo lựa chọn, không bị mất món.
+\end{itemize}
+
+\subsection*{US-06 -- Tạo đơn hàng (Task 6)}
+\textbf{Là một} khách hàng đã đăng nhập, \textbf{tôi muốn} gửi giỏ hàng để tạo đơn, \textbf{để} quán tiếp nhận và chuẩn bị đồ uống cho tôi.
+
+\textbf{Tiêu chí chấp nhận:}
+\begin{itemize}
+  \item Người chưa đăng nhập được hướng tới trang đăng nhập; API tạo đơn từ chối yêu cầu không có xác thực.
+  \item \texttt{POST /api/orders} từ chối giỏ rỗng, số lượng không hợp lệ, sản phẩm hoặc topping không tồn tại hoặc không còn kinh doanh.
+  \item Backend tính lại giá từ dữ liệu sản phẩm, size và topping trong cơ sở dữ liệu, không tin giá do client gửi.
+  \item Đơn hợp lệ được lưu với trạng thái ban đầu \texttt{PENDING} và API trả về mã đơn \texttt{orderId}.
+\end{itemize}
+
+\subsection*{US-07 -- Đăng ký và đăng nhập (Task 7)}
+\textbf{Là một} khách hàng, \textbf{tôi muốn} tạo tài khoản và đăng nhập an toàn, \textbf{để} đặt hàng, xem lại đơn và tích lũy điểm thưởng.
+
+\textbf{Tiêu chí chấp nhận:}
+\begin{itemize}
+  \item \texttt{POST /auth/register} tạo tài khoản với mật khẩu được băm.
+  \item \texttt{POST /auth/login} xác thực thông tin và thiết lập phiên đăng nhập bằng JWT.
+  \item Route tạo đơn yêu cầu xác thực; khách chỉ xem được đơn của chính mình.
+\end{itemize}
+
+\subsection*{US-08 -- Thanh toán không tiền mặt (Task 8)}
+\textbf{Là một} khách hàng, \textbf{tôi muốn} thanh toán bằng ví điện tử hoặc thẻ ngân hàng, \textbf{để} hoàn tất đơn mà không dùng tiền mặt.
+
+\textbf{Tiêu chí chấp nhận:}
+\begin{itemize}
+  \item Người mua chọn Ví hoặc Thẻ rồi xác nhận thanh toán qua \texttt{POST /payments}.
+  \item Thanh toán thành công chuyển đơn sang \texttt{PAID}; thất bại chuyển sang \texttt{PAYMENT\_FAILED}.
+  \item Khi thanh toán thất bại, người mua nhận thông báo và có thể thử lại theo luồng cho phép.
+\end{itemize}
+
+\subsection*{US-09 -- Xác nhận, lịch sử và bàn giao (Task 9)}
+\textbf{Là một} khách hàng, \textbf{tôi muốn} xem mã, trạng thái và lịch sử đơn, \textbf{để} theo dõi những đơn mình đã đặt.
+
+\textbf{Tiêu chí chấp nhận:}
+\begin{itemize}
+  \item Sau thanh toán, màn hình xác nhận hiển thị mã đơn và trạng thái.
+  \item \texttt{GET /orders/me} trả về lịch sử đơn của người dùng đang đăng nhập.
+  \item Bản bàn giao có Docker Compose chạy frontend, backend, cơ sở dữ liệu; README và demo luồng từ chọn món đến xác nhận.
+\end{itemize}
+
+\subsection*{US-10 -- Nghiệp vụ đơn hàng nâng cao (Task 10)}
+\textbf{Là một} người quản lý cửa hàng, \textbf{tôi muốn} kiểm soát tồn kho, trạng thái đơn, thanh toán lặp và quyền lợi khách hàng, \textbf{để} hệ thống vận hành nhất quán khi có nhiều người đặt cùng lúc.
+
+\textbf{Tiêu chí chấp nhận:}
+\begin{itemize}
+  \item Order State Machine chỉ cho phép chuyển trạng thái theo quy trình; yêu cầu chuyển sai bị từ chối.
+  \item Gửi lại yêu cầu thanh toán với cùng \texttt{Idempotency-Key} không tạo thêm lần thanh toán hay ghi nhận trùng.
+  \item Nhiều người mua đồng thời không làm tồn kho âm hoặc bán vượt số lượng còn lại.
+  \item Mã khuyến mãi hợp lệ được áp dụng; điểm thưởng được cộng theo quy tắc sau khi đơn thanh toán thành công.
+\end{itemize}

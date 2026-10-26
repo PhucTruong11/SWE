@@ -7,10 +7,10 @@ import { ListOrdersQueryDto } from './dto/list-orders-query.dto.js';
 import { UpdateStockDto } from './dto/update-stock.dto.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { CreatePromotionDto } from './dto/create-promotion.dto.js';
+import { RolesGuard } from '../auth/guards/roles.guard.js';
 
-// TODO(Role): sau này thêm RolesGuard + @Roles('ADMIN')
 @Controller('admin')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class AdminController {
     constructor(private readonly adminService: AdminService) { }
 
@@ -61,11 +61,23 @@ export class AdminController {
         return { data: await this.adminService.toggleProductAvailability(id) };
     }
 
+    // GET /api/admin/promotions - danh sách voucher
+    @Get('promotions')
+    async listPromotions() {
+        return { data: await this.adminService.listPromotions() };
+    }
+
+    // PATCH /api/admin/promotions/:id/active - bật / tắt voucher
+    @Patch('promotions/:id/active')
+    async togglePromotion(@Param('id', ParseUUIDPipe) id: string) {
+        return { data: await this.adminService.togglePromotionActive(id) };
+    }
+
     // POST /api/admin/promotions
     @Post('promotions')
     async createPromotion(
         @Body() dto: CreatePromotionDto) {
-            const result = await this.adminService.createPromotion(dto);
-            return { message: 'Tạo mã voucher thành công!', data: result,};
-        }
+        const result = await this.adminService.createPromotion(dto);
+        return { message: 'Tạo mã voucher thành công!', data: result, };
+    }
 }

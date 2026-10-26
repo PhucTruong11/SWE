@@ -21,6 +21,15 @@ export class ProductsController {
     return { data: toppings };
   }
 
+  @Get('best-sellers')
+  async findBestsellers(@Query('limit') limit?: string) {
+    const parsed = Number.parseInt(limit ?? '', 10);
+    const safeLimit = Number.isNaN(parsed) ? 4 : Math.min(Math.max(parsed, 1), 12);
+
+    const products = await this.productsService.getBestSellers(safeLimit);
+    return { data: products };
+  }
+
   @Get(':id')
   async findOne(@Param('id') id: string) {
     const product = await this.productsService.findOne(id);

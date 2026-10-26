@@ -4,11 +4,14 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { formatVND } from '@/lib/utils';
 import type { Product } from '@/types';
+import React, { useEffect, useState } from 'react';
+import { useCartStore, type CartItem } from '@/stores/cart.store';
 
 interface ProductCardProps {
     product: Product & {
         prices?: { size: string; price: number }[];
         price?: number;
+        isBestSeller?: boolean;
     };
     variant?: 'bestseller' | 'compact';
     priority?: boolean; // Thuộc tính ưu tiên tải ảnh nhanh nếu nằm ở màn hình đầu
@@ -30,11 +33,51 @@ function getDisplayPrice(product: ProductCardProps['product']): { rawPrice: numb
     const formattedPrice = formatVND ? formatVND(rawPrice) : `${rawPrice.toLocaleString('vi-VN')}đ`;
     return { rawPrice, formattedPrice };
 }
-
+    const CartPlusIcon = () => (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="9" cy="20" r="1" />
+            <circle cx="18" cy="20" r="1" />
+            <path d="M2 3h3l2.7 12.4a1 1 0 001 .8h9.7a1 1 0 001-.8L21 7H6" />
+            <path d="M13.5 8.5v5M11 11h5" />
+        </svg>
+    );
 export function ProductCard({ product, variant = 'bestseller', priority = false }: ProductCardProps) {
     const href = `/product/${product.id}`;
-    const { formattedPrice } = getDisplayPrice(product);
+    const { rawPrice, formattedPrice } = getDisplayPrice(product);
+    const addItemToCart = useCartStore((s) => s.addItem);
+    const [showAddedToast, setShowAddedToast] = useState(false);
+
+    useEffect(() => {
+        if (!showAddedToast) return;
+        const timer = setTimeout(() => setShowAddedToast(false), 2000);
+        return () => clearTimeout(timer);
+    }, [showAddedToast]);
+
     const isOutOfStock = (product.stock !== undefined && product.stock <= 0) || product.isAvailable === false;
+
+    const handleQuickAdd = (e: React.MouseEvent) => {
+        if (isOutOfStock) return;
+
+        const defaultSize = (product.prices && product.prices.length > 0 ? product.prices[0].size : 'S') as 'S' | 'M' | 'L';
+        const validPrice = Number(rawPrice) || 0;
+
+        const newItem: CartItem = {
+            productId: product.id,
+            name: product.name,
+            size: defaultSize,
+            basePrice: validPrice,
+            toppings: [],
+            totalToppingPrice: 0,
+            unitPrice: validPrice,
+            quantity: 1,
+            lineTotal: validPrice,
+            imageUrl: product.imageUrl ?? undefined,
+        };
+
+        addItemToCart(newItem);
+        setShowAddedToast(true);
+    };
+    
 
     if (variant === 'compact') {
         return (
@@ -72,19 +115,22 @@ export function ProductCard({ product, variant = 'bestseller', priority = false 
     }
 
     return (
-        <Link
-            href={href}
-            className="group relative flex flex-col items-center justify-between gap-3 rounded-2xl border border-primary/15 bg-surface p-4 text-center shadow-sm transition-all duration-300 ease-in-out hover:-translate-y-1.5 hover:border-primary/40 hover:shadow-xl"
-        >
+        <div className="group relative flex flex-col items-center justify-between gap-3 rounded-2xl border border-primary/15 bg-surface p-4 text-center shadow-sm transition-all duration-300 ease-in-out hover:-translate-y-1.5 hover:border-primary/40 hover:shadow-xl">
             {isOutOfStock ? (
-                <span className="absolute -right-1.5 -top-1.5 z-10 rounded-full bg-rose-600 px-2.5 py-0.5 text-[10px] font-bold text-white shadow-md">
+                <span className="pointer-events-none absolute -right-1.5 -top-1.5 z-10 rounded-full bg-rose-600 px-2.5 py-0.5 text-[10px] font-bold text-white shadow-md">
                     HẾT HÀNG
                 </span>
             ) : product.isBestSeller ? (
-                <span className="absolute -right-1.5 -top-1.5 z-10 rounded-full bg-orange-500 px-2.5 py-0.5 text-[10px] font-bold text-white shadow-md">
+                <span className="pointer-events-none absolute -right-1.5 -top-1.5 z-10 rounded-full bg-orange-500 px-2.5 py-0.5 text-[10px] font-bold text-white shadow-md">
                     HOT!
                 </span>
             ) : null}
+
+            {showAddedToast && (
+                <span className="pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2 whitespace-nowrap rounded-full bg-green-600 px-4 py-2 text-sm font-bold text-white shadow-lg animate-in fade-in zoom-in-95 duration-300">
+                    ✓ Đã thêm vào giỏ hàng
+                </span>
+            )}
 
             {/* Khung ảnh cố định với Next Image */}
             <div className="relative h-28 w-28 overflow-hidden rounded-full bg-background shadow-inner transition-transform duration-300 ease-in-out group-hover:scale-105">
@@ -112,20 +158,39 @@ export function ProductCard({ product, variant = 'bestseller', priority = false 
             </div>
 
             <div className="flex w-full flex-col items-center gap-1">
-                <p className="line-clamp-1 text-base font-semibold text-text transition-colors group-hover:text-primary">
+                {/* Link này tạo lớp phủ kín card; wrapper của nó KHÔNG được có class relative */}
+                <Link
+                    href={href}
+                    className="line-clamp-1 text-base font-semibold text-text transition-colors group-hover:text-primary after:absolute after:inset-0 after:content-['']"
+                >
                     {product.name}
-                </p>
+                </Link>
                 <p className="text-sm font-bold text-primary">{formattedPrice}</p>
             </div>
 
-            <span
-                className={`w-full rounded-full py-2 text-xs font-semibold shadow-sm transition-all duration-300 ${isOutOfStock
-                    ? 'bg-gray-200 text-gray-500 hover:bg-gray-300'
-                    : 'bg-primary text-white hover:scale-[1.02] group-hover:bg-primary-hover group-hover:shadow-md active:scale-95'
-                }`}
-            >
-                {isOutOfStock ? 'Tạm hết hàng' : 'Chi tiết sản phẩm'}
-            </span>
-        </Link>
+            <div className="relative z-10 flex w-full overflow-hidden rounded-full shadow-sm">
+                <button
+                    type="button"
+                    onClick={handleQuickAdd}
+                    disabled={isOutOfStock}
+                    aria-label="Thêm vào giỏ hàng"
+                    title={isOutOfStock ? 'Hết hàng' : 'Thêm vào giỏ hàng'}
+                    className={`flex w-2/5 shrink-0 items-center justify-center bg-primary py-2 text-white transition-colors duration-500 ${
+                        isOutOfStock
+                            ? 'cursor-not-allowed opacity-50'
+                            : 'hover:bg-primary/10 hover:text-primary active:scale-95'
+                    }`}
+                >
+                    <CartPlusIcon />
+                </button>
+
+                <Link
+                    href={href}
+                    className="flex flex-1 items-center justify-center border-l border-white/30 bg-primary py-2 text-sm font-medium text-white transition-colors duration-500 hover:bg-primary/10 hover:text-primary"
+                >
+                    Chi tiết
+                </Link>
+            </div>
+        </div>
     );
 }

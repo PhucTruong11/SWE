@@ -1,5 +1,5 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { OrderStatus, Prisma } from '@prisma/client';
+import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import { OrderStatus, PointTransactionType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { assertTransition } from '../orders/orders-state.js';
 import { ListOrdersQueryDto } from './dto/list-orders-query.dto.js';
@@ -8,6 +8,9 @@ import { CreatePromotionDto } from './dto/create-promotion.dto.js'
 
 // Các trạng thái đã thanh toán thành công (tính vào doanh thu)
 const REVENUE_STATUSES: OrderStatus[] = ['PAID', 'PREPARING', 'READY', 'COMPLETED'];
+const ADMIN_FORBIDDEN_TARGETS: OrderStatus[] = [
+    OrderStatus.PAID, OrderStatus.PAYMENT_FAILED, OrderStatus.PENDING,
+];
 
 // 00:00 hôm nay theo giờ của server
 function startOfToday(): Date {
@@ -92,6 +95,10 @@ export class AdminService {
 
     // Đổi trạng thái đơn (giữ nguyên như cũ)
     async updateStatus(id: string, next: OrderStatus) {
+        if (ADMIN_FORBIDDEN_TARGETS.includes(next)) {
+            throw new BadRequestException(`Admin không được chuyển đơn sang ${next}`);
+        }
+
         return this.prisma.$transaction(async (tx) => {
             const order = await tx.order.findUnique({
                 where: { id },
@@ -110,10 +117,26 @@ export class AdminService {
                     });
                 }
                 if (order.loyaltyPointsEarned > 0) {
-                    await tx.user.update({
-                        where: { id: order.userId },
-                        data: { loyaltyPoints: { decrement: order.loyaltyPointsEarned } },
-                    });
+                    // Không để số dư điểm âm nếu khách đã dùng điểm
+                    const u = await tx.user.findUnique({ where: { id: order.userId }, select: { loyaltyPoints: true } });
+                    const refund = Math.min(order.loyaltyPointsEarned, u?.loyaltyPoints ?? 0);
+                    if (refund > 0) {
+                        const updated = await tx.user.update({
+                            where: { id: order.userId },
+                            data: { loyaltyPoints: { decrement: refund } },
+                            select: { loyaltyPoints: true },
+                        });
+                        // Ghi sổ điểm để lịch sử khớp số dư
+                        await tx.pointTransaction.create({
+                            data: {
+                                userId: order.userId,
+                                type: PointTransactionType.REFUND,
+                                points: -refund,
+                                balanceAfter: updated.loyaltyPoints,
+                                orderId: order.id,
+                            },
+                        });
+                    }
                 }
             }
 
@@ -144,27 +167,28 @@ export class AdminService {
 
     // Cập nhật tồn kho: cộng thêm (+) hoặc gán mới
     async updateStock(id: string, dto: UpdateStockDto) {
+        if ((dto.stock === undefined) === (dto.quantityToAdd === undefined)) {
+            throw new BadRequestException('Chỉ gửi một trong hai: stock hoặc quantityToAdd');
+        }
+
+        if (dto.quantityToAdd !== undefined) {
+            const r = await this.prisma.product.updateMany({
+                where: { id },
+                data: { stock: { increment: dto.quantityToAdd }, version: { increment: 1 } },
+            });
+            if (r.count === 0) throw new NotFoundException(`Không tìm thấy sản phẩm ${id}`);
+            return this.prisma.product.findUnique({ where: { id } });
+        }
+
         const product = await this.prisma.product.findUnique({ where: { id } });
         if (!product) throw new NotFoundException(`Không tìm thấy sản phẩm ${id}`);
 
-        let newStock = product.stock;
-        if (dto.stock !== undefined) {
-            newStock = dto.stock;
-        } else if (dto.quantityToAdd !== undefined) {
-            newStock = product.stock + dto.quantityToAdd;
-        }
-
-        if (newStock < 0) {
-            throw new BadRequestException('Số lượng tồn kho không được âm');
-        }
-
-        return this.prisma.product.update({
-            where: { id },
-            data: {
-                stock: newStock,
-                version: { increment: 1 },
-            },
+        const r = await this.prisma.product.updateMany({
+            where: { id, version: product.version },
+            data: { stock: dto.stock, version: { increment: 1 } },
         });
+        if (r.count === 0) throw new ConflictException('Tồn kho vừa thay đổi, vui lòng tải lại rồi thử lại');
+        return this.prisma.product.findUnique({ where: { id } });
     }
 
     // Bật / tắt trạng thái mở bán sản phẩm
@@ -184,11 +208,12 @@ export class AdminService {
         const formattedCode = dto.code.trim().toUpperCase();
 
         const existingPromo = await this.prisma.promotion.findUnique({
-            where: {code: formattedCode},
+            where: { code: formattedCode },
         });
 
         if (existingPromo) {
-            throw new BadRequestException('Mã voucher "${formattedCode}" đã tồn tại trên hệ thống');
+            // Dùng backtick để ${...} được thay bằng giá trị thật
+            throw new BadRequestException(`Mã voucher "${formattedCode}" đã tồn tại trên hệ thống`);
         }
 
         if (dto.discountType === 'PERCENTAGE' && dto.discountValue > 100) {
@@ -207,6 +232,24 @@ export class AdminService {
                 endDate: dto.endDate ? new Date(dto.endDate) : null,
                 isActive: dto.isActive ?? true,
             },
+        });
+    }
+
+    // Danh sách toàn bộ voucher cho Admin (kể cả mã đã tắt / đã hết hạn)
+    async listPromotions() {
+        return this.prisma.promotion.findMany({
+            orderBy: { createdAt: 'desc' },
+        });
+    }
+
+    // Bật / tắt một voucher (mã tắt thì khách không áp dụng được)
+    async togglePromotionActive(id: string) {
+        const promo = await this.prisma.promotion.findUnique({ where: { id } });
+        if (!promo) throw new NotFoundException(`Không tìm thấy voucher ${id}`);
+
+        return this.prisma.promotion.update({
+            where: { id },
+            data: { isActive: !promo.isActive },
         });
     }
 }

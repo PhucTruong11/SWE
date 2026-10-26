@@ -3,13 +3,14 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, ClipboardList, Boxes, Store, LogOut, Menu, X } from 'lucide-react';
+import { LayoutDashboard, ClipboardList, Boxes, Ticket, LogOut, Menu, X } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
 const NAV_ITEMS = [
     { href: '/admin', label: 'Trang chủ', icon: LayoutDashboard, exact: true },
     { href: '/admin/orders', label: 'Đơn hàng', icon: ClipboardList, exact: false },
     { href: '/admin/inventory', label: 'Kho hàng', icon: Boxes, exact: false },
+    { href: '/admin/promotions', label: 'Voucher', icon: Ticket, exact: false },
 ];
 
 function MenuContent({
@@ -33,9 +34,8 @@ function MenuContent({
                             key={href}
                             href={href}
                             onClick={onNavigate}
-                            className={`flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-white/10 ${
-                                active ? 'bg-white/15' : ''
-                            }`}
+                            className={`flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-white/10 ${active ? 'bg-white/15' : ''
+                                }`}
                         >
                             <Icon size={18} />
                             <span>{label}</span>
@@ -45,14 +45,6 @@ function MenuContent({
             </nav>
 
             <div className="mt-auto flex flex-col gap-1 border-t border-white/15 p-4 text-sm font-semibold">
-                <Link
-                    href="/"
-                    onClick={onNavigate}
-                    className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-white/85 hover:bg-white/10"
-                >
-                    <Store size={18} />
-                    <span>Về trang khách</span>
-                </Link>
                 {showLogout && (
                     <button
                         type="button"
@@ -155,9 +147,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 />
             )}
             <aside
-                className={`fixed right-0 top-0 z-50 flex h-full w-72 flex-col bg-primary text-white transition-transform duration-300 lg:hidden ${
-                    drawerOpen ? 'translate-x-0' : 'translate-x-full'
-                }`}
+                className={`fixed right-0 top-0 z-50 flex h-full w-72 flex-col bg-primary text-white transition-transform duration-300 lg:hidden ${drawerOpen ? 'translate-x-0' : 'translate-x-full'
+                    }`}
             >
                 <div className="flex items-center justify-between border-b border-white/15 p-4">
                     <p className="truncate text-sm font-semibold">{user.email}</p>

@@ -1,4 +1,4 @@
-import {IsBoolean, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, Min} from 'class-validator'
+import { IsBoolean, IsDateString, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator'
 
 export class CreatePromotionDto {
     @IsNotEmpty({ message: 'Mã voucher không được để trống' })
@@ -24,7 +24,7 @@ export class CreatePromotionDto {
     @Min(0, { message: 'Giảm tối đa không được âm' })
     maxDiscount?: number;
     @IsOptional()
-    @IsString({ message: 'Ngày kết thúc phải là chuỗi thời gian hợp lệ' })
+    @IsDateString({}, { message: 'Ngày kết thúc phải đúng định dạng ngày (ISO 8601)' })
     endDate?: string;
     @IsOptional()
     @IsBoolean({ message: 'Trạng thái kích hoạt phải là true hoặc false' })

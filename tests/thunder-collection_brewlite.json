@@ -607,6 +607,411 @@
           "value": "200"
         }
       ]
+    },
+    {
+      "_id": "e0a1b2c3-0006-4000-8000-000000000603",
+      "colId": "9a8f4c20-7b31-4d1e-8e6f-1234567890ab",
+      "containerId": "f0a1b2c3-0006-4000-8000-000000000006",
+      "name": "6.3 Admin tự đặt PAID (kỳ vọng 400)",
+      "url": "http://localhost:3001/api/admin/orders/{{orderId}}/status",
+      "method": "PATCH",
+      "sortNum": 60300,
+      "created": "2026-10-26T00:00:00.000Z",
+      "modified": "2026-10-26T00:00:00.000Z",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "params": [],
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{token}}"
+      },
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"status\": \"PAID\"\n}",
+        "form": []
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "400"
+        }
+      ]
+    },
+    {
+      "_id": "e0a1b2c3-0006-4000-8000-000000000604",
+      "colId": "9a8f4c20-7b31-4d1e-8e6f-1234567890ab",
+      "containerId": "f0a1b2c3-0006-4000-8000-000000000006",
+      "name": "6.4 Admin PAID -> PREPARING",
+      "url": "http://localhost:3001/api/admin/orders/{{orderId}}/status",
+      "method": "PATCH",
+      "sortNum": 60400,
+      "created": "2026-10-26T00:00:00.000Z",
+      "modified": "2026-10-26T00:00:00.000Z",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "params": [],
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{token}}"
+      },
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"status\": \"PREPARING\"\n}",
+        "form": []
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "200"
+        },
+        {
+          "type": "res-body",
+          "custom": "json.data.status",
+          "action": "equal",
+          "value": "PREPARING"
+        }
+      ]
+    },
+    {
+      "_id": "e0a1b2c3-0006-4000-8000-000000000605",
+      "colId": "9a8f4c20-7b31-4d1e-8e6f-1234567890ab",
+      "containerId": "f0a1b2c3-0006-4000-8000-000000000006",
+      "name": "6.5 Admin hủy đơn đang PREPARING (kỳ vọng 400)",
+      "url": "http://localhost:3001/api/admin/orders/{{orderId}}/status",
+      "method": "PATCH",
+      "sortNum": 60500,
+      "created": "2026-10-26T00:00:00.000Z",
+      "modified": "2026-10-26T00:00:00.000Z",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "params": [],
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{token}}"
+      },
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"status\": \"CANCELLED\"\n}",
+        "form": []
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "400"
+        }
+      ]
+    },
+    {
+      "_id": "e0a1b2c3-0006-4000-8000-000000000606",
+      "colId": "9a8f4c20-7b31-4d1e-8e6f-1234567890ab",
+      "containerId": "f0a1b2c3-0006-4000-8000-000000000006",
+      "name": "6.6 Admin PREPARING -> READY",
+      "url": "http://localhost:3001/api/admin/orders/{{orderId}}/status",
+      "method": "PATCH",
+      "sortNum": 60600,
+      "created": "2026-10-26T00:00:00.000Z",
+      "modified": "2026-10-26T00:00:00.000Z",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "params": [],
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{token}}"
+      },
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"status\": \"READY\"\n}",
+        "form": []
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "200"
+        },
+        {
+          "type": "res-body",
+          "custom": "json.data.status",
+          "action": "equal",
+          "value": "READY"
+        }
+      ]
+    },
+    {
+      "_id": "e0a1b2c3-0006-4000-8000-000000000607",
+      "colId": "9a8f4c20-7b31-4d1e-8e6f-1234567890ab",
+      "containerId": "f0a1b2c3-0006-4000-8000-000000000006",
+      "name": "6.7 Admin READY -> COMPLETED",
+      "url": "http://localhost:3001/api/admin/orders/{{orderId}}/status",
+      "method": "PATCH",
+      "sortNum": 60700,
+      "created": "2026-10-26T00:00:00.000Z",
+      "modified": "2026-10-26T00:00:00.000Z",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "params": [],
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{token}}"
+      },
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"status\": \"COMPLETED\"\n}",
+        "form": []
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "200"
+        },
+        {
+          "type": "res-body",
+          "custom": "json.data.status",
+          "action": "equal",
+          "value": "COMPLETED"
+        }
+      ]
+    },
+    {
+      "_id": "e0a1b2c3-0006-4000-8000-000000000608",
+      "colId": "9a8f4c20-7b31-4d1e-8e6f-1234567890ab",
+      "containerId": "f0a1b2c3-0006-4000-8000-000000000006",
+      "name": "6.8 Nhập kho +5",
+      "url": "http://localhost:3001/api/admin/products/{{productId}}/stock",
+      "method": "PATCH",
+      "sortNum": 60800,
+      "created": "2026-10-26T00:00:00.000Z",
+      "modified": "2026-10-26T00:00:00.000Z",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "params": [],
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{token}}"
+      },
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"quantityToAdd\": 5\n}",
+        "form": []
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "200"
+        }
+      ]
+    },
+    {
+      "_id": "e0a1b2c3-0006-4000-8000-000000000609",
+      "colId": "9a8f4c20-7b31-4d1e-8e6f-1234567890ab",
+      "containerId": "f0a1b2c3-0006-4000-8000-000000000006",
+      "name": "6.9 Nhập kho số âm (kỳ vọng 400)",
+      "url": "http://localhost:3001/api/admin/products/{{productId}}/stock",
+      "method": "PATCH",
+      "sortNum": 60900,
+      "created": "2026-10-26T00:00:00.000Z",
+      "modified": "2026-10-26T00:00:00.000Z",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "params": [],
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{token}}"
+      },
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"quantityToAdd\": -3\n}",
+        "form": []
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "400"
+        }
+      ]
+    },
+    {
+      "_id": "e0a1b2c3-0006-4000-8000-000000000610",
+      "colId": "9a8f4c20-7b31-4d1e-8e6f-1234567890ab",
+      "containerId": "f0a1b2c3-0006-4000-8000-000000000006",
+      "name": "6.10 Đặt lại tồn kho = 50",
+      "url": "http://localhost:3001/api/admin/products/{{productId}}/stock",
+      "method": "PATCH",
+      "sortNum": 61000,
+      "created": "2026-10-26T00:00:00.000Z",
+      "modified": "2026-10-26T00:00:00.000Z",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "params": [],
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{token}}"
+      },
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"stock\": 50\n}",
+        "form": []
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "200"
+        },
+        {
+          "type": "res-body",
+          "custom": "json.data.stock",
+          "action": "equal",
+          "value": "50"
+        }
+      ]
+    },
+    {
+      "_id": "e0a1b2c3-0006-4000-8000-000000000611",
+      "colId": "9a8f4c20-7b31-4d1e-8e6f-1234567890ab",
+      "containerId": "f0a1b2c3-0006-4000-8000-000000000006",
+      "name": "6.11 Tạo voucher DEMO15",
+      "url": "http://localhost:3001/api/admin/promotions",
+      "method": "POST",
+      "sortNum": 61100,
+      "created": "2026-10-26T00:00:00.000Z",
+      "modified": "2026-10-26T00:00:00.000Z",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "params": [],
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{token}}"
+      },
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"code\": \"DEMO15\",\n  \"description\": \"Giảm 15% tối đa 20k cho đơn từ 30k\",\n  \"discountType\": \"PERCENTAGE\",\n  \"discountValue\": 15,\n  \"minOrderValue\": 30000,\n  \"maxDiscount\": 20000\n}",
+        "form": []
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "201"
+        }
+      ]
+    },
+    {
+      "_id": "e0a1b2c3-0006-4000-8000-000000000612",
+      "colId": "9a8f4c20-7b31-4d1e-8e6f-1234567890ab",
+      "containerId": "f0a1b2c3-0006-4000-8000-000000000006",
+      "name": "6.12 Tạo trùng mã (kỳ vọng 400, thông báo có DEMO15)",
+      "url": "http://localhost:3001/api/admin/promotions",
+      "method": "POST",
+      "sortNum": 61200,
+      "created": "2026-10-26T00:00:00.000Z",
+      "modified": "2026-10-26T00:00:00.000Z",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "params": [],
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{token}}"
+      },
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"code\": \"demo15\",\n  \"discountType\": \"FIXED_AMOUNT\",\n  \"discountValue\": 10000\n}",
+        "form": []
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "400"
+        },
+        {
+          "type": "res-body",
+          "custom": "json.message",
+          "action": "contains",
+          "value": "DEMO15"
+        }
+      ]
+    },
+    {
+      "_id": "e0a1b2c3-0006-4000-8000-000000000613",
+      "colId": "9a8f4c20-7b31-4d1e-8e6f-1234567890ab",
+      "containerId": "f0a1b2c3-0006-4000-8000-000000000006",
+      "name": "6.13 Danh sách voucher",
+      "url": "http://localhost:3001/api/admin/promotions",
+      "method": "GET",
+      "sortNum": 61300,
+      "created": "2026-10-26T00:00:00.000Z",
+      "modified": "2026-10-26T00:00:00.000Z",
+      "headers": [],
+      "params": [],
+      "auth": {
+        "type": "bearer",
+        "bearer": "{{token}}"
+      },
+      "tests": [
+        {
+          "type": "res-code",
+          "custom": "",
+          "action": "equal",
+          "value": "200"
+        }
+      ]
     }
   ]
 }

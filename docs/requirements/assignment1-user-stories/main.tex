@@ -1,0 +1,33 @@
+% !TEX program = xelatex
+\documentclass[12pt,a4paper]{article}
+
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[utf8]{inputenc}
+  \usepackage[T5]{fontenc}
+\else
+  \usepackage{fontspec}
+  \setmainfont{Times New Roman}
+\fi
+\usepackage[vietnamese]{babel}
+\usepackage{geometry}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\geometry{left=25mm,right=25mm,top=23mm,bottom=23mm}
+\hypersetup{colorlinks=true,linkcolor=black,urlcolor=blue}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt}
+\setlist[itemize]{leftmargin=*,nosep,topsep=2pt}
+\renewcommand{\arraystretch}{1.25}
+
+\begin{document}
+\begin{center}
+  {\Large\bfseries BREWLITE}\\[5pt]
+  {\large User Story}\\[3pt]
+  {Assignment 1 -- Công nghệ Phần mềm}
+\end{center}
+
+\vspace{7mm}
+\input{user_stories}
+\end{document}

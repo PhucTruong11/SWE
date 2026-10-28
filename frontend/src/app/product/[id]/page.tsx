@@ -7,6 +7,7 @@ import Image from 'next/image';
 import { useCartStore } from '@/stores/cart.store';
 import api from '@/lib/api';
 import type { ApiResponse } from '@/types';
+import { cartValidationMessage, validateCart } from '@/lib/validate-cart';
 
 interface ProductPrice {
     id: string;
@@ -22,6 +23,7 @@ interface Product {
     category: string;
     allowToppings: boolean;
     stock?: number;
+    stockBySize?: Record<string, number>;
     isAvailable?: boolean;
     prices: ProductPrice[];
 }
@@ -47,6 +49,7 @@ export default function ProductDetailPage() {
     const [toppingQuantities, setToppingQuantities] = useState<{ [toppingId: string]: number }>({});
     const [quantity, setQuantity] = useState<number>(1);
     const [showSuccessModal, setShowSuccessModal] = useState(false);
+    const [adding, setAdding] = useState(false);
 
     useEffect(() => {
         if (!productId) return;
@@ -54,8 +57,8 @@ export default function ProductDetailPage() {
         async function fetchData() {
             try {
                 setLoading(true);
-                // FIX: dùng axios instance `api` (đã có baseURL, withCredentials, xử lý 401)
-                // thay cho fetch() + URL tự ghép (fallback cũ localhost:3000 còn sai port backend).
+                // Dùng đối tượng `api` đã cấu hình sẵn địa chỉ, cookie và xử lý lỗi 401.
+                // Cách này tránh ghép sai địa chỉ máy chủ như đoạn mã cũ.
                 // Gọi song song sản phẩm và topping để giảm thời gian chờ (thay vì chờ lần lượt).
                 const toppingsPromise = api
                     .get<ApiResponse<Topping[]>>('/products/toppings')
@@ -105,8 +108,8 @@ export default function ProductDetailPage() {
         );
     }
 
-    const isOutOfStock = (product.stock !== undefined && product.stock <= 0) || product.isAvailable === false;
-    const availableStock = product.stock !== undefined ? product.stock : 999;
+    const availableStock = product.stockBySize?.[selectedSize] ?? product.stock ?? 0;
+    const isOutOfStock = availableStock <= 0 || product.isAvailable === false;
 
     const currentPriceObj = product.prices?.find((p) => p.size === selectedSize) || product.prices?.[0];
     const basePrice = currentPriceObj ? Number(currentPriceObj.price) || 0 : 0;
@@ -128,7 +131,7 @@ export default function ProductDetailPage() {
         });
     };
 
-    const handleAddToCart = () => {
+    const handleAddToCart = async () => {
         if (isOutOfStock) {
             alert('Sản phẩm này hiện đang tạm hết hàng, quý khách vui lòng chọn món khác nhé!');
             return;
@@ -148,7 +151,7 @@ export default function ProductDetailPage() {
 
         const validQty = Math.min(availableStock, Math.max(1, Number(quantity) || 1));
 
-        const added = addItemToCart({
+        const candidate = {
             productId: product.id,
             name: product.name,
             size: selectedSize,
@@ -160,13 +163,27 @@ export default function ProductDetailPage() {
             quantity: validQty,
             lineTotal: singleUnitPrice * validQty,
             imageUrl: product.imageUrl,
-        });
+        };
 
-        if (!added) {
-            alert('Số lượng sản phẩm trong giỏ đã đạt tồn kho hiện tại.');
-            return;
+        setAdding(true);
+        try {
+            const validation = await validateCart([...useCartStore.getState().items, candidate]);
+            if (!validation.available) {
+                alert(cartValidationMessage(validation));
+                return;
+            }
+            const added = addItemToCart(candidate);
+
+            if (!added) {
+                alert('Không thể thêm món vào giỏ hàng.');
+                return;
+            }
+            setShowSuccessModal(true);
+        } catch {
+            alert('Không kiểm tra được nguyên liệu. Vui lòng thử lại.');
+        } finally {
+            setAdding(false);
         }
-        setShowSuccessModal(true);
     };
 
     const hasToppings = product.allowToppings && toppingsList.length > 0;
@@ -251,7 +268,7 @@ export default function ProductDetailPage() {
                                                 <button
                                                     key={p.id}
                                                     type="button"
-                                                    onClick={() => setSelectedSize(p.size)}
+                                                    onClick={() => { setSelectedSize(p.size); setQuantity(1); }}
                                                     className={`h-9 w-11 rounded-xl text-xs font-bold transition-all duration-200 ${
                                                         selectedSize === p.size
                                                             ? 'scale-105 bg-primary text-white shadow-md'
@@ -353,7 +370,7 @@ export default function ProductDetailPage() {
                                         <button
                                             key={p.id}
                                             type="button"
-                                            onClick={() => setSelectedSize(p.size)}
+                                            onClick={() => { setSelectedSize(p.size); setQuantity(1); }}
                                             className={`h-11 w-14 rounded-2xl text-sm font-bold transition-all duration-200 ${
                                                 selectedSize === p.size
                                                     ? 'scale-105 bg-primary text-white shadow-md'
@@ -436,7 +453,8 @@ export default function ProductDetailPage() {
                             <button
                                 type="button"
                                 onClick={handleAddToCart}
-                                className="rounded-full bg-primary px-7 py-3 text-sm font-bold text-white shadow-md transition-all hover:bg-primary-hover active:scale-95"
+                                disabled={adding}
+                                className="rounded-full bg-primary px-7 py-3 text-sm font-bold text-white shadow-md transition-all hover:bg-primary-hover active:scale-95 disabled:opacity-50"
                             >
                                 Thêm vào giỏ
                             </button>
@@ -445,7 +463,7 @@ export default function ProductDetailPage() {
                 </div>
             </div>
 
-            {/* Modal thông báo */}
+            {/* Hộp thoại thông báo. */}
             {showSuccessModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
                     <div className="w-full max-w-md overflow-hidden rounded-2xl bg-surface shadow-2xl border border-primary/20 transition-all">

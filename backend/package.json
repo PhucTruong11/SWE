@@ -20,7 +20,10 @@
     "test:cov": "vitest run --coverage",
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
-    "test:payment": "tsx scripts/test-payment.ts"
+    "test:payment": "tsx scripts/test-payment.ts",
+    "catalog:bootstrap": "tsx prisma/bootstrap-ingredient-catalog.ts",
+    "inventory:demo-stock": "tsx prisma/load-demo-ingredient-stock.ts",
+    "test:ingredients": "tsx scripts/test-ingredient-flow.ts"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",

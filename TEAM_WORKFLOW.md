@@ -1,89 +1,39 @@
-# Hướng dẫn Workflow GitHub & Phân chia Task Nhóm (7 Members)
+# BrewLite: quy trình làm việc nhóm
 
-Tài liệu này hướng dẫn cách đưa code lên GitHub lần đầu và quy trình làm việc nhóm (Git Flow) cho 7 thành viên, đảm bảo code không bị conflict trong quá trình phát triển đồ án BrewLite.
+Cập nhật: 28/10/2026. Remote `origin` của checkout này là [PhucTruong11/brewlite](https://github.com/PhucTruong11/brewlite). Tài liệu này dành cho thành viên làm việc trên repo đó, không phải hướng dẫn tạo repository mới.
 
----
+## 1. Lấy bản mới
 
-## Phần 1: Step-by-step Đẩy code lên GitHub (Lần đầu)
+Sau khi PR đã merge vào `main`, lưu hoặc commit thay đổi đang làm trước. Tại thư mục `brewlite` trong bản clone trên máy mình:
 
-Do dự án đã được `git init` và `git commit` ở máy của bạn (Project Manager/Leader), bạn chỉ cần làm theo các bước sau để đưa lên GitHub:
-
-1. Đăng nhập vào [GitHub](https://github.com/) và tạo một Repository mới (New Repository).
-   - Tên repo: `brewlite`
-   - Chế độ: `Public` hoặc `Private` tuỳ ý nhóm.
-   - **LƯU Ý:** KHÔNG check vào ô *“Add a README file”* hay *“Add .gitignore”* vì code ở máy bạn đã có sẵn những file này.
-2. Mở Terminal (PowerShell) tại thư mục gốc của dự án (`d:\Dev\Subject_Uni\SWE\brewlite`) và chạy lần lượt 3 lệnh sau (thay `YOUR_USERNAME` bằng username GitHub của bạn):
-
-```bash
-# 1. Thêm đường dẫn tới remote repository
-git remote add origin https://github.com/YOUR_USERNAME/brewlite.git
-
-# 2. Đổi tên branch chính mặc định thành 'main'
-git branch -M main
-
-# 3. Đẩy code lên GitHub
-git push -u origin main
-```
-
----
-
-## Phần 2: Phân chia 7 Nhánh (Branches) cho 7 Thành Viên
-
-Trong mô hình Agile, **KHÔNG AI code trực tiếp trên nhánh `main`**. Nhánh `main` chỉ chứa code đã hoàn thiện và chạy không có lỗi. 
-
-Mỗi thành viên khi làm task của mình sẽ tạo một nhánh riêng (prefix `feature/...`). Dưới đây là phân chia cụ thể cho 7 công việc:
-
-| Thành viên | Tên Công việc (Task) | Tên Nhánh (Branch Name) | Trách nhiệm chính (Frontend & Backend) |
-| :--- | :--- | :--- | :--- |
-| **Member 1** | **Home** (Trang chủ) | `feature/home-page` | Giao diện giới thiệu quán, các món nổi bật (Best sellers), Footer, Header layout. |
-| **Member 2** | **Login & Auth** | `feature/auth-login` | Trang Đăng nhập/Đăng ký, xử lý Auth State (Zustand), gọi API `/auth/login`, cấp phát JWT. |
-| **Member 3** | **Menu** (Danh sách món) | `feature/menu-display` | Giao diện danh sách sản phẩm, gọi API `/products`, xử lý tìm kiếm/lọc món (nếu có). |
-| **Member 4** | **Cart & Checkout** (Giỏ hàng) | `feature/cart-management` | Quản lý logic Thêm/Bớt/Xóa món trong giỏ, tính tổng tiền (dùng Zustand đã setup). |
-| **Member 5** | **Voucher & Loyalty** | `feature/voucher-loyalty` | UI/Logic nhập mã giảm giá, kiểm tra điểm thưởng của user, trừ tiền khi áp dụng voucher. |
-| **Member 6** | **Xác nhận & Nhận đồ uống** | `feature/order-confirmation` | Gọi API tạo đơn (`/orders`), màn hình theo dõi trạng thái đơn (`PENDING` -> `PREPARING` -> `READY`). |
-| **Member 7** | **Payments** (Thanh toán) | `feature/payments` | Tích hợp giao diện chọn phương thức thanh toán (Tiền mặt / E-Wallet), mock logic thanh toán thành công/thất bại. |
-
----
-
-## Phần 3: Workflow Làm việc Hàng Ngày (Cho từng thành viên)
-
-Mỗi khi một thành viên (ví dụ Member 2 làm Login) bắt đầu làm việc, phải tuân thủ đúng 4 bước sau:
-
-### Bước 1: Kéo code mới nhất từ main về máy
-```bash
-# Đảm bảo đang ở nhánh main
-git checkout main
-
-# Kéo code mới nhất do các bạn khác đã làm
+```powershell
+git status --short
+git switch main
 git pull origin main
 ```
 
-### Bước 2: Tạo nhánh riêng và bắt đầu code
-```bash
-# Tạo nhánh mới và nhảy sang nhánh đó luôn
-git checkout -b feature/auth-login
+Nếu đang làm trên nhánh tính năng, trở lại nhánh đó và merge/rebase `main` theo quy ước nhóm; giải quyết conflict rồi mới tiếp tục. Không chạy `git reset --hard` để xử lý conflict khi còn file chưa lưu. Để chạy bản mới bằng Docker, làm theo [README gốc, mục thành viên đã có DB](README.md) hoặc [docker/README.md](docker/README.md); image và volume DB của từng máy không được Git đồng bộ.
+
+## 2. Cập nhật DB và container
+
+Trong PowerShell tại `brewlite`, sau khi đã pull code:
+
+```powershell
+$brewCompose = @('-f', '.\docker\docker-compose.dev.yml', '-f', '.\docker\docker-compose.app.yml')
+docker compose @brewCompose config --quiet
+docker compose @brewCompose up -d --wait db
+docker compose @brewCompose build api
+docker compose @brewCompose run --rm --no-deps api npx prisma migrate deploy
+docker compose @brewCompose run --rm --no-deps api npx prisma migrate status
+docker compose @brewCompose build web
+docker compose @brewCompose up -d --wait
+docker compose @brewCompose ps
 ```
-*(Thành viên code, chỉnh sửa file, test giao diện và backend trên máy cá nhân)*
 
-### Bước 3: Lưu lại thay đổi (Commit & Push)
-```bash
-# Add tất cả các file đã sửa
-git add .
+Máy đã có DB cũ nhưng chưa có lịch sử Prisma Migrate cần **baseline một lần** theo [docker/README.md](docker/README.md) trước khi `migrate deploy`. Nếu DB chưa có nguyên liệu/công thức, chạy `npm run catalog:bootstrap` qua Compose một lần sau migration; với DB demo có thể nạp tồn mẫu bằng `inventory:demo-stock`. Không chạy lại `db seed`, `db push` hoặc `down -v` trên DB muốn giữ. `backend/.env` và volume DB là cấu hình/dữ liệu riêng từng máy.
 
-# Ghi chú lại mình đã làm gì
-git commit -m "feat: design login UI and connect backend"
+## 3. Gửi thay đổi
 
-# Đẩy nhánh của mình lên GitHub
-git push origin feature/auth-login
-```
+Mỗi thành viên làm trên nhánh tính năng của mình, kiểm tra `git diff` và `git status`, rồi chạy bước lint/build/test phù hợp trong [README gốc](README.md). Chỉ stage file của task mình; không commit `.env`, dữ liệu DB hoặc output build. Push nhánh và mở PR vào `main`. CI hiện tại kiểm tra backend và frontend bằng `npm ci`, lint, build, unit test; CI đạt chưa thay thế bước test API/DB và giao diện cho tính năng vừa làm.
 
-### Bước 4: Tạo Pull Request (PR) để gộp code
-1. Thành viên lên GitHub, sẽ thấy nút **"Compare & pull request"** màu xanh. Click vào nút đó.
-2. Đặt tiêu đề cho Pull Request (Ví dụ: *"Hoàn thành giao diện Đăng nhập"*).
-3. (Tùy chọn) Yêu cầu Leader hoặc thành viên khác Review code.
-4. Nhấn **"Merge pull request"** để gộp code của nhánh `feature/auth-login` vào nhánh `main`.
-
-> [!WARNING]
-> **Quy tắc sinh tồn:** 
-> 1. Mỗi người CHỈ sửa code trong phạm vi chức năng của mình, hạn chế tối đa việc sửa file của người khác để tránh Conflict.
-> 2. Nếu cài thêm thư viện mới (ví dụ `npm install react-icons`), phải báo cho cả nhóm để mọi người chạy lệnh `npm install` lại khi pull code mới về.
+Các thay đổi schema phải đi cùng migration, hướng dẫn chuyển dữ liệu và kiểm tra trên DB thử. Khi thay đổi API hoặc luồng người dùng, cập nhật [PROJECT_FLOW.md](PROJECT_FLOW.md) và README liên quan trong cùng PR.

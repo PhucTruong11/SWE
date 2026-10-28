@@ -142,7 +142,7 @@ function RewardsContent() {
           <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 text-xs text-emerald-100 space-y-1 z-10">
             <p className="font-bold text-white text-sm">💡 Thể lệ tích điểm:</p>
             <p>• Điểm được cộng tự động sau khi thanh toán hóa đơn.</p>
-            <p>• Đổi điểm lấy voucher, voucher không có hạn sử dụng.</p>
+            <p>• Voucher đã đổi chỉ dùng được khi mã còn hiệu lực.</p>
             <p>• Mỗi đơn hàng dùng được một voucher.</p>
           </div>
 

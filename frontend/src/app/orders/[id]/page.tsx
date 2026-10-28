@@ -119,7 +119,7 @@ function OrderDetailContent() {
       const error = query.state.error;
       if (isAxiosError(error) && error.response && error.response.status < 500) return false;
       const status = query.state.data?.status;
-      return !status || ACTIVE_ORDER_STATUSES.includes(status) ? 5000 : false;
+      return !status || ACTIVE_ORDER_STATUSES.includes(status) ? 2000 : false;
     },
     refetchOnWindowFocus: 'always',
     refetchOnReconnect: 'always',

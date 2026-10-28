@@ -16,7 +16,7 @@ export default function AdminHomePage() {
     const { data, isLoading } = useQuery({
         queryKey: ['admin-counts'], // dùng chung key với trang Đơn hàng
         queryFn: async () => (await api.get<{ data: Summary }>('/admin/orders/counts')).data.data,
-        refetchInterval: 10_000,
+        refetchInterval: 2_000,
     });
 
     const count = (s: OrderStatus) => data?.counts[s] ?? 0;
@@ -35,7 +35,7 @@ export default function AdminHomePage() {
     return (
         <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 lg:px-8">
             <h1 className="text-2xl font-extrabold tracking-tight text-text">Tổng quan</h1>
-            <p className="mt-1 text-sm text-text/70">Tình hình đơn hàng (tự cập nhật mỗi 10 giây)</p>
+            <p className="mt-1 text-sm text-text/70">Tình hình đơn hàng (tự cập nhật mỗi 2 giây)</p>
 
             {/* Doanh thu hôm nay */}
             <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">

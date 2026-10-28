@@ -8,14 +8,16 @@ import {
 } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { PaymentMethod, OrderStatus, PaymentStatus } from '@prisma/client';
+import { InventoryState, PaymentMethod, OrderStatus, PaymentStatus } from '@prisma/client';
 import { RewardsService } from '../rewards/rewards.service.js';
+import { InventoryService, RESERVATION_DURATION_MS } from '../inventory/inventory.service.js';
+import { PaymentGatewayService } from './payment-gateway.service.js';
 
 // Thời hạn thanh toán cho mỗi đơn hàng: 2 phút (120,000 ms)
-export const PAYMENT_TIMEOUT_MS = 2 * 60 * 1000;
+export const PAYMENT_TIMEOUT_MS = RESERVATION_DURATION_MS;
 
 // ============================================================
-// Danh mục Voucher hợp lệ trong hệ thống
+// Danh mục mã giảm giá hợp lệ trong hệ thống.
 // ============================================================
 export interface VoucherRule {
   code: string;
@@ -23,7 +25,7 @@ export interface VoucherRule {
   discountType: 'FIXED' | 'PERCENT';
   discountValue: number; // 15000 (VND) hoặc 10 (%)
   minOrderValue: number; // Giá trị đơn tối thiểu để dùng
-  maxDiscount?: number;  // Giảm tối đa nếu là PERCENT
+  maxDiscount?: number;  // Mức giảm tối đa khi giảm theo phần trăm.
 }
 
 export const VALID_VOUCHERS: Record<string, VoucherRule> = {
@@ -82,27 +84,7 @@ export const VALID_VOUCHERS: Record<string, VoucherRule> = {
 };
 
 // ============================================================
-// Mock Payment Gateway - Giả lập cổng thanh toán bên ngoài
-// Trong thực tế, đây sẽ là lời gọi đến MoMo/VNPay/Stripe...
-// ============================================================
-async function callMockGateway(
-  amount: number,
-  method: PaymentMethod,
-): Promise<{ success: boolean; gatewayRef: string }> {
-  // Giả lập độ trễ mạng ngắn (100ms)
-  await new Promise((r) => setTimeout(r, 100));
-
-  // Mặc định thành công để luồng test và phát triển luôn ổn định
-  const success = true;
-
-  return {
-    success,
-    gatewayRef: `GW-${method}-${Date.now()}`, // Mã tham chiếu từ cổng thanh toán
-  };
-}
-
-// ============================================================
-// CheckoutService - Toàn bộ logic nghiệp vụ thanh toán
+// Xử lý toàn bộ nghiệp vụ thanh toán.
 // ============================================================
 @Injectable()
 export class CheckoutService {
@@ -110,8 +92,29 @@ export class CheckoutService {
 
   constructor(private readonly prisma: PrismaService,
               private readonly rewardsService: RewardsService,
+              private readonly inventory: InventoryService,
+              private readonly gateway: PaymentGatewayService,
   ) {}
 
+  /** Đơn mới dùng hạn giữ nguyên liệu; đơn cũ dùng thời điểm tạo cộng hai phút. */
+  private deadline(order: { createdAt: Date; reservationExpiresAt: Date | null }) {
+    return order.reservationExpiresAt ?? new Date(order.createdAt.getTime() + PAYMENT_TIMEOUT_MS);
+  }
+
+  /** Khóa đơn rồi hủy và trả nguyên liệu đã giữ nếu đơn thực sự quá hạn. */
+  private async cancelExpiredOrder(orderId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "orders" WHERE "id" = ${orderId} FOR UPDATE`;
+      const order = await tx.order.findUnique({ where: { id: orderId }, include: { items: true } });
+      if (!order || (order.status !== OrderStatus.PENDING && order.status !== OrderStatus.PAYMENT_FAILED)) return false;
+      if (this.deadline(order).getTime() > Date.now()) return false;
+      await this.inventory.release(tx, order);
+      await tx.order.update({ where: { id: orderId }, data: { status: OrderStatus.CANCELLED } });
+      return true;
+    });
+  }
+
+  /** Chỉ cho chủ đơn xem hoặc thao tác thanh toán trên đơn của mình. */
   private async findOwnedOrder(orderId: string, userId: string) {
     if (!userId) {
       throw new UnauthorizedException('Vui lòng đăng nhập để thanh toán');
@@ -126,7 +129,7 @@ export class CheckoutService {
   }
 
   // ----------------------------------------------------------
-  // applyVoucher: Áp dụng mã giảm giá cho đơn hàng PENDING
+  // Chỉ áp mã cho đơn đang chờ; tính lại tổng tiền từ giá trước khi giảm.
   // ----------------------------------------------------------
   async applyVoucher(orderId: string, promoCode: string, userId: string) {
     const order = await this.findOwnedOrder(orderId, userId);
@@ -136,17 +139,21 @@ export class CheckoutService {
         'Chỉ có thể áp dụng mã giảm giá khi đơn hàng đang chờ thanh toán',
       );
     }
+    if (this.deadline(order).getTime() <= Date.now()) {
+      await this.cancelExpiredOrder(orderId);
+      throw new BadRequestException('Đơn hàng đã hết hạn thanh toán');
+    }
 
     const cleanCode = promoCode.trim().toUpperCase();
-        // Mã đổi điểm: user phải sở hữu voucher
+        // Người dùng phải sở hữu mã giảm giá đã đổi bằng điểm.
     await this.rewardsService.assertVoucherUsable(userId, cleanCode);
 
-    // 1. Kiểm tra trong DB Promotions trước
+    // 1. Kiểm tra mã giảm giá trong cơ sở dữ liệu trước.
     const dbPromo = await this.prisma.promotion.findUnique({
       where: { code: cleanCode },
     });
 
-    // 2. Dự phòng trong VALID_VOUCHERS nếu DB chưa có
+    // 2. Dùng danh sách mã dự phòng nếu cơ sở dữ liệu chưa có.
     const fallbackRule = VALID_VOUCHERS[cleanCode];
 
     if (!dbPromo && !fallbackRule) {
@@ -155,9 +162,10 @@ export class CheckoutService {
       );
     }
 
-    if (dbPromo && !dbPromo.isActive) {
+    const now = new Date();
+    if (dbPromo && (!dbPromo.isActive || dbPromo.startDate > now || (dbPromo.endDate && dbPromo.endDate <= now))) {
       throw new BadRequestException(
-        `Mã giảm giá "${promoCode}" đã ngừng hoạt động`,
+        `Mã giảm giá "${promoCode}" chưa có hiệu lực hoặc đã hết hạn`,
       );
     }
 
@@ -220,7 +228,8 @@ export class CheckoutService {
   }
 
   // ----------------------------------------------------------
-  // processCheckout: Hàm chính xử lý thanh toán
+  // Thanh toán đơn đã tạo: kiểm tra quyền và thời hạn, chống xử lý trùng rồi khóa đơn.
+  // Thành công thì trừ tồn thực và cộng điểm; thất bại vẫn giữ nguyên liệu để thử lại trong hạn.
   // ----------------------------------------------------------
   async processCheckout(
     orderId: string,
@@ -232,7 +241,7 @@ export class CheckoutService {
     if (!userId) {
       throw new UnauthorizedException('Vui lòng đăng nhập để thanh toán');
     }
-    // Xác minh chủ đơn trước khi đọc payment, áp voucher hoặc gọi gateway.
+    // Xác minh chủ đơn trước khi đọc giao dịch, áp mã giảm giá hoặc gọi cổng thanh toán.
     const order = await this.prisma.order.findUnique({
       where: { id: orderId, userId },
       include: {
@@ -246,7 +255,7 @@ export class CheckoutService {
       throw new NotFoundException(`Không tìm thấy đơn hàng với id: ${orderId}`);
     }
 
-    // ── Bước 1: Chống thanh toán trùng lặp (Idempotency Guard) ──
+    // ── Bước 1: Chặn xử lý lặp bằng mã giao dịch. ──
     const existingPayment = await this.prisma.payment.findUnique({
       where: { idempotencyKey },
     });
@@ -262,7 +271,13 @@ export class CheckoutService {
       };
     }
 
-    // Kiểm tra key trước khi thay đổi voucher của đơn hàng.
+    if (this.deadline(order).getTime() <= Date.now() &&
+        (order.status === OrderStatus.PENDING || order.status === OrderStatus.PAYMENT_FAILED)) {
+      await this.cancelExpiredOrder(orderId);
+      throw new BadRequestException('Đơn hàng đã hết hạn thanh toán');
+    }
+
+    // Kiểm tra mã giao dịch trước khi thay đổi mã giảm giá của đơn hàng.
     const cleanPromoCode = promoCode?.trim().toUpperCase();
     if (cleanPromoCode && order.promoCode?.toUpperCase() !== cleanPromoCode) {
       await this.applyVoucher(orderId, cleanPromoCode, userId);
@@ -273,7 +288,7 @@ export class CheckoutService {
       throw new BadRequestException('Đơn hàng không có sản phẩm nào để thanh toán');
     }
 
-    // ── Bước 3: Kiểm tra trạng thái đơn hàng (State Machine Guard) ──
+    // ── Bước 3: Kiểm tra trạng thái hợp lệ của đơn hàng. ──
     // Cho phép thanh toán khi đơn đang ở trạng thái PENDING hoặc PAYMENT_FAILED (khách thử lại theo PDF)
     const ALLOWED_STATUSES: OrderStatus[] = [
       OrderStatus.PENDING,
@@ -295,93 +310,79 @@ export class CheckoutService {
       );
     }
 
-    // ── Bước 3b: Kiểm tra Hết hạn thanh toán (Timeout Guard 2 phút) ──
-    const elapsedMs = Date.now() - order.createdAt.getTime();
-    if (elapsedMs > PAYMENT_TIMEOUT_MS) {
-      // Đơn hàng đã quá hạn 2 phút -> Tự động cập nhật thành CANCELLED
-      await this.prisma.order.update({
-        where: { id: orderId },
-        data: { status: OrderStatus.CANCELLED },
-      });
-
-      throw new BadRequestException(
-        'Đơn hàng đã quá hạn thanh toán (quá 2 phút) và đã tự động bị hủy.',
-      );
-    }
-
-    // ── Bước 4: Ghi vào Database với Cơ chế Khóa Chống Race Condition ──
+    // ── Bước 4: Khóa dữ liệu để các yêu cầu đồng thời không xử lý trùng. ──
     const transactionResult = await this.prisma.$transaction(async (tx) => {
-      // 🔒 6a: Khóa dòng Order (Pessimistic Lock: SELECT FOR UPDATE)
-      // Ngăn chặn 2 request đồng thời cho cùng 1 đơn hàng lọt qua cùng lúc
-      await tx.$executeRaw`SELECT 1 FROM "orders" WHERE "id" = ${orderId} FOR UPDATE`;
+      // Xử lý lần lượt các yêu cầu cùng mã giao dịch trước khi gọi cổng thanh toán.
+      await tx.$queryRaw`SELECT 1 AS locked FROM (SELECT pg_advisory_xact_lock(hashtext(${idempotencyKey}))) AS payment_lock`;
+      // Khóa dòng đơn hàng trong giao dịch bằng SELECT FOR UPDATE.
+      // Ngăn hai yêu cầu đồng thời cùng xử lý một đơn hàng.
+      await tx.$queryRaw`SELECT "id" FROM "orders" WHERE "id" = ${orderId} FOR UPDATE`;
 
-      // Kiểm tra lại trạng thái đơn hàng sau khi có lock (phòng trường hợp request trước vừa cập nhật)
+      // Kiểm tra lại trạng thái sau khi khóa vì yêu cầu trước có thể vừa cập nhật đơn.
       const lockedOrder = await tx.order.findUnique({
         where: { id: orderId },
-        select: { status: true, total: true, userId: true, promoCode: true },
+        include: { items: { include: { product: true } } },
       });
 
       if (!lockedOrder || lockedOrder.userId !== userId) {
         throw new NotFoundException(`Không tìm thấy đơn hàng với id: ${orderId}`);
       }
+      // Kiểm tra mã giao dịch lần nữa sau khi khóa để chặn hai yêu cầu đến cùng lúc.
+      const paymentAfterLock = await tx.payment.findUnique({ where: { idempotencyKey } });
+      if (paymentAfterLock) {
+        if (paymentAfterLock.orderId !== orderId) {
+          throw new ConflictException('Idempotency-Key đã được sử dụng cho đơn hàng khác');
+        }
+        return { duplicate: true as const, payment: paymentAfterLock };
+      }
       if (!ALLOWED_STATUSES.includes(lockedOrder.status)) {
         throw new ConflictException('Đơn hàng đã được xử lý bởi một phiên giao dịch khác');
+      }
+      if (this.deadline(lockedOrder).getTime() <= Date.now()) {
+        await this.inventory.release(tx, lockedOrder);
+        await tx.order.update({ where: { id: orderId }, data: { status: OrderStatus.CANCELLED } });
+        return { expired: true as const };
       }
 
       if (!Number.isSafeInteger(lockedOrder.total) || lockedOrder.total < 0) {
         throw new BadRequestException('Số tiền thanh toán không hợp lệ');
       }
 
-      // ── Bước 5: Gọi cổng thanh toán (Mock) với số tiền đã xác minh ──
-      // Nếu đơn hàng 0đ (do voucher giảm 100%), tự động hoàn tất mà không cần gọi cổng thanh toán
+      // ── Bước 5: Gọi cổng thanh toán mô phỏng với số tiền đã xác minh. ──
+      // Đơn 0đ do mã giảm toàn bộ được hoàn tất mà không gọi cổng thanh toán.
       const gatewayResult =
         lockedOrder.total === 0
           ? { success: true, gatewayRef: `FREE-VOUCHER-${Date.now()}` }
-          : await callMockGateway(lockedOrder.total, method);
+          : await this.gateway.charge(lockedOrder.total, method);
 
       const pointsEarned = gatewayResult.success
         ? Math.floor(lockedOrder.total / 10_000)
         : 0;
 
+      // Chỉ thanh toán thành công mới chuyển lượng đã giữ thành lượng đã bán.
       if (gatewayResult.success) {
-        // 🔒 6b: Optimistic Locking - Trừ tồn kho và chống bán lố (Overselling)
-        // Nếu 2 người cùng tranh mua 1 ly nước cuối cùng, chỉ 1 người thành công
-        const stockItems = new Map<string, (typeof order.items)[number]>();
-        for (const item of order.items) {
-          const existing = stockItems.get(item.productId);
-          stockItems.set(item.productId, existing
-            ? { ...existing, qty: existing.qty + item.qty }
-            : { ...item });
-        }
-
-        // Mỗi sản phẩm chỉ cập nhật version một lần dù có nhiều dòng tùy chọn.
-        // Cố định thứ tự khóa sản phẩm để giảm deadlock giữa các giỏ hàng.
-        for (const item of [...stockItems.values()].sort((a, b) => a.productId.localeCompare(b.productId))) {
-          if (!item.product) continue;
-
-          // Kiểm tra và trừ kho nguyên tử (Atomic Update)
-          const updateStock = await tx.product.updateMany({
-            where: {
-              id: item.productId,
-              stock: { gte: item.qty }, // Chỉ trừ khi còn đủ số lượng
-              version: item.product.version, // Optimistic Lock version check
-            },
-            data: {
-              stock: { decrement: item.qty },
-              version: { increment: 1 },
-            },
-          });
-
-          // Nếu count === 0 nghĩa là vừa bị người khác mua mất hoặc hết hàng
-          if (updateStock.count === 0) {
-            throw new ConflictException(
-              `Sản phẩm "${item.product.name}" vừa hết hàng hoặc không đủ số lượng tồn kho!`,
-            );
+        if (lockedOrder.inventoryState === InventoryState.RESERVED) {
+          await this.inventory.consume(tx, lockedOrder);
+        } else if (lockedOrder.inventoryState === InventoryState.LEGACY) {
+          // Đơn được tạo trước khi chuyển sang kho nguyên liệu vẫn dùng tồn kho sản phẩm cũ.
+          const stockItems = new Map<string, (typeof lockedOrder.items)[number]>();
+          for (const item of lockedOrder.items) {
+            const existing = stockItems.get(item.productId);
+            stockItems.set(item.productId, existing ? { ...existing, qty: existing.qty + item.qty } : item);
           }
+          for (const item of [...stockItems.values()].sort((a, b) => a.productId.localeCompare(b.productId))) {
+            const changed = await tx.product.updateMany({
+              where: { id: item.productId, stock: { gte: item.qty }, version: item.product.version },
+              data: { stock: { decrement: item.qty }, version: { increment: 1 } },
+            });
+            if (changed.count === 0) throw new ConflictException(`Sản phẩm "${item.product.name}" không còn đủ hàng`);
+          }
+        } else {
+          throw new ConflictException('Nguyên liệu giữ cho đơn hàng này không còn hiệu lực');
         }
       }
 
-      // 6c: Tạo bản ghi Payment
+      // Tạo bản ghi thanh toán.
       const newPayment = await tx.payment.create({
         data: {
           orderId,
@@ -395,7 +396,7 @@ export class CheckoutService {
       });
 
       if (gatewayResult.success) {
-        // 6d: Cập nhật đơn hàng → PAID
+        // Cập nhật đơn hàng sang trạng thái đã thanh toán.
         await tx.order.update({
           where: { id: orderId },
           data: {
@@ -404,14 +405,14 @@ export class CheckoutService {
           },
         });
 
-        // 6e: Cộng điểm thưởng + ghi lịch sử điểm (chống cộng trùng bằng unique orderId+EARN)
+        // Cộng điểm và ghi lịch sử; ràng buộc duy nhất theo đơn ngăn cộng trùng.
         await this.rewardsService.earnPoints(tx, {
           id: orderId,
           userId: lockedOrder.userId,
           total: lockedOrder.total,
         });
 
-        // 6f: Đánh dấu voucher đổi điểm đã dùng (cùng transaction)
+        // Đánh dấu mã đổi điểm đã dùng trong cùng giao dịch.
         await this.rewardsService.consumeVoucher(
           tx,
           lockedOrder.userId,
@@ -419,6 +420,7 @@ export class CheckoutService {
           orderId,
         );
       } else {
+        // Giữ nguyên liệu đến hết hạn để khách có thể thử thanh toán lại.
         await tx.order.update({
           where: { id: orderId },
           data: { status: OrderStatus.PAYMENT_FAILED },
@@ -426,11 +428,19 @@ export class CheckoutService {
       }
 
       return {
+        expired: false as const,
         payment: newPayment,
         success: gatewayResult.success,
         pointsEarned,
       };
     });
+
+    if (transactionResult.expired) {
+      throw new BadRequestException('Đơn hàng đã hết hạn thanh toán và nguyên liệu đã được trả kho');
+    }
+    if ('duplicate' in transactionResult && transactionResult.duplicate) {
+      return { isDuplicate: true, payment: transactionResult.payment, message: 'Thanh toán này đã được xử lý trước đó' };
+    }
 
     // ── Bước 7: Trả về kết quả ──
     return {
@@ -445,7 +455,7 @@ export class CheckoutService {
   }
 
   // ----------------------------------------------------------
-  // getCheckoutsByOrder: Lấy lịch sử thanh toán của 1 đơn hàng
+  // Lấy lịch sử thanh toán của một đơn hàng.
   // ----------------------------------------------------------
   async getCheckoutsByOrder(orderId: string, userId: string) {
     await this.findOwnedOrder(orderId, userId);
@@ -456,29 +466,24 @@ export class CheckoutService {
   }
 
   // ----------------------------------------------------------
-  // getOrderCheckoutStatus: Lấy thông tin thanh toán & đếm ngược thời gian còn lại (GUI cần)
+  // Lấy trạng thái và thời gian còn lại; nếu quá hạn thì hủy đơn và trả nguyên liệu.
   // ----------------------------------------------------------
   async getOrderCheckoutStatus(orderId: string, userId: string) {
     const order = await this.findOwnedOrder(orderId, userId);
     const payments = await this.prisma.payment.findMany({ where: { orderId } });
 
-    const expiresAt = new Date(order.createdAt.getTime() + PAYMENT_TIMEOUT_MS);
+    const expiresAt = this.deadline(order);
     const remainingSeconds = Math.max(
       0,
       Math.floor((expiresAt.getTime() - Date.now()) / 1000),
     );
 
-    // Nếu đã hết hạn mà đơn vẫn đang PENDING -> tự động đổi sang CANCELLED
-    if (remainingSeconds === 0 && order.status === OrderStatus.PENDING) {
-      await this.prisma.order.update({
-        where: { id: orderId },
-        data: { status: OrderStatus.CANCELLED },
-      });
-      order.status = OrderStatus.CANCELLED;
+    if (remainingSeconds === 0 && (order.status === OrderStatus.PENDING || order.status === OrderStatus.PAYMENT_FAILED)) {
+      if (await this.cancelExpiredOrder(orderId)) order.status = OrderStatus.CANCELLED;
     }
 
     const originalTotal = order.total + order.discount;
-    // URL mã VietQR / MoMo chuẩn hiển thị cho GUI
+    // Tạo đường dẫn mã VietQR/MoMo để hiển thị trên giao diện.
     const cleanOrderId = order.id.replace(/-/g, '').slice(0, 8).toUpperCase();
     const qrCodeUrl = `https://api.vietqr.io/image/970422-0909090909-compact2.png?amount=${order.total}&addInfo=BREWLITE%20${cleanOrderId}&accountName=BREWLITE%20COFFEE`;
 
@@ -499,26 +504,30 @@ export class CheckoutService {
   }
 
   // ----------------------------------------------------------
-  // Cron Job: Chạy mỗi 30 giây để quét và hủy các đơn PENDING quá 2 phút
-  // Giúp dọn dẹp hệ thống ngay cả khi user tắt trình duyệt
+  // Tác vụ chạy mỗi 30 giây để hủy đơn quá hạn và trả nguyên liệu đã giữ.
+  // Tác vụ vẫn chạy khi khách đã đóng trình duyệt.
   // ----------------------------------------------------------
   @Cron('*/30 * * * * *')
   async handleExpiredOrders() {
-    const expirationThreshold = new Date(Date.now() - PAYMENT_TIMEOUT_MS);
-
-    const expiredOrders = await this.prisma.order.updateMany({
+    const now = new Date();
+    const expiredOrders = await this.prisma.order.findMany({
       where: {
-        status: OrderStatus.PENDING,
-        createdAt: { lt: expirationThreshold },
+        status: { in: [OrderStatus.PENDING, OrderStatus.PAYMENT_FAILED] },
+        OR: [
+          { reservationExpiresAt: { lte: now } },
+          { reservationExpiresAt: null, createdAt: { lte: new Date(now.getTime() - PAYMENT_TIMEOUT_MS) } },
+        ],
       },
-      data: {
-        status: OrderStatus.CANCELLED,
-      },
+      select: { id: true },
+      take: 100,
     });
-
-    if (expiredOrders.count > 0) {
+    let cancelled = 0;
+    for (const order of expiredOrders) {
+      if (await this.cancelExpiredOrder(order.id)) cancelled++;
+    }
+    if (cancelled > 0) {
       this.logger.warn(
-        `⏰ [CronJob] Đã tự động hủy ${expiredOrders.count} đơn hàng PENDING do quá hạn 2 phút!`,
+        `Đã hủy ${cancelled} đơn hàng hết hạn và trả nguyên liệu đã giữ`,
       );
     }
   }

@@ -3,7 +3,9 @@
 import Image from 'next/image';
 import { Trash2, Minus, Plus } from 'lucide-react';
 import { useCartStore, type CartItem } from '@/stores/cart.store';
-import { formatCartToppings, getCartLineTotal } from '@/lib/cart';
+import { formatCartToppings, getCartItemKey, getCartLineTotal } from '@/lib/cart';
+import { cartValidationMessage, validateCart } from '@/lib/validate-cart';
+import { useState } from 'react';
 
 interface CartItemRowProps {
   item: CartItem;
@@ -12,18 +14,33 @@ interface CartItemRowProps {
 
 export function CartItemRow({ item, index }: CartItemRowProps) {
   const { items, updateQuantity, removeItem } = useCartStore();
-  const productId = item.productId ?? item.id;
-  const quantityInCart = productId
-    ? items.reduce((total, row) => (row.productId ?? row.id) === productId ? total + row.quantity : total, 0)
-    : item.quantity;
-  const atStockLimit = item.stock !== undefined && quantityInCart >= item.stock;
+  const [checking, setChecking] = useState(false);
+  const [stockError, setStockError] = useState<string | null>(null);
 
   const handleDecrease = () => {
     updateQuantity(index, item.quantity - 1);
   };
 
-  const handleIncrease = () => {
-    updateQuantity(index, item.quantity + 1);
+  const handleIncrease = async () => {
+    if (checking) return;
+    setChecking(true);
+    setStockError(null);
+    try {
+      const candidate = items.map((row, rowIndex) =>
+        rowIndex === index ? { ...row, quantity: row.quantity + 1 } : row);
+      const validation = await validateCart(candidate);
+      if (!validation.available) {
+        setStockError(cartValidationMessage(validation));
+        return;
+      }
+      const current = useCartStore.getState().items[index];
+      if (!current || getCartItemKey(current) !== getCartItemKey(item) || current.quantity !== item.quantity) return;
+      updateQuantity(index, item.quantity + 1);
+    } catch {
+      setStockError('Không kiểm tra được nguyên liệu. Vui lòng thử lại.');
+    } finally {
+      setChecking(false);
+    }
   };
 
   const handleRemove = () => {
@@ -70,7 +87,7 @@ export function CartItemRow({ item, index }: CartItemRowProps) {
       </div>
 
       {/* 4. Nhóm điều khiển: Số lượng & Nút Xóa */}
-      <div className="flex flex-col items-end gap-3 h-20 justify-between">
+      <div className="flex min-h-20 flex-col items-end justify-between gap-3">
         <button
           onClick={handleRemove}
           className="text-gray-300 hover:text-red-500 transition-colors p-1"
@@ -93,13 +110,14 @@ export function CartItemRow({ item, index }: CartItemRowProps) {
 
           <button
             onClick={handleIncrease}
-            disabled={atStockLimit}
-            title={atStockLimit ? 'Đã đạt số lượng tồn kho' : 'Thêm một phần'}
+            disabled={checking}
+            title={checking ? 'Đang kiểm tra nguyên liệu' : 'Thêm một phần'}
             className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-100 text-text hover:bg-gray-200 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Plus size={14} />
           </button>
         </div>
+        {stockError && <p role="alert" className="max-w-48 text-right text-xs text-red-600">{stockError}</p>}
       </div>
     </div>
   );

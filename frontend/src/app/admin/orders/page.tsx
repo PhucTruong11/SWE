@@ -64,7 +64,7 @@ const PRIMARY_ACTION: Partial<Record<OrderStatus, { next: OrderStatus; label: st
     READY: { next: 'COMPLETED', label: 'Giao khách' },
 };
 // Các trạng thái được phép hủy
-const CANCELLABLE: OrderStatus[] = ['PENDING', 'PAYMENT_FAILED', 'PAID'];
+const CANCELLABLE: OrderStatus[] = ['PAID'];
 
 // "đã chờ 12 phút" + màu cảnh báo khi chờ lâu
 function waitInfo(createdAt: string) {
@@ -108,7 +108,7 @@ export default function AdminOrdersPage() {
         queryKey: ['admin-counts'],
         queryFn: async () =>
             (await api.get<{ data: { counts: Record<OrderStatus, number> } }>('/admin/orders/counts')).data.data,
-        refetchInterval: 10_000,
+        refetchInterval: 2_000,
     });
 
     // Danh sách đơn theo tab / ngày / tìm kiếm / trang
@@ -128,7 +128,7 @@ export default function AdminOrdersPage() {
             return res.data.data;
         },
         placeholderData: keepPreviousData, // giữ dữ liệu cũ khi đổi trang, đỡ nhấp nháy
-        refetchInterval: 10_000,
+        refetchInterval: 2_000,
     });
 
     const changeStatus = useMutation({

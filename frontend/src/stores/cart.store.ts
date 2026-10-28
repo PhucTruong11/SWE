@@ -22,15 +22,15 @@ interface CartStore {
   removePromo: () => void;
   setProductStocks: (stocks: Record<string, number>) => void;
 }
+// Các hàm hỗ trợ dùng trong tệp này.
 
-// Tạo key localStorage độc lập cho từng user hoặc khách
+// Tạo khóa lưu giỏ riêng cho từng tài khoản và khách chưa đăng nhập.
 const getCartKey = (userId: string | null) => {
   return userId ? `brewlite_cart_user_${userId}` : `brewlite_cart_guest`;
 };
 
 const getPromoKey = (userId: string | null) => `${getCartKey(userId)}_promo`;
 
-// Chỉ gộp khi cùng sản phẩm, size và số lượng từng loại topping.
 const mergeCartItems = (existingItems: CartItem[], guestItems: CartItem[]): CartItem[] => {
   const merged: CartItem[] = [];
 
@@ -101,13 +101,12 @@ const readSavedPromo = (userId: string | null): AppliedPromo | null => {
 const resetCheckoutTimer = () => {
   if (typeof window === 'undefined') return;
   localStorage.removeItem('brewlite_checkout_deadline');
-  localStorage.removeItem('brewlite_checkout_renew_count');
 };
 
 const promoForItems = (promo: AppliedPromo | null, items: CartItem[]) =>
   recalculatePromo(promo, items.reduce((total, item) => total + getCartLineTotal(item), 0));
 
-// Hàm lưu dữ liệu vào localStorage
+// Lưu giỏ hàng và mã giảm giá vào bộ nhớ trình duyệt.
 const saveToStorage = (userId: string | null, items: CartItem[], appliedPromo: AppliedPromo | null) => {
   if (typeof window !== 'undefined') {
     const key = getCartKey(userId);
@@ -120,6 +119,7 @@ const saveToStorage = (userId: string | null, items: CartItem[], appliedPromo: A
   }
 };
 
+// Các thao tác thay đổi trạng thái giỏ hàng.
 export const useCartStore = create<CartStore>((set, get) => ({
   items: [],
   currentUserId: null,
@@ -133,17 +133,15 @@ export const useCartStore = create<CartStore>((set, get) => ({
     const savedPromo = readSavedPromo(userId);
 
     if (userId) {
-      // NGƯỜI DÙNG ĐĂNG NHẬP
+      // Khi người dùng đăng nhập.
       const userKey = getCartKey(userId);
       let userItems = readCartItems(userKey);
 
-      // Nếu có món trong giỏ hàng Khách -> Gộp vào giỏ hàng User và dọn dẹp giỏ khách
+      // Gộp món trong giỏ khách vào giỏ tài khoản rồi xóa giỏ khách.
       if (guestItems.length > 0) {
         userItems = mergeCartItems(userItems, guestItems);
       }
 
-      // Mã khách vừa chọn được ưu tiên khi chuyển giỏ; nếu không còn đủ điều kiện,
-      // giữ mã hợp lệ đã lưu trong giỏ của tài khoản.
       const guestPromo = guestItems.length > 0 ? readSavedPromo(null) : null;
       const appliedPromo = promoForItems(guestPromo, userItems) ?? promoForItems(savedPromo, userItems);
       saveToStorage(userId, userItems, appliedPromo);
@@ -153,7 +151,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
       }
       set({ currentUserId: userId, items: userItems, appliedPromo });
     } else {
-      // KHÁCH VẮNG LAI / ĐĂNG XUẤT
+      // Khi là khách chưa đăng nhập hoặc người dùng vừa đăng xuất.
       const appliedPromo = promoForItems(savedPromo, guestItems);
       set({ currentUserId: null, items: guestItems, appliedPromo });
       saveToStorage(null, guestItems, appliedPromo);
@@ -163,11 +161,6 @@ export const useCartStore = create<CartStore>((set, get) => ({
   addItem: (newItem) => {
     if (!Number.isSafeInteger(newItem.quantity) || newItem.quantity <= 0) return false;
     const productId = newItem.productId ?? newItem.id;
-    if (productId && Number.isSafeInteger(newItem.stock) && newItem.stock! >= 0) {
-      const inCart = get().items.reduce((total, item) =>
-        (item.productId ?? item.id) === productId ? total + item.quantity : total, 0);
-      if (inCart + newItem.quantity > newItem.stock!) return false;
-    }
     resetCheckoutTimer();
     const updatedItems = mergeCartItems(get().items, [newItem]).map((item) =>
       productId && (item.productId ?? item.id) === productId
@@ -195,14 +188,6 @@ export const useCartStore = create<CartStore>((set, get) => ({
       get().removeItem(index);
       return;
     }
-    const selected = get().items[index];
-    const productId = selected.productId ?? selected.id;
-    if (productId && Number.isSafeInteger(selected.stock) && selected.stock! >= 0) {
-      const otherQuantity = get().items.reduce((total, item, itemIndex) =>
-        itemIndex !== index && (item.productId ?? item.id) === productId
-          ? total + item.quantity : total, 0);
-      if (otherQuantity + quantity > selected.stock!) return;
-    }
     resetCheckoutTimer();
     const updatedItems = get().items.map((item, i) => i === index
       ? { ...item, quantity, lineTotal: getCartLineTotal({ ...item, quantity }) }
@@ -214,6 +199,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
 
   clearCart: () => {
     resetCheckoutTimer();
+    if (typeof window !== 'undefined') localStorage.removeItem('brewlite_checkout_renew_count');
     set({ items: [], appliedPromo: null });
     if (typeof window !== 'undefined') {
       const key = getCartKey(get().currentUserId);

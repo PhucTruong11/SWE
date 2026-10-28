@@ -192,7 +192,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                         </Link>
 
                         <Link
-                            href="/checkout"
+                            href="/cart"
                             onClick={onClose}
                             className="mx-2 mb-2 block rounded-lg bg-primary py-2.5 text-center text-sm font-semibold text-white transition-colors hover:bg-primary-hover"
                         >

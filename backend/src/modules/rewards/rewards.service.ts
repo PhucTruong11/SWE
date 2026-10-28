@@ -20,18 +20,24 @@ export class RewardsService {
 
   // ---------------- GET /rewards ----------------
   async getOverview(userId: string) {
+    const now = new Date();
+    const usablePromotion = {
+      isActive: true,
+      startDate: { lte: now },
+      OR: [{ endDate: null }, { endDate: { gt: now } }],
+    };
     const [user, rewardItems, unusedVouchers, history] = await Promise.all([
       this.prisma.user.findUnique({
         where: { id: userId },
         select: { loyaltyPoints: true },
       }),
       this.prisma.rewardItem.findMany({
-        where: { isActive: true },
+        where: { isActive: true, promotion: { is: usablePromotion } },
         include: { promotion: true },
         orderBy: { pointsCost: 'asc' },
       }),
       this.prisma.userVoucher.findMany({
-        where: { userId, usedAt: null },
+        where: { userId, usedAt: null, promotion: { is: usablePromotion } },
         include: { promotion: true },
         orderBy: { createdAt: 'asc' },
       }),
@@ -90,7 +96,10 @@ export class RewardsService {
       where: { id: rewardItemId, isActive: true },
       include: { promotion: true },
     });
-    if (!reward) throw new NotFoundException('Phần quà không tồn tại hoặc đã ngừng đổi');
+    if (!reward || !reward.promotion.isActive || reward.promotion.startDate > new Date() ||
+        (reward.promotion.endDate && reward.promotion.endDate <= new Date())) {
+      throw new NotFoundException('Phần quà không tồn tại, chưa có hiệu lực hoặc đã hết hạn');
+    }
 
     return this.prisma.$transaction(async (tx) => {
       // Trừ điểm nguyên tử: chỉ thành công nếu còn đủ điểm (chống âm điểm khi bấm/đổi đồng thời)

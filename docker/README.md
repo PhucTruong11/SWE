@@ -1,6 +1,6 @@
 # Docker cho BrewLite
 
-Hướng dẫn chạy BrewLite local bằng Docker Compose, cập nhật ngày 22/10/2026. Mở PowerShell tại thư mục gốc `brewlite` chứa `frontend`, `backend` và `docker`; các lệnh phần 1–2 trùng với [README chính](../README.md).
+Hướng dẫn chạy BrewLite local bằng Docker Compose, cập nhật ngày 28/10/2026. Mở PowerShell tại thư mục gốc `brewlite` chứa `frontend`, `backend` và `docker`; các lệnh phần 1–2 trùng với [README chính](../README.md).
 
 Ba dịch vụ đã có cấu hình thực tế: `db` (PostgreSQL 16), `api` (NestJS) và `web` (Next.js). `docker-compose.dev.yml` chứa DB; `docker-compose.app.yml` bổ sung API và web. Hai Dockerfile nằm trong `backend/` và `frontend/`. Đây là môi trường phát triển/demo local, chưa phải cấu hình production.
 
@@ -32,19 +32,31 @@ docker compose @brewCompose build web
 docker compose @brewCompose up -d --wait db
 ```
 
-**Chỉ trên DB mới**, tạo bảng sau khi DB đã healthy:
+**DB mới, chưa có bảng**, tạo schema sau khi DB đã healthy:
 
 ```powershell
-docker compose @brewCompose run --rm --no-deps api npx prisma db push
+docker compose @brewCompose run --rm --no-deps api npx prisma migrate deploy
 ```
 
 Sau đó, cũng chỉ trên DB mới hoặc khi toàn bộ dữ liệu có thể bỏ, nạp dữ liệu mẫu:
 
 ```powershell
 docker compose @brewCompose run --rm --no-deps api npx prisma db seed
+docker compose @brewCompose run --rm --no-deps api npm run catalog:bootstrap
+docker compose @brewCompose run --rm --no-deps api npm run inventory:demo-stock
 ```
 
-Seed có thao tác xóa dữ liệu cũ. Không chạy seed mỗi lần bật hệ thống. Project chưa có migration được quản lý trong Git; `db push` chỉ dành cho môi trường phát triển. Nếu Prisma cảnh báo mất dữ liệu, xem lại thay đổi schema trước khi tiếp tục.
+Seed có thao tác xóa dữ liệu cũ. Không chạy seed mỗi lần bật hệ thống. `catalog:bootstrap` tạo 17 nguyên liệu, công thức mẫu và chỉ bật 6 món/3 topping; nó không reset stock hoặc xóa đơn. Checkout mới dùng tồn nguyên liệu. `inventory:demo-stock` chỉ nạp lượng mẫu cho các nguyên liệu có tồn bằng 0 trong DB demo local; không chạy nếu số 0 là trạng thái hết hàng có chủ ý.
+
+**DB cũ có bảng/dữ liệu nhưng chưa có lịch sử Prisma Migrate:** sao lưu DB, rồi đánh dấu baseline một lần trước khi deploy. Không chạy `db seed` trên DB này:
+
+```powershell
+docker compose @brewCompose run --rm --no-deps api npx prisma migrate resolve --applied 20261027000100_baseline
+docker compose @brewCompose run --rm --no-deps api npx prisma migrate deploy
+docker compose @brewCompose run --rm --no-deps api npm run catalog:bootstrap
+```
+
+Nếu DB đã có baseline, bỏ lệnh `resolve`; lần pull sau có migration mới chỉ chạy `migrate deploy`. Chỉ dùng `resolve` sau khi đã xác minh và sao lưu DB cũ. Xem [plan nguyên liệu](../INVENTORY_RECIPE_PLAN.md) để biết phần còn chờ triển khai.
 
 Sau đó bật đủ ba dịch vụ:
 
@@ -77,6 +89,33 @@ docker compose @brewCompose up -d --wait api
 
 docker compose @brewCompose build web
 docker compose @brewCompose up -d --wait web
+```
+
+### Thành viên đã chạy bản cũ và muốn cập nhật code mới
+
+Sau khi code được merge, mở PowerShell ở **thư mục gốc bản clone trên máy mình**. Giữ nguyên `backend/.env` và volume DB đang dùng. Thứ tự dưới đây áp migration trước khi API mới chạy. Nếu đang làm trên nhánh cá nhân, merge `main` vào nhánh đó theo quy trình Git của nhóm rồi mới build; không ghi đè thay đổi chưa commit.
+
+```powershell
+git switch main
+git pull origin main
+$brewCompose = @('-f', '.\docker\docker-compose.dev.yml', '-f', '.\docker\docker-compose.app.yml')
+docker compose @brewCompose config --quiet
+docker compose @brewCompose up -d --wait db
+docker compose @brewCompose build api
+docker compose @brewCompose run --rm --no-deps api npx prisma migrate deploy
+docker compose @brewCompose run --rm --no-deps api npx prisma migrate status
+docker compose @brewCompose build web
+docker compose @brewCompose up -d --wait
+docker compose @brewCompose ps
+```
+
+Không chạy lại `db seed`: seed xóa dữ liệu cũ. Chỉ chạy `catalog:bootstrap` một lần khi chuyển DB sang danh mục nguyên liệu; script không reset đơn/tồn nhưng bật lại 6 món và 3 topping mẫu. `inventory:demo-stock` chỉ dành cho DB demo muốn nạp nguyên liệu đang có tồn 0. Nếu DB cũ chưa từng dùng Prisma Migrate, làm theo nhánh baseline ở phần 2 sau khi sao lưu. Admin xem dữ liệu ở `/admin/ingredients` và `/admin/recipes`; API tạo/sửa/nhập/lưu công thức còn chờ thành viên phụ trách.
+
+Với DB lần đầu chuyển sang nguyên liệu, chèn hai lệnh sau sau `migrate deploy` trong khối trên. Chỉ dùng lệnh nạp tồn thứ hai cho DB demo, khi nguyên liệu tồn 0 chưa phải trạng thái hết hàng có chủ ý:
+
+```powershell
+docker compose @brewCompose run --rm --no-deps api npm run catalog:bootstrap
+docker compose @brewCompose run --rm --no-deps api npm run inventory:demo-stock
 ```
 
 Nếu cần log build chi tiết, dùng `docker compose --progress plain @brewCompose build api` hoặc thay `api` bằng `web`. `npm ci` yêu cầu `package.json` và `package-lock.json` đồng bộ. Lỗi thiếu TypeScript 5.9.3 trong lockfile backend đã được sửa ngày 22/10/2026; nếu lỗi tương tự tái xuất hiện sau khi đổi dependency, cập nhật lockfile bằng npm tương ứng với Node 22 rồi kiểm tra diff trước khi build lại.
@@ -118,9 +157,9 @@ Chạy Compose trên một laptop làm máy chủ. Laptop còn lại cùng mạn
 | `npm ci` báo lockfile lệch | Đồng bộ lockfile với `package.json` bằng npm phù hợp Node 22, rồi build lại image |
 | Cổng 3000/3001 đã được dùng | Dừng web/API local đang chạy hoặc container cũ trước khi `up` |
 | API không kết nối DB | Kiểm tra DB healthy và `DATABASE_URL` nội bộ dùng `db:5432` |
-| API báo thiếu bảng/cột | Xem schema và chỉ chạy bước `db push` phù hợp với DB local |
+| API báo thiếu bảng/cột | Kiểm tra `npx prisma migrate status`, áp `migrate deploy` bằng image API mới; không dùng `db push` để bỏ qua lịch sử migration |
 | Web không gọi được API | Kiểm tra `NEXT_PUBLIC_API_URL=/api`, `API_INTERNAL_URL=http://api:3001`, rồi build lại web |
 | Build web lỗi tải font Geist | Kiểm tra kết nối mạng/DNS của Docker tại thời điểm build |
 | Container bị dừng | Xem `logs`, `ps -a` và `stats` để phân biệt lỗi ứng dụng với thiếu tài nguyên |
 
-Đã xác nhận build image API, khởi động cả ba container healthy và HTTP 200 cho web/`/api/products` ngày 22/10/2026. Điều này chưa thay cho kiểm thử luồng nghiệp vụ, migration, CI/CD và kiểm tra production trong [kế hoạch Assignment 2](../ASSIGNMENT2_PLAN.md).
+Luồng giỏ, tạo đơn và payments dùng nguyên liệu; hai trang admin đã đọc nguyên liệu/công thức thật qua API chỉ đọc. Xem [plan nguyên liệu](../INVENTORY_RECIPE_PLAN.md) cho phần API ghi còn chờ triển khai. `POST /api/cart/validate` kiểm tra toàn bộ giỏ và không trừ tồn.

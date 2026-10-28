@@ -44,7 +44,16 @@ function getErrorMessage(error: unknown): string {
 
 // Voucher đã quá hạn nếu có endDate và endDate < hiện tại
 function isExpired(p: PromotionItem): boolean {
-    return !!p.endDate && new Date(p.endDate).getTime() < Date.now();
+    return !!p.endDate && new Date(p.endDate).getTime() <= Date.now();
+}
+
+// Ngày nhập trên form luôn tính đến 23:59:59 theo giờ Việt Nam.
+function todayInVietnam(): string {
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(new Date());
+    const value = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+    return `${value('year')}-${value('month')}-${value('day')}`;
 }
 
 function formatDiscount(p: PromotionItem): string {
@@ -82,7 +91,7 @@ export default function AdminPromotionsPage() {
                 payload.maxDiscount = Number(form.maxDiscount);
             }
             // Voucher hết hạn vào cuối ngày đã chọn
-            if (form.endDate) payload.endDate = new Date(`${form.endDate}T23:59:59`).toISOString();
+            if (form.endDate) payload.endDate = new Date(`${form.endDate}T23:59:59+07:00`).toISOString();
             return api.post('/admin/promotions', payload);
         },
         onSuccess: () => {
@@ -110,6 +119,9 @@ export default function AdminPromotionsPage() {
         }
         if (form.discountType === 'PERCENTAGE' && value > 100) {
             return setFormError('Giảm theo % không được vượt quá 100');
+        }
+        if (form.endDate && form.endDate < todayInVietnam()) {
+            return setFormError('Hạn dùng voucher không được là ngày đã qua');
         }
         setFormError(null);
         createMutation.mutate();
@@ -195,6 +207,7 @@ export default function AdminPromotionsPage() {
                     Hạn dùng (để trống = không hết hạn)
                     <input
                         type="date"
+                        min={todayInVietnam()}
                         className={`${inputClass} mt-1`}
                         value={form.endDate}
                         onChange={(e) => setField('endDate', e.target.value)}

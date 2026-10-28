@@ -18,7 +18,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) { }
 
-  // POST /orders - Tạo đơn hàng mới
+  // POST /orders - Tạo đơn hàng mới.
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async createOrder(
@@ -32,14 +32,14 @@ export class OrdersController {
     };
   }
 
-  // GET /orders/me - Xem lịch sử đơn hàng của mình
+  // GET /orders/me - Xem lịch sử đơn của tài khoản đang đăng nhập.
   @Get('me')
   async getMyOrders(@CurrentUser() user: { id: string }) {
     const orders = await this.ordersService.findAllByUser(user.id);
     return { data: orders };
   }
 
-  // GET /orders/:id - Xem chi tiết 1 đơn hàng
+  // GET /orders/:id - Xem chi tiết một đơn thuộc tài khoản đang đăng nhập.
   @Get(':id')
   async getOrderById(@Param('id') id: string, @CurrentUser() user: { id: string }) {
     const order = await this.ordersService.findOne(id, user.id);

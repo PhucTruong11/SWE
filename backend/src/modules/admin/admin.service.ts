@@ -1,13 +1,21 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
-import { OrderStatus, PointTransactionType, Prisma } from '@prisma/client';
+import { OrderStatus, PointTransactionType, Prisma, ProductSize } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { assertTransition } from '../orders/orders-state.js';
 import { ListOrdersQueryDto } from './dto/list-orders-query.dto.js';
 import { UpdateStockDto } from './dto/update-stock.dto.js';
 import { CreatePromotionDto } from './dto/create-promotion.dto.js'
+import { InventoryService } from '../inventory/inventory.service.js';
 
 // Các trạng thái đã thanh toán thành công (tính vào doanh thu)
 const REVENUE_STATUSES: OrderStatus[] = ['PAID', 'PREPARING', 'READY', 'COMPLETED'];
+// Admin chỉ thấy đơn đã thanh toán; đơn hủy chỉ hiện nếu trước đó thanh toán thành công.
+const ADMIN_VISIBLE_ORDERS: Prisma.OrderWhereInput = {
+    OR: [
+        { status: { in: REVENUE_STATUSES } },
+        { status: OrderStatus.CANCELLED, payments: { some: { status: 'SUCCESS' } } },
+    ],
+};
 const ADMIN_FORBIDDEN_TARGETS: OrderStatus[] = [
     OrderStatus.PAID, OrderStatus.PAYMENT_FAILED, OrderStatus.PENDING,
 ];
@@ -21,14 +29,14 @@ function startOfToday(): Date {
 
 @Injectable()
 export class AdminService {
-    constructor(private readonly prisma: PrismaService) { }
+    constructor(private readonly prisma: PrismaService, private readonly inventory: InventoryService) { }
 
     // Danh sách đơn: lọc trạng thái / ngày / tìm kiếm + phân trang
     async listOrders(q: ListOrdersQueryDto) {
         const page = q.page ?? 1;
         const limit = q.limit ?? 20;
 
-        const where: Prisma.OrderWhereInput = {};
+        const where: Prisma.OrderWhereInput = { AND: [ADMIN_VISIBLE_ORDERS] };
 
         if (q.status?.length) where.status = { in: q.status };
 
@@ -72,6 +80,7 @@ export class AdminService {
     async getCounts() {
         const grouped = await this.prisma.order.groupBy({
             by: ['status'],
+            where: ADMIN_VISIBLE_ORDERS,
             _count: { _all: true },
         });
 
@@ -83,7 +92,7 @@ export class AdminService {
 
         const today = startOfToday();
         const todayOrders = await this.prisma.order.count({
-            where: { createdAt: { gte: today } },
+            where: { createdAt: { gte: today }, status: { in: REVENUE_STATUSES } },
         });
         const revenue = await this.prisma.order.aggregate({
             _sum: { total: true },
@@ -100,6 +109,7 @@ export class AdminService {
         }
 
         return this.prisma.$transaction(async (tx) => {
+            await tx.$queryRaw`SELECT "id" FROM "orders" WHERE "id" = ${id} FOR UPDATE`;
             const order = await tx.order.findUnique({
                 where: { id },
                 include: { items: true },
@@ -110,11 +120,15 @@ export class AdminService {
 
             // Hủy đơn đã thanh toán -> hoàn kho + thu hồi điểm
             if (next === OrderStatus.CANCELLED && order.status === OrderStatus.PAID) {
-                for (const item of order.items) {
-                    await tx.product.update({
-                        where: { id: item.productId },
-                        data: { stock: { increment: item.qty }, version: { increment: 1 } },
-                    });
+                if (order.inventoryState === 'CONSUMED') {
+                    await this.inventory.restore(tx, order);
+                } else if (order.inventoryState === 'LEGACY') {
+                    for (const item of order.items) {
+                        await tx.product.update({
+                            where: { id: item.productId },
+                            data: { stock: { increment: item.qty }, version: { increment: 1 } },
+                        });
+                    }
                 }
                 if (order.loyaltyPointsEarned > 0) {
                     // Không để số dư điểm âm nếu khách đã dùng điểm
@@ -144,7 +158,28 @@ export class AdminService {
         });
     }
 
-    // QUẢN LÝ KHO (INVENTORY / STOCK)
+    // QUẢN LÝ TỒN KHO SẢN PHẨM CŨ.
+
+    // Nguồn dữ liệu chỉ đọc cho giao diện nguyên liệu và công thức.
+    async listIngredients() {
+        return this.prisma.ingredient.findMany({ orderBy: { name: 'asc' } });
+    }
+
+    async listProductRecipe(productId: string, size: ProductSize) {
+        return this.prisma.recipe.findMany({
+            where: { productId, size },
+            select: { ingredientId: true, quantity: true },
+            orderBy: { ingredient: { name: 'asc' } },
+        });
+    }
+
+    async listToppingRecipe(toppingId: string) {
+        return this.prisma.recipe.findMany({
+            where: { toppingId },
+            select: { ingredientId: true, quantity: true },
+            orderBy: { ingredient: { name: 'asc' } },
+        });
+    }
 
     // Danh sách toàn bộ sản phẩm cho Admin (kèm tồn kho, size, trạng thái)
     async listProducts(category?: string, search?: string) {
@@ -206,6 +241,15 @@ export class AdminService {
 
     async createPromotion(dto: CreatePromotionDto) {
         const formattedCode = dto.code.trim().toUpperCase();
+        // API nhận cả ngày đơn thuần và ISO có múi giờ; ngày đơn thuần hết hạn cuối ngày Việt Nam.
+        const endDate = dto.endDate
+            ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(dto.endDate)
+                ? `${dto.endDate}T23:59:59+07:00`
+                : dto.endDate)
+            : null;
+        if (endDate && (Number.isNaN(endDate.getTime()) || endDate.getTime() <= Date.now())) {
+            throw new BadRequestException('Hạn dùng voucher phải ở trong tương lai theo giờ Việt Nam');
+        }
 
         const existingPromo = await this.prisma.promotion.findUnique({
             where: { code: formattedCode },
@@ -229,7 +273,7 @@ export class AdminService {
                 minOrderValue: dto.minOrderValue ?? 0,
                 maxDiscount: dto.discountType === 'PERCENTAGE' ? (dto.maxDiscount ?? null) : null,
                 startDate: new Date(),
-                endDate: dto.endDate ? new Date(dto.endDate) : null,
+                endDate,
                 isActive: dto.isActive ?? true,
             },
         });

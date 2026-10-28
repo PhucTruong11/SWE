@@ -10,26 +10,26 @@ Sơ đồ công nghệ thể hiện các thành phần đang dùng và đường
 
 ## 1. Hiện trạng dự án
 
-Cập nhật theo mã nguồn ngày 22/10/2026. “Đã có” nghĩa là đã có mã nguồn hoặc cấu hình, không đồng nghĩa đã nghiệm thu đầy đủ.
+Cập nhật theo mã nguồn ngày 28/10/2026. “Đã có” nghĩa là đã có mã nguồn hoặc cấu hình, không đồng nghĩa đã nghiệm thu đầy đủ.
 
 | Hạng mục | Hiện trạng |
 | --- | --- |
-| Menu, chi tiết sản phẩm, size và topping | Đã có giao diện, API và dữ liệu seed |
-| Giỏ hàng | Đã có gộp/tách theo sản phẩm, size, số phần topping và tính lại voucher khi thay đổi giỏ |
-| Tài khoản | Đã có đăng ký, xác minh email, đăng nhập và cookie JWT; luồng khách/tài khoản cần hoàn thiện |
-| Đơn hàng, thanh toán, lịch sử | Đã có; thanh toán là mô phỏng trong backend |
-| Admin | Đã có quản lý đơn, kho và khuyến mãi; chưa hoàn thiện phân quyền theo vai trò |
-| Kiểm thử | Có unit test trạng thái đơn và các test mẫu; chưa đủ integration/E2E theo Assignment 2 |
-| CI | Có workflow cho PR vào main; thiếu test ở cả hai ứng dụng và lint backend |
+| Menu, chi tiết sản phẩm, size và topping | Chỉ bật 6 món và 3 topping; trạng thái có thể bán tính theo công thức và nguyên liệu |
+| Giỏ hàng | Gộp/tách theo món, size, topping; gọi `POST /api/cart/validate` để đối chiếu cả giỏ với giá và nguyên liệu trong DB |
+| Tài khoản | Có đăng ký, xác minh email, đăng nhập và cookie JWT; route admin kiểm tra vai trò ADMIN |
+| Đơn hàng, thanh toán, lịch sử | Tạo đơn giữ nguyên liệu 2 phút; xác nhận thanh toán mô phỏng mới trừ tồn thực; có một cơ hội tạo lại đơn khi hết hạn |
+| Admin | Có quản lý đơn và voucher; hai trang Nguyên liệu/Công thức đã đọc dữ liệu thật, API tạo/sửa/nhập hàng/lưu công thức còn chờ triển khai |
+| Kiểm thử | Unit test frontend/backend và integration test nguyên liệu trên DB thử riêng đã có; browser E2E vẫn chưa hoàn thiện |
+| CI | Workflow PR vào main chạy `npm ci`, Prisma generate, lint, build và unit test ở cả hai ứng dụng; chưa bật integration/E2E và required checks |
 | Docker | Đã có Dockerfile cho web/API và hai file Compose ghép thành web/API/PostgreSQL; build và chạy local đã kiểm tra |
 | Production/CD | Chưa có cấu hình CD và URL production được xác nhận trong tài liệu |
 | Tài liệu Assignment 2 | Đã tạo khung docs; nội dung Task 1–3, truy vết và vận hành cần bổ sung |
 
-Các vấn đề cần xử lý trước khi nghiệm thu gồm xác thực/chủ sở hữu đơn, quyền admin, idempotency khi gửi đồng thời, đồng bộ voucher và gia hạn thanh toán. Xem [luồng hệ thống](PROJECT_FLOW.md) và [kế hoạch Assignment 2](ASSIGNMENT2_PLAN.md).
+Các việc còn lại gồm API ghi cho Nguyên liệu/Công thức, kiểm thử browser E2E, xác minh CI trên GitHub và cấu hình CD. Xem [luồng hệ thống](PROJECT_FLOW.md), [plan nguyên liệu](INVENTORY_RECIPE_PLAN.md) và [kế hoạch Assignment 2](ASSIGNMENT2_PLAN.md).
 
 ![Luồng hệ thống BrewLite hiện tại: khách, đăng nhập, giỏ, checkout và theo dõi đơn](docs/assets/system-flow-current.svg)
 
-Sơ đồ thể hiện luồng đang có, gồm nhánh khách chưa đăng nhập, gộp giỏ sau login, tạo/thanh toán đơn, xác nhận, thử lại và hết hạn. Các điểm API/quyền còn thiếu được ghi trực tiếp trên hình.
+Sơ đồ SVG này được vẽ trước đợt chuyển sang tồn nguyên liệu. Luồng mới và các trạng thái nguồn chuẩn nằm trong [PROJECT_FLOW.md](PROJECT_FLOW.md); không dùng các nhãn stock/thời hạn trên hình làm đặc tả hiện tại.
 
 ## 2. Công nghệ
 
@@ -68,7 +68,7 @@ brewlite/
 |   |-- architecture/         # Cần bổ sung kiến trúc và ADR
 |   |-- traceability-matrix.md # Hiện là khung rỗng
 |   |-- deployment.md         # Hiện là khung rỗng
-|-- tests/                    # Dự kiến cho integration/E2E
+|-- tests/                    # Bộ request API; integration nguyên liệu chạy trong backend/scripts
 |-- .github/workflows/ci.yml
 |-- .env.example
 |-- PROJECT_FLOW.md
@@ -88,11 +88,11 @@ Assignment 2 yêu cầu apps/web, apps/api, docs và Compose chạy đủ ba d�
 - Kết nối mạng để cài package; frontend hiện dùng next/font để tải Geist từ Google khi build.
 
 ~~~powershell
-git clone https://github.com/PhucTruong11/SWE.git brewlite
+git clone https://github.com/PhucTruong11/brewlite.git brewlite
 cd brewlite
 ~~~
 
-Thư mục gốc là thư mục chứa frontend, backend và docker, bất kể tên thư mục clone trên máy.
+Remote `origin` của checkout hiện tại là `PhucTruong11/brewlite.git`. Thư mục gốc là thư mục chứa frontend, backend và docker, bất kể tên thư mục clone trên máy; đường dẫn `D:\Dev\Subject_Uni\SWE\brewlite` chỉ là vị trí trên máy đang phát triển.
 
 ### 4.2. Cấu hình môi trường
 
@@ -156,18 +156,26 @@ Mở terminal tại thư mục gốc:
 cd backend
 npm ci
 npx prisma generate
-npx prisma db push
 ~~~
 
-Dự án hiện chưa có lịch sử migration. db push đang phục vụ phát triển local; quy trình migrate dev/migrate deploy sẽ được hoàn thiện trong Task 5.
-
-Chỉ với database phát triển mới hoặc dữ liệu có thể bỏ, chạy seed:
+Migration đã được lưu trong `backend/prisma/migrations`. **DB mới chưa có bảng:** tạo schema và dữ liệu demo theo thứ tự:
 
 ~~~powershell
+npx prisma migrate deploy
 npx prisma db seed
+npm run catalog:bootstrap
+npm run inventory:demo-stock
 ~~~
 
-Seed hiện xóa dữ liệu cũ trước khi tạo menu, topping, user thử, đơn và voucher mẫu. Không chạy trên database cần giữ dữ liệu và không tự động chạy lại khi khởi động production.
+**DB cũ có bảng/dữ liệu nhưng chưa có lịch sử Prisma Migrate:** sao lưu DB, rồi chạy theo thứ tự; `resolve` chỉ cần một lần:
+
+~~~powershell
+npx prisma migrate resolve --applied 20261027000100_baseline
+npx prisma migrate deploy
+npm run catalog:bootstrap
+~~~
+
+Nếu DB đã có baseline, bỏ lệnh `resolve`. Seed hiện xóa dữ liệu cũ trước khi tạo menu, topping, user thử, đơn và voucher mẫu, nên **không chạy `db seed` trên DB cần giữ dữ liệu**. `catalog:bootstrap` tạo nguyên liệu/công thức và chỉ bật bán 6 món, 3 topping, không xóa đơn hoặc reset tồn cũ. Giỏ và checkout hiện kiểm tra nguyên liệu; tạo đơn giữ kho 2 phút, thanh toán thành công mới trừ tồn thực. `inventory:demo-stock` chỉ dành cho DB demo local: nó nạp lượng mẫu vào nguyên liệu đang có tồn bằng 0, không ghi đè số lượng khác 0. Có thể bỏ lệnh này nếu sẽ nhập tồn thực tế ở bước admin tiếp theo. Định lượng mẫu nằm trong [plan nguyên liệu](INVENTORY_RECIPE_PLAN.md).
 
 User test@brewlite.com trong seed có password hash placeholder, không phải tài khoản demo có mật khẩu đăng nhập hợp lệ. Để kiểm tra đăng nhập, đăng ký và xác minh một tài khoản riêng qua giao diện.
 
@@ -208,23 +216,62 @@ docker compose @brewCompose build web
 docker compose @brewCompose up -d --wait db
 ~~~
 
-**Chỉ trên DB mới** (lần đầu chạy trên máy đó), tạo bảng và nạp dữ liệu mẫu:
+**DB mới, chưa có bảng:** tạo schema, dữ liệu demo rồi bật danh mục/công thức:
 
 ~~~powershell
-docker compose @brewCompose run --rm --no-deps api npx prisma db push
+docker compose @brewCompose run --rm --no-deps api npx prisma migrate deploy
 docker compose @brewCompose run --rm --no-deps api npx prisma db seed
+docker compose @brewCompose run --rm --no-deps api npm run catalog:bootstrap
+docker compose @brewCompose run --rm --no-deps api npm run inventory:demo-stock
 ~~~
 
-`seed` xóa dữ liệu cũ; bỏ qua cả hai lệnh này khi DB đã có schema và dữ liệu cần giữ. Cuối cùng, bật đủ ba dịch vụ:
+**DB cũ có dữ liệu và chưa từng dùng Prisma Migrate:** sao lưu DB, đánh dấu baseline một lần, sau đó áp migration và nạp danh mục. **Không chạy `db seed`**:
+
+~~~powershell
+docker compose @brewCompose run --rm --no-deps api npx prisma migrate resolve --applied 20261027000100_baseline
+docker compose @brewCompose run --rm --no-deps api npx prisma migrate deploy
+docker compose @brewCompose run --rm --no-deps api npm run catalog:bootstrap
+~~~
+
+Nếu baseline đã được ghi, bỏ lệnh `resolve`; sau lần đầu chỉ cần `migrate deploy` khi pull code có migration mới. Cuối cùng, bật đủ ba dịch vụ:
 
 ~~~powershell
 docker compose @brewCompose up -d --wait
 docker compose @brewCompose ps
 ~~~
 
-Compose đặt `DATABASE_URL` nội bộ là `db:5432`; frontend dùng `/api` và Next.js chuyển tiếp đến `api:3001`. Truy cập [http://localhost:3000](http://localhost:3000) và kiểm tra [menu qua proxy](http://localhost:3000/api/products). Sau các lần pull code tiếp theo, build lại image có code thay đổi rồi chạy `docker compose @brewCompose up -d --wait`; không seed lại.
+Compose đặt `DATABASE_URL` nội bộ là `db:5432`; frontend dùng `/api` và Next.js chuyển tiếp đến `api:3001`. Truy cập [http://localhost:3000](http://localhost:3000) và kiểm tra [menu qua proxy](http://localhost:3000/api/products). Sau các lần pull code tiếp theo, build lại image có code thay đổi, chạy `migrate deploy` nếu có migration mới rồi `docker compose @brewCompose up -d --wait`; không seed lại.
 
-Đã xác nhận build image API và khởi động cả ba dịch vụ ở local ngày 22/10/2026. Các lệnh build lại từng image, xem log, dừng/bật và xử lý lỗi thường gặp nằm trong [docker/README.md](docker/README.md).
+### 4.7. Thành viên đã có DB: cập nhật sau khi pull
+
+Chỉ chạy sau khi phần thay đổi này đã được merge vào nhánh mà thành viên sẽ pull. Mở PowerShell ở thư mục gốc của bản clone **trên máy mình**; không copy nguyên đường dẫn `D:\...` của máy khác. Giữ `backend/.env` hiện có và Docker volume hiện có; không chạy `db seed`, `db push`, `down -v` hoặc `migrate resolve` lần nữa.
+
+~~~powershell
+git switch main
+git pull origin main
+$brewCompose = @('-f', '.\docker\docker-compose.dev.yml', '-f', '.\docker\docker-compose.app.yml')
+docker compose @brewCompose config --quiet
+docker compose @brewCompose up -d --wait db
+docker compose @brewCompose build api
+docker compose @brewCompose run --rm --no-deps api npx prisma migrate deploy
+docker compose @brewCompose run --rm --no-deps api npx prisma migrate status
+docker compose @brewCompose build web
+docker compose @brewCompose up -d --wait
+docker compose @brewCompose ps
+~~~
+
+`catalog:bootstrap` chỉ cần chạy **một lần** sau khi áp migration nguyên liệu vào DB chưa có danh mục mới. Chạy lại sẽ bật lại đúng 6 món/3 topping mẫu, dù không đặt lại tồn hoặc công thức đã có. **Chỉ dùng** `inventory:demo-stock` cho DB demo cần nạp mẫu ở nguyên liệu đang bằng 0. Nếu `migrate status` cho thấy DB cũ có bảng nhưng chưa có lịch sử migration, dừng tại đó và làm theo nhánh “DB cũ” ở [hướng dẫn Docker](docker/README.md); không tự chạy seed hay resolve trên DB chưa xác minh. Sau khi khởi động, đăng nhập ADMIN và mở `/admin/ingredients`, `/admin/recipes`; các nút lưu vẫn chờ API ghi của thành viên phụ trách.
+
+Nếu đây là **lần đầu** DB của thành viên chuyển sang công thức nguyên liệu, chạy thêm sau `migrate deploy` (trước `up -d --wait`):
+
+~~~powershell
+docker compose @brewCompose run --rm --no-deps api npm run catalog:bootstrap
+docker compose @brewCompose run --rm --no-deps api npm run inventory:demo-stock
+~~~
+
+Lệnh nạp tồn chỉ dùng cho DB demo: nó thêm số lượng mẫu vào nguyên liệu có tồn bằng 0. Bỏ dòng thứ hai nếu số 0 là trạng thái hết nguyên liệu có chủ ý.
+
+Đã xác nhận build hai image, chạy ba dịch vụ và kiểm tra API chỉ đọc của hai trang admin ở local ngày 28/10/2026. Các lệnh build lại từng image, xem log, dừng/bật và xử lý lỗi thường gặp nằm trong [docker/README.md](docker/README.md).
 
 ## 5. Lệnh kiểm tra đang có
 
@@ -235,13 +282,27 @@ Chạy lệnh trong đúng thư mục ứng dụng.
 | frontend | npm run lint | Kiểm tra mã frontend |
 | frontend | npx tsc --noEmit | Kiểm tra kiểu TypeScript |
 | frontend | npm run build | Tạo production build; cần tải được font Google |
+| frontend | npm test | Unit test giỏ hàng và các hàm liên quan |
 | backend | npm run lint | Kiểm tra mã backend bằng Oxlint |
 | backend | npm test | Chạy unit test hiện có |
+| backend | npm run test:ingredients | Kiểm thử tích hợp giỏ → đơn → giữ/trừ/trả nguyên liệu → thanh toán trên DB thử riêng |
 | backend | npm run test:e2e | Chạy test HTTP mẫu, chưa phải luồng menu đến xác nhận đơn |
-| backend | npm run test:payment | Script gọi API và ghi dữ liệu thanh toán vào DB đang cấu hình |
+| backend | npm run test:payment | Script payment cũ gọi API và ghi dữ liệu vào DB đang cấu hình; chỉ dùng với DB thử |
 | backend | npm run build | Biên dịch backend |
 
-Frontend chưa có lệnh npm test. Script test:payment cần backend và database thử đang chạy; các nhánh báo FAIL hiện chủ yếu ghi console nên chưa đủ làm quality gate của CI. Không dùng script này với dữ liệu thật.
+Để chạy `test:ingredients`, tạo database thử **riêng** trong PostgreSQL local một lần, rồi chạy các lệnh dưới đây trong `backend`. Lệnh seed chỉ được phép chạy khi `DATABASE_URL` đang trỏ tới `brewlite_inventory_test`:
+
+~~~powershell
+docker exec brewlite-db psql -U brewlite -d postgres -c 'CREATE DATABASE brewlite_inventory_test'
+Set-Location .\backend
+$env:DATABASE_URL = 'postgresql://brewlite:brewlite@localhost:5433/brewlite_inventory_test'
+npx prisma migrate deploy
+npx prisma db seed
+npm run catalog:bootstrap
+npm run test:ingredients
+~~~
+
+Nếu DB thử đã tồn tại, bỏ lệnh `CREATE DATABASE`. Những lần sau chỉ cần đặt lại `DATABASE_URL` thử rồi chạy `npm run test:ingredients`. Script từ chối chạy nếu tên DB không đúng và kiểm tra thiếu nguyên liệu, hai đơn đặt đồng thời, thanh toán thất bại/thử lại, idempotency, hết hạn và hoàn kho khi hủy. Script `test:payment` cũ chưa theo luồng xác thực và nguyên liệu mới, nên dùng `test:ingredients` để kiểm thử giai đoạn này. Sau khi test, mở terminal mới hoặc xóa biến môi trường bằng `Remove-Item Env:DATABASE_URL` trước khi làm việc với DB khác.
 
 Nếu lint đọc cả output .next-e2e/coverage, cần chuẩn hóa ignore hoặc phạm vi lint. Nếu build bị lỗi mạng tải font hoặc lỗi Turbopack, ghi nhận log và kiểm tra nguyên nhân riêng, không đánh dấu build đạt chỉ vì TypeScript đã qua.
 
@@ -249,12 +310,12 @@ Nếu lint đọc cả output .next-e2e/coverage, cần chuẩn hóa ignore ho�
 
 [CI hiện tại](.github/workflows/ci.yml) chạy khi mở/cập nhật PR vào main:
 
-- Backend: install, generate Prisma client, build.
-- Frontend: install, lint, build.
+- Backend: install, generate Prisma client, lint, build, unit test.
+- Frontend: install, lint, build, unit test.
 
-Task 4 còn yêu cầu unit test cho cả hai ứng dụng, lint backend và required checks để chặn merge khi lint/test/build thất bại. Workflow hiện dùng Node 22 và `npm ci`, cùng phiên bản Node chính và cách cài dependency với Dockerfile. Cấu hình branch protection, issue board và lịch sử chạy trên GitHub cần được xác minh riêng.
+Task 4 vẫn cần bật required checks trong quy tắc chặn merge. Workflow hiện dùng Node 22 và `npm ci`, cùng phiên bản Node chính và cách cài dependency với Dockerfile. Cấu hình branch protection, issue board và lịch sử chạy trên GitHub cần được xác minh riêng.
 
-Assignment 1 đã yêu cầu Compose chạy web/API/DB ở Task 9 và test nghiệp vụ ở Task 10. Compose local đã chạy được, nhưng Assignment 2 vẫn cần migration, health endpoint chuyên dụng, integration/E2E và CD. Kiểm thử lại trên container, rồi phát hành khi các kiểm tra bắt buộc đạt. Sau deploy vẫn phải chạy smoke test.
+Assignment 1 đã yêu cầu Compose chạy web/API/DB ở Task 9 và test nghiệp vụ ở Task 10. Compose local và migration nền cho nguyên liệu đã chạy được, nhưng Assignment 2 vẫn cần hoàn thiện quy trình migration, health endpoint chuyên dụng, integration/E2E và CD. Kiểm thử lại trên container, rồi phát hành khi các kiểm tra bắt buộc đạt. Sau deploy vẫn phải chạy smoke test.
 
 Đã có [mẫu CI](.github/workflows/ci.yml.example), [mẫu CD](.github/workflows/cd.yml.example) và [hướng dẫn bổ sung/kích hoạt](.github/CI_CD_GUIDE.md). Các file `.yml.example` chưa chạy trên GitHub Actions; hoàn thành test frontend, Docker và cấu hình triển khai theo hướng dẫn trước khi bật từng workflow.
 

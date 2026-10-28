@@ -3,13 +3,14 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, ClipboardList, Boxes, Ticket, LogOut, Menu, X } from 'lucide-react';
+import { LayoutDashboard, ClipboardList, FlaskConical, BookOpen, Ticket, LogOut, Menu, X } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
 const NAV_ITEMS = [
     { href: '/admin', label: 'Trang chủ', icon: LayoutDashboard, exact: true },
     { href: '/admin/orders', label: 'Đơn hàng', icon: ClipboardList, exact: false },
-    { href: '/admin/inventory', label: 'Kho hàng', icon: Boxes, exact: false },
+    { href: '/admin/ingredients', label: 'Nguyên liệu', icon: FlaskConical, exact: false },
+    { href: '/admin/recipes', label: 'Công thức', icon: BookOpen, exact: false },
     { href: '/admin/promotions', label: 'Voucher', icon: Ticket, exact: false },
 ];
 

@@ -1,36 +1,21 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# BrewLite Web
 
-## Getting Started
+Ứng dụng Next.js cho khách mua đồ uống và trang quản trị. Hướng dẫn **chạy toàn bộ web/API/DB** và cập nhật sau khi pull nằm ở [README gốc](../README.md) và [Docker README](../docker/README.md).
 
-First, run the development server:
+## Luồng hiện tại
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+Khách chọn món và cấu hình → giỏ kiểm tra công thức/nguyên liệu qua API → bấm “Tiến hành Thanh toán” để tạo đơn, giữ nguyên liệu 2 phút → trang checkout hiển thị QR và đồng hồ → bấm “Xác nhận trả” để thanh toán mô phỏng → hóa đơn và theo dõi đơn. Trang admin Nguyên liệu/Công thức đã đọc API thật; thao tác ghi còn chờ backend.
+
+Các file chính: `src/stores/cart.store.ts` giữ giỏ, `src/components/cart/CartContent.tsx` tạo đơn, `src/app/checkout/page.tsx` xử lý xác nhận trả/gia hạn, `src/app/admin/ingredients/page.tsx` và `src/app/admin/recipes/page.tsx` hiển thị dữ liệu quản trị. Chi tiết nằm ở [PROJECT_FLOW.md](../PROJECT_FLOW.md).
+
+## Kiểm tra mã nguồn
+
+Chạy trong thư mục `frontend` với Node 22 và dependency từ `npm ci`:
+
+```powershell
+npm run lint
+npm run build
+npm test
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Các lệnh trên là bước CI. `npm run dev` chỉ dùng khi phát triển frontend trực tiếp trên máy; dừng container `web` trước để tránh trùng cổng 3000. Khi chạy Compose, web gọi `/api` qua proxy Next.js đến container API; không cần chạy Node riêng.

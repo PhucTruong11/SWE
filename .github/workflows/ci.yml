@@ -29,8 +29,14 @@ jobs:
       - name: Generate Prisma Client
         run: npx prisma generate
 
+      - name: Lint Backend
+        run: npm run lint
+
       - name: Build Backend (Check TypeScript Errors)
         run: npm run build
+
+      - name: Test Backend
+        run: npm test
 
   check-frontend:
     name: Build & Check Frontend
@@ -58,3 +64,6 @@ jobs:
 
       - name: Build Frontend (Check Next.js Build Errors)
         run: npm run build
+
+      - name: Test Frontend
+        run: npm test

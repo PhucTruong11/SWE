@@ -16,6 +16,7 @@ import { ApplyVoucherDto } from './dto/apply-voucher.dto.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 
+// Hai đường dẫn dùng chung một luồng thanh toán; tất cả thao tác đều cần đăng nhập.
 @Controller(['checkout', 'payments'])
 @UseGuards(JwtAuthGuard)
 export class CheckoutController {

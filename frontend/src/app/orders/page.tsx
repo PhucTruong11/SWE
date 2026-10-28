@@ -54,7 +54,7 @@ function OrderHistoryContent() {
     },
     refetchInterval: (query) => {
       const error = query.state.error;
-      return isAxiosError(error) && error.response && error.response.status < 500 ? false : 5000;
+      return isAxiosError(error) && error.response && error.response.status < 500 ? false : 2000;
     },
     refetchOnWindowFocus: 'always',
     refetchOnReconnect: 'always',

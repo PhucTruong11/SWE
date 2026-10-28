@@ -19,10 +19,10 @@ Mẫu chạy khi có PR vào `main`, push vào `main`, chạy thủ công hoặc
 
 Trước khi bật:
 
-1. Backend đã có `lint`, `test`, `build`; chạy thử cả ba bằng dependency từ lockfile.
+1. Workflow đang chạy đã dùng `npm ci`, Prisma generate, `lint`, `build`, `test` cho backend; frontend dùng `npm ci`, `lint`, `build`, `test`.
 2. Frontend cần thêm test runner, các test nghiệp vụ và script `test` vào `frontend/package.json`. Ví dụ nếu chọn Vitest, script là `"test": "vitest run"`; phải cài và cấu hình runner trước. Ưu tiên test menu theo Task 4, sau đó cart/voucher và các phần đang sửa.
 3. `npm test` phải chạy một lần rồi thoát, không watch, trả mã lỗi khi test thất bại. Mẫu không bỏ qua script còn thiếu hoặc trường hợp chưa có test.
-4. Thay nội dung `.github/workflows/ci.yml` bằng mẫu `ci.yml.example`, commit và tạo PR. CI unit/build không cần Compose hay database đang chạy; test truy cập DB thật thuộc lớp integration riêng.
+4. Giữ workflow hiện tại khi chỉ cần quality gate PR. `ci.yml.example` là mẫu mở rộng cho push/workflow_call, chưa cần thay file đang chạy. CI unit/build không cần Compose hay database đang chạy; test truy cập DB thật thuộc lớp integration riêng.
 5. Sau khi workflow chạy, chọn hai check `Check backend` và `Check frontend` trong ruleset/branch protection của `main`. Chọn tên thực tế GitHub hiển thị nếu có thêm tiền tố workflow.
 6. Lưu minh chứng một lần chạy thành công và một PR có lỗi bị CI phát hiện/chặn merge. Sửa lỗi rồi chạy lại trước khi merge.
 
@@ -55,10 +55,10 @@ Hai mẫu phải được đưa vào cùng một phiên bản code trước khi 
 
 | Hạng mục | Cần hoàn thành |
 | --- | --- |
-| CI | Test frontend và toàn bộ lint/test/build đạt; bật CI từ mục 1 |
-| Docker | `frontend/Dockerfile`, `backend/Dockerfile`, `.dockerignore` phù hợp, Compose web/API/DB tại `docker-compose.yml` |
-| Cấu hình web | Dockerfile nhận `ARG NEXT_PUBLIC_API_URL` trước build; thiết kế API URL/proxy để trình duyệt truy cập đúng API và E2E trong CI dùng được image production |
-| Migration | Commit `backend/prisma/migrations/*/migration.sql`; sửa quy tắc ignore hiện tại; thiết lập baseline phù hợp với DB đang có |
+| CI | Workflow PR hiện có đã chạy lint/test/build cho hai ứng dụng; còn cần kiểm tra run trên GitHub và required checks |
+| Docker | Dockerfile và `.dockerignore` hiện có; Compose web/API/DB dùng ghép `docker-compose.dev.yml` và `docker-compose.app.yml` |
+| Cấu hình web | Proxy `/api` qua Next.js đã dùng trong Compose; kiểm tra lại URL và HTTPS khi chọn nơi triển khai thật |
+| Migration | Commit `backend/prisma/migrations/*/migration.sql`; DB thành viên có dữ liệu cũ cần baseline một lần rồi `migrate deploy` |
 | Health | Endpoint API kiểm tra được trạng thái sẵn sàng và kết nối DB; không dùng “Hello World” làm minh chứng health DB |
 | Test container | Script chạy integration order/payment và ít nhất một browser E2E từ menu đến xác nhận đơn, dùng DB test riêng |
 | Hosting | Chọn nền tảng, tạo ứng dụng/DB, HTTPS, secret runtime và quyền pull image GHCR |

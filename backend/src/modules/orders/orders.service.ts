@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateOrderDto } from './dto/create-order.dto.js';
 import { PromotionsService } from '../promotions/promotions.service.js';
 import { RewardsService } from '../rewards/rewards.service.js';
+import { InventoryService, RESERVATION_DURATION_MS } from '../inventory/inventory.service.js';
 
 @Injectable()
 export class OrdersService {
@@ -10,9 +11,13 @@ export class OrdersService {
         private readonly prisma: PrismaService,
         private readonly promotionsService: PromotionsService,
         private readonly rewardsService: RewardsService,
-    ) {}
+        private readonly inventory: InventoryService,
+    ) { }
 
-    // POST /orders - Tạo đơn hàng mới từ giỏ hàng Frontend
+    /**
+     * Tạo đơn từ giỏ của người đã đăng nhập. Giá và nguyên liệu được tính lại từ cơ sở dữ liệu,
+     * không tin số tiền do trình duyệt gửi lên. Đơn mới chờ thanh toán và giữ nguyên liệu hai phút.
+     */
     async create(dto: CreateOrderDto, userId: string) {
         if (!userId) {
             throw new UnauthorizedException('Vui lòng đăng nhập để đặt hàng');
@@ -21,111 +26,47 @@ export class OrdersService {
             throw new BadRequestException('Giỏ hàng không được rỗng');
         }
 
-        // Lấy thông tin + giá thực tế của từng sản phẩm từ Database
-        const productIds = [...new Set(dto.items.map((item) => item.productId))];
-        const products = await this.prisma.product.findMany({
-            where: { id: { in: productIds }, isAvailable: true },
-            include: { prices: true },
-        });
-
-        if (products.length !== productIds.length) {
-            throw new BadRequestException('Một số sản phẩm không tồn tại hoặc đã ngừng kinh doanh');
+        // Kiểm tra sớm để báo nguyên liệu thiếu trước khi bắt đầu giao dịch tạo đơn.
+        const preview = await this.inventory.prepareCart(dto.items);
+        if (preview.shortages.length) {
+            throw new BadRequestException(`Không đủ nguyên liệu: ${preview.shortages.map((entry) => entry.ingredientName).join(', ')}`);
         }
+        const calculatedTotal = preview.subtotal;
 
-        // Tồn kho dùng chung cho mọi size/topping của cùng một sản phẩm.
-        const requestedQuantities = new Map<string, number>();
-        for (const item of dto.items) {
-            requestedQuantities.set(item.productId, (requestedQuantities.get(item.productId) ?? 0) + item.qty);
-        }
-        for (const product of products) {
-            const requestedQuantity = requestedQuantities.get(product.id)!;
-            if (product.stock < requestedQuantity) {
-                throw new BadRequestException(
-                    `Sản phẩm "${product.name}" chỉ còn ${product.stock} phần, không đủ ${requestedQuantity} phần yêu cầu`,
-                );
-            }
-        }
-
-        // Lấy tất cả tên topping được yêu cầu trong giỏ hàng
-        const requestedToppingNames = dto.items.flatMap(item => item.toppings || []);
-        const uniqueToppingNames = [...new Set(requestedToppingNames)];
-        
-        let toppingsFromDb: any[] = [];
-        if (uniqueToppingNames.length > 0) {
-            toppingsFromDb = await this.prisma.topping.findMany({
-                where: { name: { in: uniqueToppingNames }, isAvailable: true }
-            });
-            const availableNames = new Set(toppingsFromDb.map((topping) => topping.name));
-            const unavailableName = uniqueToppingNames.find((name) => !availableNames.has(name));
-            if (unavailableName) {
-                throw new BadRequestException(`Topping "${unavailableName}" không tồn tại hoặc đã ngừng bán`);
-            }
-        }
-
-        // Tính lại tổng tiền từng dòng và tổng đơn hàng
-        let calculatedTotal = 0;
-        const orderItemsData = dto.items.map((item) => {
-            const product = products.find((p) => p.id === item.productId);
-            const priceObj = product!.prices.find((p) => p.size === item.size);
-
-            if (!priceObj) {
-                throw new BadRequestException(
-                    `Sản phẩm "${product!.name}" không có size ${item.size}`,
-                );
-            }
-
-            // Tính tiền topping
-            let toppingTotal = 0;
-            if (item.toppings && item.toppings.length > 0) {
-                for (const tName of item.toppings) {
-                    const dbTopping = toppingsFromDb.find(t => t.name === tName);
-                    if (dbTopping) {
-                        toppingTotal += dbTopping.price;
-                    }
-                }
-            }
-
-            // Tính thành tiền (Giá size + giá các topping) * số lượng
-            const lineTotalFromDb = (priceObj.price + toppingTotal) * item.qty;
-            calculatedTotal += lineTotalFromDb;
-
-            return {
-                productId: item.productId,
-                size: item.size,
-                qty: item.qty,
-                toppings: item.toppings ?? [],    // Snapshot tên topping
-                lineTotal: lineTotalFromDb,
-            };
-        });
-
-        // Kiểm tra và tính mã giảm giá
+        // Kiểm tra mã giảm giá và tính lại số tiền phải trả.
         let finalTotal = calculatedTotal;
         let finalDiscount = 0;
 
         if (dto.promoCode) {
-            // Mã đổi điểm: user phải sở hữu voucher
             await this.rewardsService.assertVoucherUsable(userId, dto.promoCode);
-            // Gọi sang service của bạn làm Promo để nó tự xử lý (tách bạch trách nhiệm)
             const promoResult = await this.promotionsService.applyPromotion({
                 code: dto.promoCode,
                 subtotal: calculatedTotal
             });
-            
+
             finalDiscount = promoResult.discountAmount;
             finalTotal -= finalDiscount;
         }
 
-        // Lưu đơn hàng vào Database bằng Prisma Transaction
+        // Kiểm tra lại ngay trong giao dịch: khách khác có thể vừa giữ nguyên liệu sau lần kiểm tra đầu.
+        // Nếu giữ nguyên liệu hoặc lưu đơn thất bại, cả hai thay đổi đều được hoàn tác.
         const order = await this.prisma.$transaction(async (tx) => {
+            const cart = await this.inventory.prepareCart(dto.items, tx);
+            if (cart.subtotal !== calculatedTotal) {
+                throw new BadRequestException('Giá món vừa thay đổi, vui lòng kiểm tra lại giỏ hàng');
+            }
+            await this.inventory.reserve(tx, cart);
             const newOrder = await tx.order.create({
                 data: {
                     userId,
-                    total: finalTotal,             // Tiền thực tế sau giảm
-                    discount: finalDiscount,       // Tiền giảm
+                    total: finalTotal,
+                    discount: finalDiscount,
                     status: 'PENDING',
+                    inventoryState: 'RESERVED',
+                    reservationExpiresAt: new Date(Date.now() + RESERVATION_DURATION_MS),
                     promoCode: dto.promoCode ?? null,
                     items: {
-                        create: orderItemsData,
+                        create: cart.orderItems,
                     },
                 },
                 include: {
@@ -140,7 +81,7 @@ export class OrdersService {
         return order;
     }
 
-    // GET /orders/me - Lấy danh sách đơn hàng của user đang đăng nhập
+    /** Chỉ lấy lịch sử đơn của tài khoản đang đăng nhập, mới nhất trước. */
     async findAllByUser(userId: string) {
         if (!userId) {
             throw new UnauthorizedException('Vui lòng đăng nhập để xem đơn hàng');
@@ -157,7 +98,7 @@ export class OrdersService {
         });
     }
 
-    // GET /orders/:id - Lấy chi tiết 1 đơn hàng
+    /** Lấy chi tiết đơn và thanh toán sau khi xác nhận đơn thuộc về tài khoản này. */
     async findOne(id: string, userId: string) {
         if (!userId) {
             throw new UnauthorizedException('Vui lòng đăng nhập để xem đơn hàng');
@@ -172,7 +113,6 @@ export class OrdersService {
             },
         });
 
-        // Kiểm tra đơn hàng có tồn tại không
         if (!order) {
             throw new NotFoundException(`Không tìm thấy đơn hàng #${id}`);
         }

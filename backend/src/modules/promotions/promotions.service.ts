@@ -8,8 +8,14 @@ export class PromotionsService {
 
   // Lấy tất cả mã đang active để hiển thị lên UI
   async findAll() {
+    const now = new Date();
     return this.prisma.promotion.findMany({
-      where: { isActive: true, isRewardOnly: false },
+      where: {
+        isActive: true,
+        isRewardOnly: false,
+        startDate: { lte: now },
+        OR: [{ endDate: null }, { endDate: { gt: now } }],
+      },
       orderBy: { minOrderValue: 'asc' },
     });
   }
@@ -25,7 +31,8 @@ export class PromotionsService {
       where: { code: code.trim().toUpperCase() },
     });
 
-    if (!promo || !promo.isActive) {
+    const now = new Date();
+    if (!promo || !promo.isActive || promo.startDate > now || (promo.endDate && promo.endDate <= now)) {
       throw new NotFoundException('Mã ưu đãi không tồn tại hoặc đã hết hạn');
     }
 

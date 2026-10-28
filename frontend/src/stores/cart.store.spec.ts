@@ -49,17 +49,16 @@ describe('cart store', () => {
     expect(useCartStore.getState().totalPrice()).toBe(130000);
   });
 
-  it('chặn thêm và tăng số lượng khi tổng các dòng cùng sản phẩm vượt tồn kho', () => {
+  it('không dùng Product.stock cũ để chặn các dòng size/topping; UI kiểm tra công thức qua API', () => {
     const cart = useCartStore.getState();
     expect(cart.addItem({ ...drink, quantity: 3 })).toBe(true);
     expect(cart.addItem({ ...drink, size: 'L', quantity: 2 })).toBe(true);
-    expect(cart.addItem({ ...drink, toppings: ['Trân châu'] })).toBe(false);
+    expect(cart.addItem({ ...drink, toppings: ['Trân châu'] })).toBe(true);
     cart.updateQuantity(1, 3);
 
-    expect(useCartStore.getState().items.map((item) => item.quantity)).toEqual([3, 2]);
+    expect(useCartStore.getState().items.map((item) => item.quantity)).toEqual([3, 3, 1]);
     cart.updateQuantity(0, 2);
-    cart.updateQuantity(1, 3);
-    expect(useCartStore.getState().items.map((item) => item.quantity)).toEqual([2, 3]);
+    expect(useCartStore.getState().items.map((item) => item.quantity)).toEqual([2, 3, 1]);
   });
 
   it('giữ voucher sau khi xóa một trong ba dòng nếu vẫn đủ điều kiện, rồi bỏ khi không đủ', () => {
@@ -88,6 +87,18 @@ describe('cart store', () => {
     expect(useCartStore.getState().items).toHaveLength(1);
     expect(useCartStore.getState().totalPrice()).toBe(60000);
     expect(useCartStore.getState().appliedPromo).toMatchObject({ code: 'GIAM10K', discount: 10000 });
+  });
+
+  it('giữ lượt gia hạn khi sửa giỏ và xóa lượt khi thanh toán xong', () => {
+    const cart = useCartStore.getState();
+    cart.addItem(drink);
+    storage.setItem('brewlite_checkout_renew_count', '1');
+
+    cart.updateQuantity(0, 2);
+    expect(storage.getItem('brewlite_checkout_renew_count')).toBe('1');
+
+    cart.clearCart();
+    expect(storage.getItem('brewlite_checkout_renew_count')).toBeNull();
   });
 
   it('chuyển món và voucher hợp lệ từ giỏ khách sang giỏ user lúc đăng nhập', () => {

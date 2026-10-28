@@ -6,12 +6,14 @@ import { formatVND } from '@/lib/utils';
 import type { Product } from '@/types';
 import React, { useEffect, useState } from 'react';
 import { useCartStore, type CartItem } from '@/stores/cart.store';
+import { cartValidationMessage, validateCart } from '@/lib/validate-cart';
 
 interface ProductCardProps {
     product: Product & {
         prices?: { size: string; price: number }[];
         price?: number;
         isBestSeller?: boolean;
+        stockBySize?: Record<string, number>;
     };
     variant?: 'bestseller' | 'compact';
     priority?: boolean; // Thuộc tính ưu tiên tải ảnh nhanh nếu nằm ở màn hình đầu
@@ -46,6 +48,8 @@ export function ProductCard({ product, variant = 'bestseller', priority = false 
     const { rawPrice, formattedPrice } = getDisplayPrice(product);
     const addItemToCart = useCartStore((s) => s.addItem);
     const [showAddedToast, setShowAddedToast] = useState(false);
+    const [adding, setAdding] = useState(false);
+    const [addError, setAddError] = useState<string | null>(null);
 
     useEffect(() => {
         if (!showAddedToast) return;
@@ -55,10 +59,14 @@ export function ProductCard({ product, variant = 'bestseller', priority = false 
 
     const isOutOfStock = (product.stock !== undefined && product.stock <= 0) || product.isAvailable === false;
 
-    const handleQuickAdd = (e: React.MouseEvent) => {
+    const handleQuickAdd = async () => {
         if (isOutOfStock) return;
 
         const defaultSize = (product.prices && product.prices.length > 0 ? product.prices[0].size : 'S') as 'S' | 'M' | 'L';
+        if ((product.stockBySize?.[defaultSize] ?? product.stock ?? 0) <= 0) {
+            setAddError(`Size ${defaultSize} đang thiếu nguyên liệu`);
+            return;
+        }
         const validPrice = Number(rawPrice) || 0;
 
         const newItem: CartItem = {
@@ -74,8 +82,21 @@ export function ProductCard({ product, variant = 'bestseller', priority = false 
             imageUrl: product.imageUrl ?? undefined,
         };
 
-        addItemToCart(newItem);
-        setShowAddedToast(true);
+        setAdding(true);
+        setAddError(null);
+        try {
+            const validation = await validateCart([...useCartStore.getState().items, newItem]);
+            if (!validation.available) {
+                setAddError(cartValidationMessage(validation));
+                return;
+            }
+            addItemToCart(newItem);
+            setShowAddedToast(true);
+        } catch {
+            setAddError('Không kiểm tra được nguyên liệu. Vui lòng thử lại.');
+        } finally {
+            setAdding(false);
+        }
     };
     
 
@@ -131,8 +152,9 @@ export function ProductCard({ product, variant = 'bestseller', priority = false 
                     ✓ Đã thêm vào giỏ hàng
                 </span>
             )}
+            {addError && <p role="alert" className="relative z-10 text-xs text-red-600">{addError}</p>}
 
-            {/* Khung ảnh cố định với Next Image */}
+            {/* Khung ảnh cố định dùng thành phần hiển thị ảnh của Next.js. */}
             <div className="relative h-28 w-28 overflow-hidden rounded-full bg-background shadow-inner transition-transform duration-300 ease-in-out group-hover:scale-105">
                 {product.imageUrl ? (
                     <Image
@@ -158,7 +180,7 @@ export function ProductCard({ product, variant = 'bestseller', priority = false 
             </div>
 
             <div className="flex w-full flex-col items-center gap-1">
-                {/* Link này tạo lớp phủ kín card; wrapper của nó KHÔNG được có class relative */}
+                {/* Liên kết phủ kín thẻ món; khung ngoài không đặt vị trí tương đối. */}
                 <Link
                     href={href}
                     className="line-clamp-1 text-base font-semibold text-text transition-colors group-hover:text-primary after:absolute after:inset-0 after:content-['']"
@@ -172,7 +194,7 @@ export function ProductCard({ product, variant = 'bestseller', priority = false 
                 <button
                     type="button"
                     onClick={handleQuickAdd}
-                    disabled={isOutOfStock}
+                    disabled={isOutOfStock || adding}
                     aria-label="Thêm vào giỏ hàng"
                     title={isOutOfStock ? 'Hết hàng' : 'Thêm vào giỏ hàng'}
                     className={`flex w-2/5 shrink-0 items-center justify-center bg-primary py-2 text-white transition-colors duration-500 ${

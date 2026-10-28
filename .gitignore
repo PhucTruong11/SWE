@@ -13,8 +13,7 @@ build/
 out/
 *.tsbuildinfo
 
-# Prisma
-prisma/migrations/
+# Prisma migrations are versioned so every checkout has the same schema.
 
 # IDE
 .vscode/

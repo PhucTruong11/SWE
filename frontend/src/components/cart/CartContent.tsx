@@ -1,13 +1,14 @@
-/* eslint-disable */
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
+import { isAxiosError } from 'axios';
 import { useAuth } from '@/hooks/useAuth';
 import api from '@/lib/api';
 import { useCartStore } from '@/stores/cart.store';
 import { getCartItemKey, toOrderItem } from '@/lib/cart';
+import { cartValidationMessage, validateCart } from '@/lib/validate-cart';
 import { CartItemRow } from './CartItemRow';
 import Link from 'next/link';
 import { ShoppingBag, ArrowRight, LogIn, Loader2, AlertCircle, CheckCircle2, ChevronDown, Tag } from 'lucide-react';
@@ -40,13 +41,14 @@ interface OwnedVoucher {
 export function CartContent({ onClose }: CartContentProps) {
   const router = useRouter();
   const { user, isAuthenticated, loading: authLoading } = useAuth();
-  const { items, totalPrice, totalItems, clearCart, appliedPromo, applyPromo, removePromo, setProductStocks } = useCartStore();
+  const { items, totalPrice, totalItems, appliedPromo, applyPromo, removePromo } = useCartStore();
 
   const [isLoading, setIsLoading] = useState(false);
+  const submittingRef = useRef(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
 
-  // --- STATE QUẢN LÝ PROMO CODE & DANH SÁCH MÃ ---
+  // Trạng thái mã giảm giá và danh sách mã có thể chọn.
   const [promoCode, setPromoCode] = useState('');
   const discountAmount = appliedPromo ? appliedPromo.discount : 0;
   const [promoLoading, setPromoLoading] = useState(false);
@@ -76,38 +78,18 @@ export function CartContent({ onClose }: CartContentProps) {
 
   const subtotal = totalPrice();
   const finalTotal = Math.max(0, subtotal - discountAmount);
-  const productIds = [...new Set(items.map((item) => item.productId ?? item.id).filter((id): id is string => !!id))].sort().join('|');
-  const isOverStock = items.some((item) => {
-    const productId = item.productId ?? item.id;
-    return productId && item.stock !== undefined &&
-      items.reduce((total, row) => (row.productId ?? row.id) === productId ? total + row.quantity : total, 0) > item.stock;
+  const cartSignature = JSON.stringify(items.map(toOrderItem));
+  const inventoryCheck = useQuery({
+    queryKey: ['cart', 'ingredients', cartSignature],
+    queryFn: () => validateCart(items),
+    enabled: items.length > 0,
+    staleTime: 0,
+    refetchOnWindowFocus: 'always',
+    refetchInterval: 10_000,
   });
+  const isOverStock = inventoryCheck.data?.available === false;
 
-  useEffect(() => {
-    if (authLoading || !productIds) return;
-    const ids = productIds.split('|');
-    const controller = new AbortController();
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-    fetch(`${backendUrl}/products`, { signal: controller.signal })
-      .then((response) => {
-        if (!response.ok) throw new Error('Không thể tải tồn kho');
-        return response.json();
-      })
-      .then((result: { data: { id: string; stock: number }[] }) => {
-        if (!Array.isArray(result.data)) return;
-        const stocks = Object.fromEntries(ids.map((id) => [id, 0]));
-        for (const product of result.data) {
-          if (Object.hasOwn(stocks, product.id)) stocks[product.id] = product.stock;
-        }
-        setProductStocks(stocks);
-      })
-      .catch((error) => {
-        if (error instanceof Error && error.name !== 'AbortError') console.error('Không thể cập nhật tồn kho giỏ hàng:', error);
-      });
-    return () => controller.abort();
-  }, [authLoading, productIds, setProductStocks]);
-
-  // Gọi API lấy danh sách mã ưu đãi đang hoạt động khi component mount
+  // Lấy danh sách mã ưu đãi đang hoạt động khi mở giỏ hàng.
   useEffect(() => {
     const fetchPromos = async () => {
       try {
@@ -124,7 +106,7 @@ export function CartContent({ onClose }: CartContentProps) {
     fetchPromos();
   }, []);
 
-  // Đóng dropdown khi click ra ngoài
+  // Đóng danh sách mã khi nhấn ra ngoài.
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -135,13 +117,51 @@ export function CartContent({ onClose }: CartContentProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleCheckoutClick = (e: React.MouseEvent) => {
+  const handleCheckoutClick = async (e: React.MouseEvent) => {
     e.preventDefault();
+    if (submittingRef.current || authLoading) return;
     if (!isAuthenticated) {
       setShowLoginModal(true);
-    } else {
+      return;
+    }
+
+    submittingRef.current = true;
+    setIsLoading(true);
+    setErrorMsg(null);
+    let navigated = false;
+    try {
+      // Tạo đơn và giữ nguyên liệu trước khi mở trang QR để hạn hai phút bắt đầu đúng lúc.
+      const cartBeforeCheck = JSON.stringify(useCartStore.getState().items.map(toOrderItem));
+      const latest = await inventoryCheck.refetch();
+      if (!latest.data?.available) {
+        setErrorMsg(latest.data ? cartValidationMessage(latest.data) : 'Không kiểm tra được nguyên liệu. Vui lòng thử lại.');
+        return;
+      }
+      const currentCart = useCartStore.getState();
+      if (cartBeforeCheck !== JSON.stringify(currentCart.items.map(toOrderItem))) {
+        setErrorMsg('Giỏ hàng vừa thay đổi. Vui lòng kiểm tra lại trước khi thanh toán.');
+        return;
+      }
+      const response = await api.post<{ data: { id: string } }>('/orders', {
+        items: currentCart.items.map(toOrderItem),
+        ...(currentCart.appliedPromo?.code ? { promoCode: currentCart.appliedPromo.code } : {}),
+      });
+      const orderId = response.data.data?.id;
+      if (!orderId) throw new Error('Máy chủ không trả về mã đơn hàng.');
+      localStorage.removeItem('brewlite_checkout_renew_count');
       if (onClose) onClose();
-      router.push('/checkout');
+      router.push(`/checkout?orderId=${encodeURIComponent(orderId)}`);
+      navigated = true;
+    } catch (error) {
+      const message = isAxiosError<{ message?: string | string[] }>(error)
+        ? error.response?.data?.message
+        : error instanceof Error ? error.message : null;
+      setErrorMsg(Array.isArray(message) ? message.join(', ') : message || 'Không tạo được đơn hàng. Vui lòng thử lại.');
+    } finally {
+      if (!navigated) {
+        submittingRef.current = false;
+        setIsLoading(false);
+      }
     }
   };
 
@@ -151,7 +171,7 @@ export function CartContent({ onClose }: CartContentProps) {
     router.push('/auth/login?redirect=/cart');
   };
 
-  // --- HÀM ÁP DỤNG MÃ GIẢM GIÁ ---
+  // Áp dụng mã giảm giá.
   const handleApplyPromo = async (codeToApply?: string) => {
     const targetCode = codeToApply || promoCode;
     if (!targetCode.trim()) {
@@ -203,48 +223,6 @@ export function CartContent({ onClose }: CartContentProps) {
     }
   };
 
-  // --- HÀM TẠO ĐƠN HÀNG TRỰC TIẾP ---
-  const handlePlaceOrder = async () => {
-    if (!isAuthenticated) {
-      setShowLoginModal(true);
-      return;
-    }
-
-    setIsLoading(true);
-    setErrorMsg(null);
-
-    try {
-      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-
-      const payload = {
-        items: items.map(toOrderItem),
-        promoCode: appliedPromo?.code || null,
-      };
-
-      const res = await fetch(`${backendUrl}/orders`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const json = await res.json();
-
-      if (!res.ok) {
-        setErrorMsg(json.message || 'Có lỗi xảy ra, vui lòng thử lại!');
-        return;
-      }
-
-      const orderId = json.data?.id;
-      clearCart();
-      if (onClose) onClose();
-      router.push(`/order-success?orderId=${orderId}`);
-    } catch {
-      setErrorMsg('Không thể kết nối đến máy chủ. Vui lòng kiểm tra lại kết nối!');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   if (items.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -268,7 +246,7 @@ export function CartContent({ onClose }: CartContentProps) {
 
   return (
     <div className="flex w-full md:justify-center transition-all duration-300 items-stretch relative z-20">
-      {/* Wrapper vừa khít 2 cột */}
+      {/* Khung chứa hai cột. */}
       <div ref={dropdownRef} className="flex items-stretch w-full max-w-full md:w-auto">
 
         {/* 1. CỘT TRÁI: GIỎ HÀNG CHÍNH */}
@@ -318,7 +296,7 @@ export function CartContent({ onClose }: CartContentProps) {
                 </button>
               </div>
 
-              {/* DÀNH CHO MOBILE: Hiển thị danh sách mã inline */}
+              {/* Trên màn hình nhỏ, hiển thị danh sách mã ngay trong giỏ. */}
               <div className={`md:hidden overflow-hidden transition-all duration-300 ${showDropdown ? 'max-h-[300px] mt-4 opacity-100' : 'max-h-0 opacity-0'}`}>
                 <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1">
                   <Tag size={12} /> Mã khả dụng
@@ -396,30 +374,24 @@ export function CartContent({ onClose }: CartContentProps) {
 
             {isOverStock && (
               <p role="alert" className="mb-4 text-sm font-medium text-red-600">
-                Số lượng trong giỏ vượt tồn kho hiện tại. Vui lòng giảm số lượng món trước khi thanh toán.
+                {inventoryCheck.data ? cartValidationMessage(inventoryCheck.data) : 'Không đủ nguyên liệu'}
               </p>
+            )}
+            {inventoryCheck.isError && (
+              <p role="alert" className="mb-4 text-sm font-medium text-red-600">Không kiểm tra được nguyên liệu. Vui lòng thử lại.</p>
             )}
 
             <button
               onClick={handleCheckoutClick}
-              disabled={isLoading || authLoading || isOverStock}
+              disabled={isLoading || authLoading || isOverStock || inventoryCheck.isPending || inventoryCheck.isError}
               className="w-full bg-primary hover:bg-primary-hover disabled:bg-primary/60 disabled:cursor-not-allowed text-white py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-2 transition-all shadow-md hover:shadow-lg active:scale-95"
             >
-              {isLoading ? (
-                <>
-                  <Loader2 size={20} className="animate-spin" />
-                  Đang xử lý...
-                </>
-              ) : (
-                <>
-                  {authLoading ? 'Đang kiểm tra...' : 'Tiến hành Thanh toán'} <ArrowRight size={20} />
-                </>
-              )}
+              {isLoading ? 'Đang tạo đơn...' : authLoading ? 'Đang kiểm tra...' : 'Tiến hành Thanh toán'} <ArrowRight size={20} />
             </button>
           </div>
         </div>
 
-        {/* 2. CỘT PHẢI: BẢNG PROMO SLIDE-IN (Chỉ dành cho Desktop) */}
+        {/* Cột phải hiển thị danh sách mã ưu đãi trên màn hình lớn. */}
         <div
           className={`hidden md:flex flex-col bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] shrink-0 md:h-[80vh] md:max-h-[800px] ${showDropdown ? 'w-[340px] opacity-100 translate-x-0 ml-6' : 'w-0 opacity-0 -translate-x-10 pointer-events-none ml-0 border-0'
             }`}
@@ -500,7 +472,7 @@ export function CartContent({ onClose }: CartContentProps) {
         </div>
       </div>
 
-      {/* MODAL THÔNG BÁO DÀNH CHO KHÁCH CHƯA ĐĂNG NHẬP */}
+      {/* Hộp thoại yêu cầu khách đăng nhập. */}
       {showLoginModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-3xl p-6 max-w-sm w-full text-center shadow-2xl border border-gray-100">

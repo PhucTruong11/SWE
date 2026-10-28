@@ -1,6 +1,6 @@
 # BrewLite: kế hoạch hoàn thiện Assignment 2
 
-Cập nhật: 21/10/2026.
+Cập nhật hiện trạng: 28/10/2026. Các mục checkbox bên dưới là kế hoạch nghiệm thu Assignment 2, không đồng nghĩa các chức năng Assignment 1 chưa có.
 
 Nguồn yêu cầu: [Assignment2-BrewLite.pdf](Assignment2-BrewLite.pdf), đặc biệt mục 6–9. Tài liệu tập trung Task 4–5 và ghi rõ các điều kiện đầu vào từ Task 1–3. Đây là kế hoạch cần thực hiện, không phải báo cáo các hạng mục đã hoàn thành.
 
@@ -26,12 +26,12 @@ Nhóm có thể chuẩn bị kỹ thuật Docker/CI sớm, nhưng không đánh 
 
 | Hạng mục | Đã có | Khoảng trống |
 | --- | --- | --- |
-| Mã ứng dụng | frontend, backend; menu, auth, giỏ, đơn, checkout và admin | Chưa dùng apps/web, apps/api; còn lỗi tích hợp/quyền |
+| Mã ứng dụng | `frontend/`, `backend/`; menu, auth, giỏ, đơn, checkout, admin; giỏ/đơn mới dùng công thức nguyên liệu | Chưa dùng apps/web, apps/api; API ghi quản lý nguyên liệu/công thức và kiểm thử tích hợp còn thiếu |
 | Tài liệu | Ba tài liệu tổng quan, khung docs và SVG minh họa | docs/requirements, diagrams, architecture mới có khung; hai file truy vết/triển khai đang rỗng |
-| CI | Workflow PR vào main | Backend thiếu lint/test; frontend thiếu test; chưa xác minh required checks trên GitHub |
-| Unit/API test | Test state machine, test mẫu và script payment | Chưa đủ test nghiệp vụ, API với DB test và E2E trình duyệt |
-| Database | Prisma schema và seed | Chưa có migration được quản lý; .gitignore đang bỏ qua prisma/migrations |
-| Docker | Compose chạy PostgreSQL | Chưa có Dockerfile web/API và Compose đủ ba dịch vụ |
+| CI | Workflow PR vào `main` chạy `npm ci`, lint, build, unit test cho web/API và Prisma generate cho API | Cần xác minh trên PR GitHub, bật required checks; integration/E2E chưa nằm trong CI |
+| Unit/API test | Unit test web/API, Newman collection, script kiểm tra nguyên liệu với DB thử | Cần bổ sung E2E trình duyệt và bằng chứng nghiệm thu các đường lỗi |
+| Database | Prisma schema, migration nguyên liệu/công thức, seed và script bootstrap riêng | Cần migration xóa bảng `addresses` vật lý sau backup; tránh seed phá hủy trên DB đang dùng |
+| Docker | Compose chạy `db`, `api`, `web`, có Dockerfile và volume DB | Cần xác minh quy trình triển khai môi trường đích và backup/restore |
 | Vận hành | API ứng dụng cơ bản | Chưa có health endpoint kiểm tra DB, CD, production URL và rollback đã kiểm chứng |
 
 Trạng thái docs được đánh giá theo nội dung, không theo việc thư mục đã được tạo. Các tệp mới phải được commit/PR trước khi dùng làm minh chứng.
@@ -91,7 +91,7 @@ Công việc:
 
 Tên file ngoài các vị trí bắt buộc trong đề là đề xuất tổ chức. Không tạo tài liệu rỗng rồi đánh dấu hoàn thành.
 
-Class diagram tối thiểu cần User, Product, Order, OrderItem, Payment, Promotion và LoyaltyTransaction. Schema hiện chưa có LoyaltyTransaction; cần quyết định hiện thực/sửa thiết kế rõ ràng, không vẽ như bảng đã tồn tại.
+Class diagram tối thiểu cần User, Product, Order, OrderItem, Payment, Promotion và giao dịch điểm. Schema hiện dùng `PointTransaction` cho sổ điểm, cùng `Ingredient` và `Recipe` cho tồn kho mới; sơ đồ phải dùng tên thực tế hoặc ghi rõ ánh xạ với thuật ngữ trong đề.
 
 Các SVG ở docs/assets chỉ minh họa ba tài liệu tổng quan, không thay thế bộ sơ đồ UML bắt buộc.
 
@@ -115,22 +115,22 @@ MVP Sprint 1 tập trung menu. Chức năng checkout sẵn có có thể tiếp 
 Pipeline bắt buộc cho từng ứng dụng:
 
 ~~~text
-Install → Lint → Unit Test → Build
+Install → Prisma generate (API) → Lint → Build → Unit Test
 ~~~
 
 | Job | Hiện tại | Cần bổ sung |
 | --- | --- | --- |
-| Backend | npm install → prisma generate → build | Lint và unit test |
-| Frontend | npm install → lint → build | Test runner, test cần thiết và lệnh test |
+| Backend | `npm ci` → Prisma generate → lint → build → unit test | Xác minh run PR và mở rộng integration nếu task yêu cầu |
+| Frontend | `npm ci` → lint → build → unit test | Bổ sung E2E trình duyệt và minh chứng CI |
 | GitHub | Workflow PR vào main | Required status checks và quy tắc không merge khi check thất bại |
 
 Công việc:
 
-- [ ] Dùng cài đặt theo lockfile, ưu tiên npm ci; đồng bộ Node giữa local và CI.
-- [ ] Chạy lint/test/build cho web và API; generate Prisma trước bước cần client.
+- [x] Dùng `npm ci` từ lockfile; Node 22 trong CI và Dockerfile.
+- [x] Chạy lint/test/build cho web và API; generate Prisma trước build/test backend.
 - [ ] Tách unit test khỏi integration/E2E; unit test dùng mock cho phụ thuộc bên ngoài.
-- [ ] Chạy test ở chế độ kết thúc một lần, không dùng watch trong CI.
-- [ ] Để lỗi lint/test/build trả exit code thất bại; không bỏ qua lỗi bằng continue-on-error.
+- [x] Unit test dùng `vitest run`, kết thúc một lần trong CI.
+- [x] Lỗi lint/test/build trả exit code thất bại; workflow không có `continue-on-error`.
 - [ ] Bật required checks trên nhánh đích để check đỏ không thể merge.
 - [ ] Lưu PR/log của một lần thành công và một lần pipeline phát hiện lỗi.
 
@@ -146,11 +146,11 @@ Script test-payment.ts hiện ghi nhiều FAIL ra console nhưng chưa bảo đ�
 | --- | --- |
 | Khách và đăng nhập | Giỏ gộp đúng; đổi tài khoản không lẫn dữ liệu; API gắn đơn đúng user |
 | Quyền truy cập | Orders/Checkout có JWT và kiểm tra chủ đơn; admin có role/guard, không chỉ kiểm tra đăng nhập |
-| Sản phẩm và giỏ | Size/topping hợp lệ; tùy chọn giống nhau mới gộp; tổng số ly theo sản phẩm được kiểm soát |
+| Sản phẩm và giỏ | Size/topping hợp lệ; tùy chọn giống nhau mới gộp; cộng nhu cầu nguyên liệu của toàn giỏ theo công thức |
 | Voucher | Một nguồn quy tắc từ backend; kiểm tra active/ngày hiệu lực/minimum/cap; thay đổi giỏ tính lại tiền |
 | Tạo đơn | Tính lại từ DB, không tin giá client; từ chối giỏ rỗng, size/topping sai hoặc sản phẩm ngừng bán |
 | Thanh toán | Ví/Thẻ mô phỏng, success/failure/retry có thể kiểm thử; không lặp tiền/kho/điểm |
-| Trạng thái và thời hạn | Chặn chuyển sai; hết hạn và gia hạn nhất quán UI/backend; thống nhất hủy đơn đã PAID |
+| Trạng thái và thời hạn | Chặn chuyển sai; giữ nguyên liệu 2 phút khi tạo đơn, một lần tạo lại đơn trên UI sau khi hết hạn; thống nhất hủy đơn đã PAID |
 | Xác nhận và lịch sử | Hiển thị đúng orderId, số tiền, trạng thái và chỉ dữ liệu được cấp quyền |
 
 Không coi toàn bộ Task 5 chỉ là “làm payment”. Phần xác thực, giỏ, validate và quyền dữ liệu phải hoàn thiện cùng luồng.
@@ -166,19 +166,19 @@ Không coi toàn bộ Task 5 chỉ là “làm payment”. Phần xác thực, g
 | CART-02 | Unit | Tăng/xóa đúng dòng; tính tiền đúng; giỏ khách/tài khoản tách đúng |
 | PROMO-01 | Unit/API | Mã sai/hết hiệu lực, min/cap, giảm cố định/phần trăm; xóa một dòng vẫn giữ mã nếu đủ điều kiện |
 | AUTH-01 | API | Login đúng/sai, JWT thiếu/hết hạn, người A không đọc/sửa đơn người B; khách và tài khoản thường không dùng API admin |
-| ORDER-01 | Integration | Tạo đơn nhiều biến thể cùng productId; dùng giá DB; tổng lượng không vượt kho |
+| ORDER-01 | Integration | Tạo đơn nhiều biến thể cùng productId; dùng giá DB; tổng lượng nguyên liệu của các món không vượt kho |
 | PAY-01 | Integration | Thanh toán thành công, thất bại, thử lại, đơn 0đ và đơn quá hạn |
 | PAY-02 | Integration | Gửi tuần tự/đồng thời cùng key chỉ có một tác động; key cho đơn khác bị xử lý đúng |
-| STOCK-01 | Integration | Nhiều người mua lượng tồn cuối cùng: không có stock âm hoặc bán vượt kho |
+| STOCK-01 | Integration | Nhiều người mua cùng nguyên liệu cuối: không có `onHand - reserved` âm hoặc bán vượt định lượng công thức |
 | LOYALTY-01 | Unit/API | Chỉ cộng điểm sau PAID, một lần; chuyển trạng thái sai bị chặn |
 | E2E-01 | Trình duyệt | Menu → chọn size/topping → giỏ → login → thanh toán → xác nhận và thấy đơn trong lịch sử |
 
-Các ID trên là đề xuất để đưa vào ma trận truy vết, chưa phải các test đã được tạo/chạy. Task 5 yêu cầu ít nhất một E2E từ menu đến xác nhận; test HTTP endpoint gốc không thay thế E2E đó.
+Các ID trên là đề xuất để đưa vào ma trận truy vết, không khẳng định tất cả đã có test tự động. Đã có unit test và script DB thử cho một phần luồng nguyên liệu; Task 5 vẫn cần ít nhất một E2E trình duyệt từ menu đến xác nhận. Test HTTP endpoint gốc không thay thế E2E đó.
 
 **Database và môi trường test**
 
 - [ ] Dùng database test riêng, fixture riêng và cơ chế dọn dữ liệu; không trỏ integration test vào dữ liệu dùng thật.
-- [ ] Bỏ quy tắc ignore prisma/migrations; tạo và commit migration có thể tái tạo database mới.
+- [x] Bỏ quy tắc ignore prisma/migrations và tạo migration nguyên liệu/công thức; cần commit cùng mã nguồn trước khi nhóm pull.
 - [ ] Nếu DB local đã có dữ liệu, thống nhất baseline trước; không reset DB để tạo lịch sử migration.
 - [ ] Dùng migrate dev khi phát triển, migrate deploy khi CI/deploy chạy migration đã được duyệt.
 - [ ] Tách seed/fixture test khỏi dữ liệu production; seed hiện xóa dữ liệu, không gắn vào startup.
@@ -186,10 +186,10 @@ Các ID trên là đề xuất để đưa vào ma trận truy vết, chưa ph�
 
 **Đóng gói và kiểm tra trên container**
 
-- [ ] Tạo Dockerfile và .dockerignore cho apps/web, apps/api; build có thể lặp lại từ lockfile.
+- [x] Có Dockerfile và .dockerignore cho `frontend/`, `backend/`; khi đổi cấu trúc sang `apps/web`, `apps/api` phải cập nhật build context.
 - [ ] Tạo docker-compose.yml ở gốc với web, api, db; DB có persistent volume và healthcheck.
-- [ ] API dùng db:5432 trong mạng container; browser dùng URL API mà người dùng truy cập được.
-- [ ] Phân biệt biến frontend tại thời điểm build với biến backend tại runtime.
+- [x] Compose local dùng `db:5432` cho API; browser gọi `/api` qua proxy Next.js.
+- [x] Dockerfile web nhận biến proxy lúc build; API nhận biến môi trường runtime qua Compose.
 - [ ] Chạy migration bằng job/bước riêng có kiểm soát; không để mọi replica tự chạy seed/migration khi khởi động.
 - [ ] Test integration/E2E lại trên hệ thống đã đóng gói; kiểm tra khởi động mới, dữ liệu tồn tại sau restart và health check.
 
@@ -249,7 +249,7 @@ Có thể chọn Continuous Delivery với bước duyệt phát hành hoặc Co
 2. Chuẩn hóa apps/web, apps/api và cập nhật mọi đường dẫn liên quan trong cùng PR.
 3. Bổ sung test menu, unit test cần thiết và hoàn thiện CI/required checks để nghiệm thu Task 4.
 4. Sửa tích hợp auth/quyền/checkout; viết unit/API test song song với chức năng.
-5. Tạo migration, fixture test, health endpoint, Dockerfile và Compose; chạy integration/E2E trên container.
+5. Duy trì migration, fixture test, Dockerfile và Compose hiện có; bổ sung health endpoint chuyên dụng và integration/E2E trên container.
 6. Chọn môi trường production, hoàn thiện deployment diagram/ADR và triển khai CD.
 7. Release, deploy, smoke test, xác minh rollback và hoàn tất tài liệu/minh chứng bàn giao.
 

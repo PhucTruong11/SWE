@@ -1,5 +1,5 @@
-// BrewLite Database Schema
-// Docs: https://pris.ly/d/prisma-schema
+// Lược đồ cơ sở dữ liệu BrewLite.
+// Tài liệu: https://pris.ly/d/prisma-schema
 
 generator client {
   provider = "prisma-client-js"
@@ -11,7 +11,7 @@ datasource db {
 }
 
 // ==========================================
-// Enums
+// Các kiểu liệt kê.
 // ==========================================
 
 enum OrderStatus {
@@ -41,6 +41,20 @@ enum ProductSize {
   L
 }
 
+enum IngredientUnit {
+  G
+  ML
+  PIECE
+}
+
+enum InventoryState {
+  LEGACY
+  RESERVED
+  CONSUMED
+  RELEASED
+  RESTORED
+}
+
 enum Role {
   USER
   ADMIN
@@ -53,7 +67,7 @@ enum PointTransactionType {
 }
 
 // ==========================================
-// Models
+// Các bảng dữ liệu.
 // ==========================================
 
 model User {
@@ -96,18 +110,19 @@ model EmailVerification {
 model Product {
   id            String  @id @default(uuid())
   name          String
-  description   String? // Mô tả ngắn (EN/VI)
+  description   String? // Mô tả ngắn bằng tiếng Anh hoặc tiếng Việt.
   imageUrl      String?
   category      String  // "phin", "tra", "freeze", "phindi", "espresso", "other"
-  allowToppings Boolean @default(false) // true = cho phép thêm topping
+  allowToppings Boolean @default(false) // Giá trị đúng cho phép thêm topping.
   stock         Int     @default(100)
-  version       Int     @default(1) // Optimistic locking
+  version       Int     @default(1) // Phiên bản dùng để phát hiện cập nhật chồng chéo.
   isAvailable   Boolean @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   prices     ProductPrice[] // Bảng giá theo size (S/M/L)
   orderItems OrderItem[]
+  recipes    Recipe[]
 
   @@map("products")
 }
@@ -136,8 +151,49 @@ model Topping {
   imageUrl    String?
   isAvailable Boolean @default(true)
   createdAt   DateTime @default(now())
+  recipes     Recipe[]
 
   @@map("toppings")
+}
+
+model Ingredient {
+  id                String         @id @default(uuid())
+  code              String         @unique
+  name              String
+  unit              IngredientUnit
+  trackStock        Boolean        @default(true)
+  onHand            Decimal?       @db.Decimal(14, 3)
+  reserved          Decimal?       @db.Decimal(14, 3)
+  packageQuantity   Decimal?       @db.Decimal(14, 3)
+  lowStockThreshold Decimal?       @db.Decimal(14, 3)
+  version           Int            @default(1)
+  isActive          Boolean        @default(true)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  recipes           Recipe[]
+
+  @@map("ingredients")
+}
+
+// Mỗi dòng công thức thuộc một sản phẩm/size hoặc một topping, không thuộc cả hai.
+model Recipe {
+  id           String       @id @default(uuid())
+  productId    String?
+  size         ProductSize?
+  toppingId    String?
+  ingredientId String
+  quantity     Decimal      @db.Decimal(14, 3)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  product    Product?   @relation(fields: [productId], references: [id], onDelete: Restrict)
+  topping    Topping?   @relation(fields: [toppingId], references: [id], onDelete: Restrict)
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+
+  @@unique([productId, size, ingredientId])
+  @@unique([toppingId, ingredientId])
+  @@index([ingredientId])
+  @@map("recipes")
 }
 
 model Order {
@@ -148,6 +204,8 @@ model Order {
   discount            Int         @default(0) // VND
   promoCode           String?
   loyaltyPointsEarned Int         @default(0)
+  inventoryState      InventoryState @default(LEGACY)
+  reservationExpiresAt DateTime?
   createdAt           DateTime    @default(now())
   updatedAt           DateTime    @updatedAt
 
@@ -168,9 +226,10 @@ model OrderItem {
   orderId   String
   productId String
   size      ProductSize @default(S)
-  toppings  String[]    // Snapshot tên topping tại thời điểm đặt
+  toppings  String[]    // Tên topping được lưu tại thời điểm đặt đơn.
   qty       Int         @default(1)
   lineTotal Int         // VND
+  recipeSnapshot Json?
 
   order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product Product @relation(fields: [productId], references: [id])
@@ -206,7 +265,7 @@ model Promotion {
   isActive       Boolean   @default(true)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
-  isRewardOnly Boolean       @default(false) // true = chỉ dùng được khi đã đổi điểm
+  isRewardOnly Boolean       @default(false) // Giá trị đúng nghĩa là phải đổi điểm mới dùng được.
   rewardItems  RewardItem[]
   userVouchers UserVoucher[]
 
@@ -216,7 +275,7 @@ model Promotion {
 model PasswordReset {
   id         String   @id @default(uuid())
   email      String   @unique
-  codeHash   String   // Hash của mã OTP 6 số
+  codeHash   String   // Giá trị băm của mã xác minh sáu số.
   expiresAt  DateTime // Hạn sử dụng (10 phút)
   attempts   Int      @default(0)
   createdAt  DateTime @default(now())
@@ -225,7 +284,7 @@ model PasswordReset {
   @@map("password_resets")
 }
 
-/// Danh mục quà đổi điểm (mỗi quà gắn với 1 Promotion reward-only)
+/// Danh mục quà đổi điểm; mỗi quà gắn với một mã ưu đãi chỉ dùng sau khi đổi điểm.
 model RewardItem {
   id          String   @id @default(uuid())
   name        String
@@ -241,7 +300,7 @@ model RewardItem {
   @@map("reward_items")
 }
 
-/// Voucher mà user đã đổi bằng điểm. Không có hạn dùng; usedAt = null nghĩa là còn dùng được.
+/// Mã ưu đãi người dùng đã đổi bằng điểm. Không có hạn dùng; chưa có thời điểm sử dụng nghĩa là còn dùng được.
 model UserVoucher {
   id           String    @id @default(uuid())
   userId       String
@@ -260,7 +319,7 @@ model UserVoucher {
   @@map("user_vouchers")
 }
 
-/// Lịch sử cộng/trừ điểm. Unique (orderId, type) để một đơn không bao giờ bị cộng điểm 2 lần.
+/// Lịch sử cộng và trừ điểm. Ràng buộc duy nhất theo đơn và loại giao dịch ngăn cộng điểm hai lần.
 model PointTransaction {
   id            String               @id @default(uuid())
   userId        String

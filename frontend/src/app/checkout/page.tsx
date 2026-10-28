@@ -4,7 +4,7 @@ import { Suspense, useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCartStore, useHasCartHydrated } from '@/stores/cart.store';
 import api from '@/lib/api';
-import { getCartLineTotal, toOrderItem } from '@/lib/cart';
+import { getCartLineTotal, toOrderItem, type CartItem } from '@/lib/cart';
 import { RequireAuth } from '@/components/auth/RequireAuth';
 import {
   ReceiptInvoice,
@@ -18,17 +18,38 @@ import {
 } from '@/components/checkout';
 import type { AppliedPromo } from '@/lib/voucher';
 
+type CheckoutStatus = {
+  status: string;
+  total: number;
+  originalTotal: number;
+  discount: number;
+  promoCode: string | null;
+  qrCodeUrl: string;
+  expiresAt: string;
+};
+
+type SavedOrder = {
+  items: Array<{
+    productId: string;
+    size: string;
+    toppings: string[];
+    qty: number;
+    lineTotal: number;
+    product: { name: string; imageUrl: string | null };
+  }>;
+};
+
 function CheckoutContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { items, clearCart, appliedPromo, applyPromo, removePromo } = useCartStore();
+  const { items, clearCart, appliedPromo, removePromo } = useCartStore();
   const currentPromo: AppliedPromo | null = appliedPromo;
   const hasHydrated = useHasCartHydrated();
 
-  // Phương thức thanh toán: EWALLET (MoMo) | CARD (Thẻ ngân hàng)
+  // Phương thức thanh toán: ví điện tử hoặc thẻ ngân hàng.
   const [method, setMethod] = useState<'EWALLET' | 'CARD'>('EWALLET');
 
-  // Thông tin form thẻ ngân hàng (mặc định điền sẵn thẻ mẫu Sandbox để test thanh toán ảo nhanh)
+  // Mẫu thẻ ngân hàng được điền sẵn để thử luồng thanh toán mô phỏng.
   const [cardInfo, setCardInfo] = useState<CardFormData>({
     cardNumber: '9704 2200 8888 6666',
     cardHolder: 'NGUYEN VAN A',
@@ -39,19 +60,17 @@ function CheckoutContent() {
 
   // Thời lượng giữ đơn và thanh toán chạy ngầm: 2 phút (120 giây)
   const CHECKOUT_DURATION_SECONDS = 120;
-  const CHECKOUT_DEADLINE_KEY = 'brewlite_checkout_deadline';
   const CHECKOUT_RENEW_COUNT_KEY = 'brewlite_checkout_renew_count';
   const MAX_RENEWALS = 1; // Chỉ cho phép gia hạn tối đa 1 lần duy nhất
 
-  // Đồng hồ đếm ngược chạy ngầm (không hiển thị thanh ra ngoài giao diện)
+  // Đồng hồ hiển thị thời gian còn lại của đơn đã tạo từ giỏ.
   const [timeLeft, setTimeLeft] = useState(CHECKOUT_DURATION_SECONDS);
-  const isExpired = timeLeft <= 0;
 
-  // Số lần đã gia hạn (khởi tạo đọc từ localStorage)
+  // Số lần đã gia hạn được đọc từ bộ nhớ trình duyệt.
   const [renewCount, setRenewCount] = useState<number>(() => {
     if (typeof window !== 'undefined') {
       const savedRenewCount = localStorage.getItem('brewlite_checkout_renew_count');
-      return savedRenewCount ? parseInt(savedRenewCount, 10) || 0 : 0;
+      return savedRenewCount ? Math.min(MAX_RENEWALS, Math.max(0, parseInt(savedRenewCount, 10) || 0)) : 0;
     }
     return 0;
   });
@@ -64,67 +83,93 @@ function CheckoutContent() {
   // Dữ liệu HÓA ĐƠN XUẤT SAU KHI THANH TOÁN THÀNH CÔNG
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
 
-  // Giữ order/key trong suốt vòng đời thao tác để retry do timeout không tạo request mới.
-  const [orderId, setOrderId] = useState<string | null>(
-    searchParams.get('orderId'),
-  );
+  // Mã đơn trong đường dẫn là đơn đã được tạo khi khách rời giỏ hàng.
+  const orderId = searchParams.get('orderId');
+  const [checkoutStatus, setCheckoutStatus] = useState<CheckoutStatus | null>(null);
+  const [orderItems, setOrderItems] = useState<CartItem[] | null>(null);
+  const isExpired = orderId !== null && (timeLeft <= 0 || checkoutStatus?.status === 'CANCELLED');
   const paymentAttemptRef = useRef<string | null>(null);
+  const renewalAttemptRef = useRef(false);
+  const serverDeadlineRef = useRef<number | null>(null);
 
-  // Bộ đếm thời gian được đồng bộ qua localStorage và chạy hoàn toàn ngầm
+  // Đồng bộ hạn hai phút và số tiền thật của đơn từ máy chủ, không lấy đồng hồ hay giá giỏ làm chuẩn.
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const syncTimer = () => {
-      const saved = localStorage.getItem(CHECKOUT_DEADLINE_KEY);
-      let targetDeadline: number;
-
-      if (!saved) {
-        targetDeadline = Date.now() + CHECKOUT_DURATION_SECONDS * 1000;
-        localStorage.setItem(CHECKOUT_DEADLINE_KEY, targetDeadline.toString());
-      } else {
-        targetDeadline = parseInt(saved, 10);
-        // Nếu deadline cũ lưu thời gian xa hơn CHECKOUT_DURATION_SECONDS, tự động reset lại 2 phút
-        if (isNaN(targetDeadline) || targetDeadline - Date.now() > CHECKOUT_DURATION_SECONDS * 1000) {
-          targetDeadline = Date.now() + CHECKOUT_DURATION_SECONDS * 1000;
-          localStorage.setItem(CHECKOUT_DEADLINE_KEY, targetDeadline.toString());
-        }
-      }
-
-      const remaining = Math.max(0, Math.floor((targetDeadline - Date.now()) / 1000));
-      setTimeLeft(remaining);
-    };
-
-    syncTimer();
-    const timer = setInterval(syncTimer, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  // Xóa deadline & số lần gia hạn khi giỏ hàng trống
-  useEffect(() => {
-    if (items.length === 0 && typeof window !== 'undefined') {
-      localStorage.removeItem(CHECKOUT_DEADLINE_KEY);
-      localStorage.removeItem(CHECKOUT_RENEW_COUNT_KEY);
+    if (!orderId) {
+      serverDeadlineRef.current = null;
+      return;
     }
-  }, [items.length]);
+    let active = true;
+    const syncStatus = async () => {
+      try {
+        const response = await api.get<CheckoutStatus>(`/checkout/status/${orderId}`);
+        if (!active) return;
+        setCheckoutStatus(response.data);
+        serverDeadlineRef.current = new Date(response.data.expiresAt).getTime();
+        setTimeLeft(response.data.status === 'CANCELLED'
+          ? 0
+          : Math.max(0, Math.floor((serverDeadlineRef.current - Date.now()) / 1000)));
+      } catch {
+        if (active) setErrorMessage('Không tải được thời hạn thanh toán của đơn hàng.');
+      }
+    };
+    const loadOrderItems = async () => {
+      try {
+        const response = await api.get<{ data: SavedOrder }>(`/orders/${orderId}`);
+        if (!active) return;
+        setOrderItems(response.data.data.items.map((item) => ({
+          productId: item.productId,
+          name: item.product.name,
+          imageUrl: item.product.imageUrl,
+          size: item.size,
+          quantity: item.qty,
+          toppings: item.toppings,
+          unitPrice: item.lineTotal / item.qty,
+          lineTotal: item.lineTotal,
+        })));
+      } catch {
+        if (active) setErrorMessage('Không tải được chi tiết đơn hàng. Vui lòng quay lại giỏ hàng.');
+      }
+    };
+    const tick = () => {
+      if (serverDeadlineRef.current !== null) {
+        setTimeLeft(Math.max(0, Math.floor((serverDeadlineRef.current - Date.now()) / 1000)));
+      }
+    };
+    void syncStatus();
+    void loadOrderItems();
+    const poll = setInterval(syncStatus, 2_000);
+    const timer = setInterval(tick, 1000);
+    return () => { active = false; clearInterval(poll); clearInterval(timer); };
+  }, [orderId]);
 
   // Tự động thu hồi mã giảm giá nếu hết hạn cả 2 cơ hội thanh toán (2 phút đầu + 1 lần gia hạn)
   useEffect(() => {
     if (isExpired && !canRenew && currentPromo) {
       const timer = setTimeout(() => {
         removePromo();
-        setErrorMessage('Đơn hàng đã hết hạn thanh toán qua 2 cơ hội. Mã ưu đãi đã tự động bị thu hồi.');
       }, 0);
       return () => clearTimeout(timer);
     }
   }, [isExpired, canRenew, currentPromo, removePromo]);
 
-  // Tính toán số tiền thực tế từ giỏ hàng kèm giảm giá Voucher
-  const subtotal = items.reduce((sum, item) => sum + getCartLineTotal(item), 0);
-  const discountAmount = appliedPromo ? appliedPromo.discount : 0;
-  const finalTotal = Math.max(0, subtotal - discountAmount);
-  const pointsEarned = Math.floor(finalTotal / 10000); // 10.000đ = 1 điểm (đồng bộ với backend)
+  // Đơn đã tạo là nguồn dữ liệu cho số tiền và nội dung QR; giỏ chỉ dùng để tạo lượt mới khi hết hạn.
+  const displayItems = orderItems ?? items;
+  const subtotal = checkoutStatus?.originalTotal ?? displayItems.reduce((sum, item) => sum + getCartLineTotal(item), 0);
+  const discountAmount = checkoutStatus?.discount ?? (appliedPromo?.discount ?? 0);
+  const finalTotal = checkoutStatus?.total ?? Math.max(0, subtotal - discountAmount);
+  const pointsEarned = Math.floor(finalTotal / 10000); // 10.000đ = 1 điểm, cùng quy tắc với máy chủ.
+  const displayedPromo: AppliedPromo | null = checkoutStatus?.promoCode
+    ? {
+        code: checkoutStatus.promoCode,
+        discount: discountAmount,
+        description: currentPromo?.code === checkoutStatus.promoCode ? currentPromo.description : 'Ưu đãi của đơn hàng',
+        rules: currentPromo?.code === checkoutStatus.promoCode
+          ? currentPromo.rules
+          : { discountType: 'FIXED_AMOUNT', discountValue: discountAmount, minOrderValue: 0 },
+      }
+    : null;
 
-  // Kiểm tra tính hợp lệ của Form thẻ ngân hàng
+  // Kiểm tra thông tin thẻ ngân hàng.
   const validateCardForm = (): boolean => {
     const errors: CardFormErrors = {};
     const cleanNumber = cardInfo.cardNumber.replace(/\s+/g, '');
@@ -155,26 +200,53 @@ function CheckoutContent() {
     return Object.keys(errors).length === 0;
   };
 
-  // Làm mới đơn hàng khi hết hạn (Chỉ được gia hạn tối đa 1 lần)
-  const handleRenewOrder = () => {
-    if (renewCount >= MAX_RENEWALS) {
+  // Sau khi đơn cũ hết hạn, trả nguyên liệu rồi tạo lượt chờ thanh toán mới trước khi khách xác nhận trả.
+  const handleRenewOrder = async () => {
+    const savedRenewCount = Number(localStorage.getItem(CHECKOUT_RENEW_COUNT_KEY)) || 0;
+    if (isSubmitting || renewalAttemptRef.current || !orderId || Math.max(renewCount, savedRenewCount) >= MAX_RENEWALS) {
       setErrorMessage('Đơn hàng đã hết số lần gia hạn cho phép (tối đa 1 lần). Vui lòng tạo lại đơn mới.');
       return;
     }
-
-    const nextRenewCount = renewCount + 1;
-    setRenewCount(nextRenewCount);
-
-    const newDeadline = Date.now() + CHECKOUT_DURATION_SECONDS * 1000;
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(CHECKOUT_DEADLINE_KEY, newDeadline.toString());
-      localStorage.setItem(CHECKOUT_RENEW_COUNT_KEY, nextRenewCount.toString());
-    }
-    setTimeLeft(CHECKOUT_DURATION_SECONDS);
+    renewalAttemptRef.current = true;
+    setIsSubmitting(true);
     setErrorMessage(null);
+    try {
+      // API trạng thái hủy đơn quá hạn và giải phóng lượng nguyên liệu đã giữ.
+      const oldStatus = await api.get<CheckoutStatus>(`/checkout/status/${orderId}`);
+      if (oldStatus.data.status !== 'CANCELLED') {
+        throw new Error('Đơn cũ chưa được hủy. Vui lòng kiểm tra trạng thái đơn trước khi tạo lại.');
+      }
+      const currentCart = useCartStore.getState();
+      if (currentCart.items.length === 0) throw new Error('Giỏ hàng đã trống. Vui lòng chọn món lại.');
+      const response = await api.post<{ data: { id: string; reservationExpiresAt: string } }>('/orders', {
+        items: currentCart.items.map(toOrderItem),
+        ...(currentCart.appliedPromo?.code ? { promoCode: currentCart.appliedPromo.code } : {}),
+      });
+      const nextOrder = response.data.data;
+      if (!nextOrder?.id) throw new Error('Máy chủ không trả về mã đơn hàng mới.');
+      const nextRenewCount = renewCount + 1;
+      setRenewCount(nextRenewCount);
+      localStorage.setItem(CHECKOUT_RENEW_COUNT_KEY, nextRenewCount.toString());
+      paymentAttemptRef.current = null;
+      serverDeadlineRef.current = new Date(nextOrder.reservationExpiresAt).getTime();
+      setTimeLeft(Math.max(0, Math.floor((serverDeadlineRef.current - Date.now()) / 1000)));
+      setCheckoutStatus(null);
+      setOrderItems(null);
+      router.replace(`/checkout?orderId=${encodeURIComponent(nextOrder.id)}`);
+    } catch (error: unknown) {
+      const response = error && typeof error === 'object' && 'response' in error
+        ? (error as { response?: { data?: { message?: string | string[] } } }).response
+        : null;
+      const message = response?.data?.message;
+      setErrorMessage(Array.isArray(message) ? message.join(', ') : message ||
+        (error instanceof Error ? error.message : 'Không thể tạo lại đơn hàng. Vui lòng thử lại.'));
+    } finally {
+      renewalAttemptRef.current = false;
+      setIsSubmitting(false);
+    }
   };
 
-  // Điền thẻ mẫu Demo
+  // Điền thông tin thẻ mẫu.
   const handleFillDemoCard = () => {
     setCardInfo({
       cardNumber: '9704 2200 8888 6666',
@@ -208,15 +280,21 @@ function CheckoutContent() {
     }
   };
 
-  // Xử lý tạo đơn hàng và thanh toán (Checkout Flow)
+  // Đơn đã được tạo ở giỏ; nút xác nhận chỉ thanh toán orderId đang chờ.
   const handleCheckout = async () => {
-    if (isExpired) {
-      setErrorMessage('Đơn hàng đã quá hạn thanh toán. Vui lòng bấm "Làm mới đơn hàng" để tiếp tục.');
+    if (isSubmitting) return;
+    if (isExpired || (serverDeadlineRef.current !== null && serverDeadlineRef.current <= Date.now())) {
+      setTimeLeft(0);
+      setErrorMessage('Đơn hàng đã quá hạn thanh toán. Vui lòng bấm "Tạo lại đơn hàng" để tiếp tục.');
       return;
     }
 
-    if (items.length === 0) {
-      setErrorMessage('Giỏ hàng trống. Vui lòng chọn món trước khi thanh toán.');
+    if (!orderId || !checkoutStatus || !orderItems?.length) {
+      setErrorMessage('Chưa có đơn hàng để thanh toán. Vui lòng quay lại giỏ hàng.');
+      return;
+    }
+    if (checkoutStatus.status !== 'PENDING' && checkoutStatus.status !== 'PAYMENT_FAILED') {
+      setErrorMessage('Đơn hàng này không còn ở trạng thái chờ thanh toán.');
       return;
     }
 
@@ -233,21 +311,7 @@ function CheckoutContent() {
     setErrorMessage(null);
 
     try {
-      // 1. Chỉ tạo order một lần. Khi retry thanh toán, dùng lại order hiện có.
-      let currentOrderId = orderId;
-      if (!currentOrderId) {
-        const orderRes = await api.post('/orders', {
-          items: items.map(toOrderItem),
-          ...(appliedPromo?.code ? { promoCode: appliedPromo.code } : {}),
-        });
-        currentOrderId = orderRes.data.data?.id;
-        if (!currentOrderId) {
-          throw new Error('Không thể khởi tạo đơn hàng từ máy chủ.');
-        }
-        setOrderId(currentOrderId);
-      }
-
-      // 2. Cùng một thao tác thanh toán luôn dùng cùng key, kể cả khi request timeout.
+      // Giữ nguyên mã giao dịch cho cùng một lần thanh toán, kể cả khi yêu cầu hết thời gian chờ.
       if (!paymentAttemptRef.current) {
         paymentAttemptRef.current =
           typeof crypto !== 'undefined' && crypto.randomUUID
@@ -255,13 +319,12 @@ function CheckoutContent() {
             : `checkout-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
       }
 
-      // 3. Contract hiện có là POST /checkout (CheckoutController), không phải /payments.
+      // Chỉ gửi mã đơn đã được tạo từ giỏ cho API thanh toán.
       const paymentRes = await api.post(
         '/checkout',
         {
-          orderId: currentOrderId,
+          orderId,
           method,
-          ...(appliedPromo?.code ? { promoCode: appliedPromo.code } : {}),
         },
         {
           headers: {
@@ -281,12 +344,12 @@ function CheckoutContent() {
         };
         pointsEarned?: number;
       };
-      const orderRes = await api.get(`/orders/${currentOrderId}`);
+      const orderRes = await api.get(`/orders/${orderId}`);
       const confirmedOrder = orderRes.data.data;
 
-      // Response duplicate không có field success; xác minh trạng thái order là nguồn sự thật.
+      // Phản hồi giao dịch trùng không có trường success; kiểm tra trạng thái đơn trên máy chủ.
       if (paymentData.success !== true && confirmedOrder?.status !== 'PAID') {
-        // Một response thất bại đã được backend xác nhận là một attempt mới ở lần retry sau.
+        // Khi máy chủ xác nhận thất bại, lần thử tiếp theo dùng mã giao dịch mới.
         if (paymentData.success === false || confirmedOrder?.status === 'PAYMENT_FAILED') {
           paymentAttemptRef.current = null;
         }
@@ -296,11 +359,11 @@ function CheckoutContent() {
       const now = new Date();
       const datePrefix = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}`;
 
-      // 4. Xuất hóa đơn điện tử thực tế từ dữ liệu trả về của Server
+      // Tạo hóa đơn điện tử từ dữ liệu máy chủ trả về.
       setReceiptData({
-        orderId: currentOrderId,
-        invoiceNo: `BL-${datePrefix}-${currentOrderId.slice(-6).toUpperCase()}`,
-        paymentId: paymentData.payment?.id || `PAY-${currentOrderId.slice(-6).toUpperCase()}`,
+        orderId,
+        invoiceNo: `BL-${datePrefix}-${orderId.slice(-6).toUpperCase()}`,
+        paymentId: paymentData.payment?.id || `PAY-${orderId.slice(-6).toUpperCase()}`,
         paidAt: new Date(paymentData.payment?.createdAt || now).toLocaleString('vi-VN', {
           hour: '2-digit',
           minute: '2-digit',
@@ -309,18 +372,17 @@ function CheckoutContent() {
           month: '2-digit',
           year: 'numeric',
         }),
-        items: [...items],
+        items: [...displayItems],
         subtotal,
         discount: discountAmount,
-        promoCode: appliedPromo?.code || confirmedOrder?.promoCode || null,
+        promoCode: confirmedOrder?.promoCode || checkoutStatus.promoCode,
         finalTotal: paymentData.payment?.amount ?? finalTotal,
         pointsEarned: paymentData.pointsEarned ?? (confirmedOrder?.loyaltyPointsEarned ?? pointsEarned),
         method,
       });
 
-      // 5. Dọn dẹp giỏ hàng, deadline và lượt gia hạn sau khi backend xác nhận PAID
+      // Xóa giỏ và lượt làm mới sau khi máy chủ xác nhận đã thanh toán.
       if (typeof window !== 'undefined') {
-        localStorage.removeItem(CHECKOUT_DEADLINE_KEY);
         localStorage.removeItem(CHECKOUT_RENEW_COUNT_KEY);
       }
       clearCart();
@@ -348,10 +410,10 @@ function CheckoutContent() {
     }
   };
 
-  // URL QR MoMo / VietQR động
-  const vietQrUrl = `https://api.vietqr.io/image/970422-0909090909-compact2.png?amount=${finalTotal}&addInfo=BREWLITE%20CAFE&accountName=BREWLITE%20COFFEE`;
+  // QR gắn với đúng mã đơn và số tiền đã được máy chủ chốt khi tạo đơn.
+  const vietQrUrl = checkoutStatus?.qrCodeUrl ?? '';
 
-  // Chờ đọc xong dữ liệu giỏ hàng từ localStorage để tránh giật giao diện
+  // Chờ tải giỏ hàng từ bộ nhớ trình duyệt để tránh giao diện hiển thị sai lúc đầu.
   if (!hasHydrated) {
     return (
       <main className="mx-auto flex w-full max-w-md flex-1 items-center justify-center px-4 py-24">
@@ -381,19 +443,50 @@ function CheckoutContent() {
     );
   }
 
-  // 2. NẾU GIỎ HÀNG TRỐNG → HIỂN THỊ COMPONENT THÔNG BÁO VỀ MENU
-  if (items.length === 0) {
+  // Chỉ có đơn được tạo từ giỏ mới được mở trang QR và bắt đầu thời hạn thanh toán.
+  if (!orderId) {
+    return (
+      <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-4 px-4 py-24 text-center">
+        <p className="font-semibold text-text">Vui lòng tạo đơn từ giỏ hàng trước khi thanh toán.</p>
+        <button type="button" onClick={() => router.push('/cart')} className="rounded-full bg-primary px-6 py-3 font-bold text-white">
+          Quay lại giỏ hàng
+        </button>
+      </main>
+    );
+  }
+
+  if (!checkoutStatus || !orderItems) {
+    return (
+      <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-4 px-4 py-24 text-center">
+        <p className="font-semibold text-text">{errorMessage || 'Đang tải đơn hàng và thời hạn thanh toán...'}</p>
+        {errorMessage && <button type="button" onClick={() => router.push('/cart')} className="rounded-full bg-primary px-6 py-3 font-bold text-white">Quay lại giỏ hàng</button>}
+      </main>
+    );
+  }
+
+  if (checkoutStatus.status === 'PAID') {
+    return (
+      <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-4 px-4 py-24 text-center">
+        <p className="font-semibold text-text">Đơn hàng này đã được thanh toán.</p>
+        <button type="button" onClick={() => router.push(`/orders/${orderId}`)} className="rounded-full bg-primary px-6 py-3 font-bold text-white">Xem đơn hàng</button>
+      </main>
+    );
+  }
+
+  if (orderItems.length === 0) {
     return <EmptyCheckout />;
   }
 
-  // 3. GIAO DIỆN CHECKOUT CHÍNH
+  // 3. GIAO DIỆN THANH TOÁN CHÍNH.
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 px-4 py-6 pb-20 lg:px-8">
-      {/* Đồng hồ đếm ngược chạy ngầm đồng bộ với nút thanh toán */}
+      {/* Hai phút bắt đầu khi khách rời giỏ và đơn được tạo; hạn lấy từ máy chủ. */}
       <CountdownTimer
         timeLeft={timeLeft}
         isExpired={isExpired}
-        showUI={false}
+        canRenew={canRenew}
+        attempt={renewCount + 1}
+        showUI
       />
 
       {errorMessage && (
@@ -403,7 +496,7 @@ function CheckoutContent() {
       )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* CỘT TRÁI: Phương thức thanh toán (7 cols) */}
+        {/* CỘT TRÁI: Phương thức thanh toán, chiếm bảy phần lưới. */}
         <div className="flex flex-col gap-6 lg:col-span-7">
           <CheckoutMethods
             method={method}
@@ -418,10 +511,10 @@ function CheckoutContent() {
           />
         </div>
 
-        {/* CỘT PHẢI: Tóm tắt đơn hàng + Bảng tính tiền + Nút thanh toán (5 cols) */}
+        {/* CỘT PHẢI: Tóm tắt đơn, tiền và nút thanh toán; chiếm năm phần lưới. */}
         <div className="flex flex-col gap-6 lg:col-span-5">
           <OrderSummary
-            items={items}
+            items={displayItems}
             subtotal={subtotal}
             finalTotal={finalTotal}
             pointsEarned={pointsEarned}
@@ -429,18 +522,21 @@ function CheckoutContent() {
             isExpired={isExpired}
             canRenew={canRenew}
             durationSeconds={CHECKOUT_DURATION_SECONDS}
-            onCheckout={handleCheckout}
             onPayment={handleCheckout}
             onRenew={handleRenewOrder}
             onReturnToCart={() => router.push('/cart')}
-            appliedPromo={appliedPromo}
-            onApplyPromo={applyPromo}
-            onRemovePromo={removePromo}
+            appliedPromo={displayedPromo}
           />
         </div>
       </div>
     </main>
   );
+}
+
+function CheckoutForOrder() {
+  const orderId = useSearchParams().get('orderId');
+  // Đổi mã đơn sẽ tạo lại trạng thái trang, tránh hiển thị dữ liệu của đơn cũ trong lúc tải đơn mới.
+  return <CheckoutContent key={orderId ?? 'empty'} />;
 }
 
 export default function CheckoutPage() {
@@ -453,7 +549,7 @@ export default function CheckoutPage() {
       }
     >
       <RequireAuth>
-        <CheckoutContent />
+        <CheckoutForOrder />
       </RequireAuth>
     </Suspense>
   );

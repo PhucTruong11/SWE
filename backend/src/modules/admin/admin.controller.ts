@@ -1,6 +1,7 @@
 import {
-    Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards,
+    BadRequestException, Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards,
 } from '@nestjs/common';
+import { ProductSize } from '@prisma/client';
 import { AdminService } from './admin.service.js';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto.js';
 import { ListOrdersQueryDto } from './dto/list-orders-query.dto.js';
@@ -44,6 +45,27 @@ export class AdminController {
         @Query('search') search?: string,
     ) {
         return { data: await this.adminService.listProducts(category, search) };
+    }
+
+    // Chỉ đọc dữ liệu nguyên liệu và công thức để hiển thị trên hai trang admin mới.
+    @Get('ingredients')
+    async listIngredients() {
+        return { data: await this.adminService.listIngredients() };
+    }
+
+    @Get('recipes')
+    async listRecipes(
+        @Query('productId') productId?: string,
+        @Query('size') size?: string,
+        @Query('toppingId') toppingId?: string,
+    ) {
+        if (toppingId && !productId && !size) {
+            return { data: await this.adminService.listToppingRecipe(toppingId) };
+        }
+        if (productId && !toppingId && size && Object.values(ProductSize).includes(size as ProductSize)) {
+            return { data: await this.adminService.listProductRecipe(productId, size as ProductSize) };
+        }
+        throw new BadRequestException('Chọn productId cùng size S/M/L hoặc chỉ chọn toppingId');
     }
 
     // PATCH /api/admin/products/:id/stock

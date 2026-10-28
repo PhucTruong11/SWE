@@ -20,7 +20,6 @@ interface OrderSummaryProps {
   onRenew?: () => void;
   onReturnToCart?: () => void;
   appliedPromo?: AppliedPromo | null;
-  onApplyPromo?: (promo: AppliedPromo) => void;
   onRemovePromo?: () => void;
 }
 
@@ -38,7 +37,6 @@ export function OrderSummary({
   onRenew,
   onReturnToCart,
   appliedPromo,
-  onApplyPromo: _onApplyPromo,
   onRemovePromo,
 }: OrderSummaryProps) {
   const durationLabel = durationSeconds >= 60 ? `${Math.floor(durationSeconds / 60)} phút` : `${durationSeconds} giây`;
@@ -139,15 +137,16 @@ export function OrderSummary({
         </div>
       </div>
 
-      {/* Nút bấm thanh toán chính hoặc Gia hạn khi hết hạn */}
+      {/* Đơn hết hạn phải được tạo lại trước khi khách xác nhận thanh toán. */}
       {isExpired ? (
         canRenew ? (
           <button
             type="button"
             onClick={onRenew}
+            disabled={isSubmitting}
             className="mt-6 w-full rounded-full py-4 text-center font-bold text-white bg-amber-600 hover:bg-amber-700 shadow-lg transition-all active:scale-[0.99] flex items-center justify-center gap-2"
           >
-            Làm mới đơn hàng (Gia hạn {durationLabel})
+            {isSubmitting ? 'Đang gia hạn...' : `Gia hạn thêm ${durationLabel} (1 lần)`}
           </button>
         ) : (
           <div className="mt-6 flex flex-col gap-2">

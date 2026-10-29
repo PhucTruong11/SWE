@@ -73,7 +73,16 @@ export class AdminService {
             this.prisma.order.count({ where }),
         ]);
 
-        return { items, total, page, limit };
+        return {
+            items: items.map((order) => ({
+                ...order,
+                items: order.items.map((item) => ({
+                    ...item,
+                    product: item.product ?? { name: item.productName },
+                })),
+            })),
+            total, page, limit,
+        };
     }
 
     // Số đơn theo từng trạng thái + doanh thu hôm nay (cho tab và trang Tổng quan)
@@ -124,6 +133,7 @@ export class AdminService {
                     await this.inventory.restore(tx, order);
                 } else if (order.inventoryState === 'LEGACY') {
                     for (const item of order.items) {
+                        if (!item.productId) continue; // Món cũ đã xóa chỉ còn bản chụp trong lịch sử.
                         await tx.product.update({
                             where: { id: item.productId },
                             data: { stock: { increment: item.qty }, version: { increment: 1 } },

@@ -38,7 +38,7 @@ docker compose @brewCompose up -d --wait db
 docker compose @brewCompose run --rm --no-deps api npx prisma migrate deploy
 ```
 
-Sau đó, cũng chỉ trên DB mới hoặc khi toàn bộ dữ liệu có thể bỏ, nạp dữ liệu mẫu:
+Sau đó, chỉ trên DB trống, nạp dữ liệu mẫu:
 
 ```powershell
 docker compose @brewCompose run --rm --no-deps api npx prisma db seed
@@ -46,7 +46,7 @@ docker compose @brewCompose run --rm --no-deps api npm run catalog:bootstrap
 docker compose @brewCompose run --rm --no-deps api npm run inventory:demo-stock
 ```
 
-Seed có thao tác xóa dữ liệu cũ. Không chạy seed mỗi lần bật hệ thống. `catalog:bootstrap` tạo 17 nguyên liệu, công thức mẫu và chỉ bật 6 món/3 topping; nó không reset stock hoặc xóa đơn. Checkout mới dùng tồn nguyên liệu. `inventory:demo-stock` chỉ nạp lượng mẫu cho các nguyên liệu có tồn bằng 0 trong DB demo local; không chạy nếu số 0 là trạng thái hết hàng có chủ ý.
+Seed từ chối chạy nếu DB đã có dữ liệu và chỉ tạo 6 món/3 topping. Không chạy seed mỗi lần bật hệ thống. `catalog:bootstrap` tạo 17 nguyên liệu, công thức mẫu và bật bán 6 món/3 topping; nó không reset stock hoặc xóa đơn. Checkout mới dùng tồn nguyên liệu. `inventory:demo-stock` chỉ nạp lượng mẫu cho các nguyên liệu có tồn bằng 0 trong DB demo local; không chạy nếu số 0 là trạng thái hết hàng có chủ ý.
 
 **DB cũ có bảng/dữ liệu nhưng chưa có lịch sử Prisma Migrate:** sao lưu DB, rồi đánh dấu baseline một lần trước khi deploy. Không chạy `db seed` trên DB này:
 
@@ -109,7 +109,7 @@ docker compose @brewCompose up -d --wait
 docker compose @brewCompose ps
 ```
 
-Không chạy lại `db seed`: seed xóa dữ liệu cũ. Chỉ chạy `catalog:bootstrap` một lần khi chuyển DB sang danh mục nguyên liệu; script không reset đơn/tồn nhưng bật lại 6 món và 3 topping mẫu. `inventory:demo-stock` chỉ dành cho DB demo muốn nạp nguyên liệu đang có tồn 0. Nếu DB cũ chưa từng dùng Prisma Migrate, làm theo nhánh baseline ở phần 2 sau khi sao lưu. Admin xem dữ liệu ở `/admin/ingredients` và `/admin/recipes`; API tạo/sửa/nhập/lưu công thức còn chờ thành viên phụ trách.
+Không chạy lại `db seed`: seed chỉ dành cho DB trống. Migration `20261029000100_prune_legacy_catalog` xóa 17 món và 12 topping cũ, giữ tên/ảnh món trong lịch sử đơn; sao lưu DB trước khi áp trên máy của mỗi thành viên. Chỉ chạy `catalog:bootstrap` một lần khi chuyển DB sang danh mục nguyên liệu; script không reset đơn/tồn nhưng bật lại 6 món và 3 topping mẫu. `inventory:demo-stock` chỉ dành cho DB demo muốn nạp nguyên liệu đang có tồn 0. Nếu DB cũ chưa từng dùng Prisma Migrate, làm theo nhánh baseline ở phần 2 sau khi sao lưu. Admin xem dữ liệu ở `/admin/ingredients` và `/admin/recipes`; Giao diện đã gọi API ghi, nhưng backend hiện mới có GET nên thao tác tạo/sửa/nhập kho/lưu công thức chưa hoạt động.
 
 Với DB lần đầu chuyển sang nguyên liệu, chèn hai lệnh sau sau `migrate deploy` trong khối trên. Chỉ dùng lệnh nạp tồn thứ hai cho DB demo, khi nguyên liệu tồn 0 chưa phải trạng thái hết hàng có chủ ý:
 

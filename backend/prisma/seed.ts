@@ -18,9 +18,6 @@ interface ProductSeed {
 }
 
 const PRODUCTS: ProductSeed[] = [
-  // ──────────────────────────────────────────
-  // CÀ PHÊ PHIN TRUYỀN THỐNG (No topping)
-  // ──────────────────────────────────────────
   {
     name: 'Phin Sữa Đá',
     description: 'Iced Coffee with Condensed Milk',
@@ -57,34 +54,6 @@ const PRODUCTS: ProductSeed[] = [
       { size: 'L', price: 45000 },
     ],
   },
-
-  // ──────────────────────────────────────────
-  // TRÀ TRÁI CÂY & TRÀ SỮA (Có topping)
-  // ──────────────────────────────────────────
-  {
-    name: 'Trà Sen Vàng',
-    description: 'Tea with Lotus Seeds',
-    category: 'tra',
-    allowToppings: true,
-    imageUrl: '/images/tra-sen-vang.jpg',
-    prices: [
-      { size: 'S', price: 45000 },
-      { size: 'M', price: 55000 },
-      { size: 'L', price: 65000 },
-    ],
-  },
-  {
-    name: 'Trà Thạch Đào',
-    description: 'Tea with Peach Jelly',
-    category: 'tra',
-    allowToppings: true,
-    imageUrl: '/images/tra-thach-dao.jpg',
-    prices: [
-      { size: 'S', price: 45000 },
-      { size: 'M', price: 55000 },
-      { size: 'L', price: 65000 },
-    ],
-  },
   {
     name: 'Trà Thanh Đào',
     description: 'Peach Tea with Lemongrass',
@@ -98,150 +67,6 @@ const PRODUCTS: ProductSeed[] = [
     ],
   },
   {
-    name: 'Trà Thạch Vải',
-    description: 'Tea with Lychee Jelly',
-    category: 'tra',
-    allowToppings: true,
-    imageUrl: '/images/tra-thach-vai.jpg',
-    prices: [
-      { size: 'S', price: 45000 },
-      { size: 'M', price: 55000 },
-      { size: 'L', price: 65000 },
-    ],
-  },
-  {
-    name: 'Trà Xanh Đậu Đỏ',
-    description: 'Green Tea with Red Bean',
-    category: 'tra',
-    allowToppings: true,
-    imageUrl: '/images/tra-xanh-dau-do.jpg',
-    prices: [
-      { size: 'S', price: 45000 },
-      { size: 'M', price: 55000 },
-      { size: 'L', price: 65000 },
-    ],
-  },
-  {
-    name: 'Trà Sữa Highlands',
-    description: 'Highlands Milk Tea',
-    category: 'tra',
-    allowToppings: true,
-    imageUrl: '/images/tra-sua-highlands.jpg',
-    prices: [
-      // KHÔNG có size S
-      { size: 'M', price: 65000 },
-      { size: 'L', price: 69000 },
-    ],
-  },
-
-  // ──────────────────────────────────────────
-  // FREEZE ĐÁ XAY (Có topping)
-  // ──────────────────────────────────────────
-  {
-    name: 'Freeze Trà Xanh',
-    description: 'Green Tea Freeze',
-    category: 'freeze',
-    allowToppings: true,
-    imageUrl: '/images/freeze-tra-xanh.jpg',
-    prices: [
-      { size: 'S', price: 55000 },
-      { size: 'M', price: 65000 },
-      { size: 'L', price: 69000 },
-    ],
-  },
-  {
-    name: 'Caramel Phin Freeze',
-    description: 'Caramel Phin Freeze',
-    category: 'freeze',
-    allowToppings: true,
-    imageUrl: '/images/caramel-phin-freeze.jpg',
-    prices: [
-      { size: 'S', price: 55000 },
-      { size: 'M', price: 65000 },
-      { size: 'L', price: 69000 },
-    ],
-  },
-  {
-    name: 'Cookies & Cream',
-    description: 'Cookies & Cream Freeze',
-    category: 'freeze',
-    allowToppings: true,
-    imageUrl: '/images/cookies-cream.jpg',
-    prices: [
-      { size: 'S', price: 55000 },
-      { size: 'M', price: 65000 },
-      { size: 'L', price: 69000 },
-    ],
-  },
-  {
-    name: 'Freeze Sô-Cô-La',
-    description: 'Chocolate Freeze',
-    category: 'freeze',
-    allowToppings: true,
-    imageUrl: '/images/freeze-socola.jpg',
-    prices: [
-      { size: 'S', price: 55000 },
-      { size: 'M', price: 65000 },
-      { size: 'L', price: 69000 },
-    ],
-  },
-  {
-    name: 'Classic Phin Freeze',
-    description: 'Classic Phin Freeze',
-    category: 'freeze',
-    allowToppings: true,
-    imageUrl: '/images/classic-phin-freeze.jpg',
-    prices: [
-      { size: 'S', price: 55000 },
-      { size: 'M', price: 65000 },
-      { size: 'L', price: 69000 },
-    ],
-  },
-
-  // ──────────────────────────────────────────
-  // PHINDI – CÀ PHÊ THẾ HỆ MỚI (No topping)
-  // ──────────────────────────────────────────
-  {
-    name: 'PhinDi Hạnh Nhân',
-    description: 'Iced Coffee with Almond & Fresh Milk',
-    category: 'phindi',
-    allowToppings: false,
-    imageUrl: '/images/phindi-hanh-nhan.jpg',
-    prices: [
-      { size: 'S', price: 45000 },
-      { size: 'M', price: 49000 },
-      { size: 'L', price: 55000 },
-    ],
-  },
-  {
-    name: 'PhinDi Kem Sữa',
-    description: 'Iced Coffee with Milk Foam',
-    category: 'phindi',
-    allowToppings: false,
-    imageUrl: '/images/phindi-kem-sua.jpg',
-    prices: [
-      { size: 'S', price: 45000 },
-      { size: 'M', price: 49000 },
-      { size: 'L', price: 55000 },
-    ],
-  },
-  {
-    name: 'PhinDi Choco',
-    description: 'Iced Coffee with Chocolate',
-    category: 'phindi',
-    allowToppings: false,
-    imageUrl: '/images/phindi-choco.jpg',
-    prices: [
-      { size: 'S', price: 45000 },
-      { size: 'M', price: 49000 },
-      { size: 'L', price: 55000 },
-    ],
-  },
-
-  // ──────────────────────────────────────────
-  // ESPRESSO (No topping)
-  // ──────────────────────────────────────────
-  {
     name: 'Americano',
     description: 'Americano',
     category: 'espresso',
@@ -251,18 +76,6 @@ const PRODUCTS: ProductSeed[] = [
       { size: 'S', price: 45000 },
       { size: 'M', price: 49000 },
       { size: 'L', price: 55000 },
-    ],
-  },
-  {
-    name: 'Cappuccino / Latte',
-    description: 'Cappuccino or Latte',
-    category: 'espresso',
-    allowToppings: false,
-    imageUrl: '/images/cappuccino-latte.jpg',
-    prices: [
-      { size: 'S', price: 65000 },
-      { size: 'M', price: 75000 },
-      { size: 'L', price: 79000 },
     ],
   },
   {
@@ -277,76 +90,15 @@ const PRODUCTS: ProductSeed[] = [
       { size: 'L', price: 85000 },
     ],
   },
-
-  // ──────────────────────────────────────────
-  // THỨC UỐNG KHÁC (Có topping)
-  // ──────────────────────────────────────────
-  {
-    name: 'Chanh Đá Xay',
-    description: 'Ice Blended Lime Juice',
-    category: 'other',
-    allowToppings: true,
-    imageUrl: '/images/chanh-da-xay.jpg',
-    prices: [
-      { size: 'S', price: 39000 },
-      { size: 'M', price: 49000 },
-      { size: 'L', price: 55000 },
-    ],
-  },
-  {
-    name: 'Chanh Dây Đá Viên',
-    description: 'Iced Passion Fruit Juice',
-    category: 'other',
-    allowToppings: true,
-    imageUrl: '/images/chanh-day-da-vien.jpg',
-    prices: [
-      { size: 'S', price: 39000 },
-      { size: 'M', price: 49000 },
-      { size: 'L', price: 55000 },
-    ],
-  },
-  {
-    name: 'Sô-Cô-La Nóng/Đá',
-    description: 'Dark Chocolate (hot or iced)',
-    category: 'other',
-    allowToppings: true,
-    imageUrl: '/images/socola-nong-da.jpg',
-    prices: [
-      { size: 'S', price: 55000 },
-      { size: 'M', price: 59000 },
-      { size: 'L', price: 65000 },
-    ],
-  },
 ];
 
 // ──────────────────────────────────────────
 // DANH SÁCH TOPPING (Từ menu thực tế)
 // ──────────────────────────────────────────
 const TOPPINGS = [
-  // Kem & Foam
   { name: 'Kem Sữa Mặn',      price: 9000,  imageUrl: '/images/toppings/kem-sua-man.jpg' },
-  { name: 'Kem Tươi',          price: 9000,  imageUrl: '/images/toppings/kem-tuoi.jpg' },
-
-  // Trân Châu (Boba)
-  { name: 'Trân Châu Dừa',     price: 9000,  imageUrl: '/images/toppings/tran-chau-dua.jpg' },
-  { name: 'Trân Châu Khoai Môn', price: 9000, imageUrl: '/images/toppings/tran-chau-khoai-mon.jpg' },
   { name: 'Trân Châu Trắng',   price: 9000,  imageUrl: '/images/toppings/tran-chau-trang.jpg' },
-
-  // Thạch (Jelly)
   { name: 'Thạch Cà Phê',      price: 9000,  imageUrl: '/images/toppings/thach-ca-phe.jpg' },
-  { name: 'Thạch Trà Xanh',    price: 9000,  imageUrl: '/images/toppings/thach-tra-xanh.jpg' },
-  { name: 'Thạch Vải',         price: 9000,  imageUrl: '/images/toppings/thach-vai.jpg' },
-  { name: 'Thạch Đào',         price: 9000,  imageUrl: '/images/toppings/thach-dao.jpg' },
-
-  // Nguyên liệu khác
-  { name: 'Củ Năng',            price: 9000,  imageUrl: '/images/toppings/cu-nang.jpg' },
-  { name: 'Đậu Đỏ',            price: 9000,  imageUrl: '/images/toppings/dau-do.jpg' },
-  { name: 'Hạt Sen',            price: 15000, imageUrl: '/images/toppings/hat-sen.jpg' },
-  { name: 'Trái Vải',           price: 15000, imageUrl: '/images/toppings/trai-vai.jpg' },
-  { name: 'Đào Lát',            price: 15000, imageUrl: '/images/toppings/dao-lat.jpg' },
-
-  // Extra
-  { name: 'Shot Espresso',      price: 10000, imageUrl: '/images/toppings/shot-espresso.jpg' },
 ];
 
 // ──────────────────────────────────────────
@@ -454,20 +206,22 @@ const REWARD_CATALOG = [
 async function main() {
   console.log('🌱 Seeding database...\n');
 
-  // ── Bước 1: Xoá dữ liệu cũ (thứ tự quan trọng!) ──
-  console.log('🗑️  Đang xóa dữ liệu cũ...');
-  await prisma.payment.deleteMany();
-  await prisma.orderItem.deleteMany();
-  await prisma.order.deleteMany();
-  await prisma.productPrice.deleteMany();
-  await prisma.product.deleteMany();
-  await prisma.topping.deleteMany();
-  await prisma.user.deleteMany();
-  await prisma.promotion.deleteMany(); // thêm cho phần ưu đãi (promo)
-  await prisma.pointTransaction.deleteMany();
-  await prisma.userVoucher.deleteMany();
-  await prisma.rewardItem.deleteMany();
-  // ── Bước 2: Tạo User mẫu để test Payment ──
+  // Seed chỉ dành cho DB trống; không đụng vào dữ liệu của thành viên khác.
+  const [usersCount, productsCount, toppingsCount, ingredientsCount, ordersCount] = await Promise.all([
+    prisma.user.count(), prisma.product.count(), prisma.topping.count(),
+    prisma.ingredient.count(), prisma.order.count(),
+  ]);
+  if (usersCount || productsCount || toppingsCount || ingredientsCount || ordersCount) {
+    throw new Error('DB đã có dữ liệu. Không chạy seed; hãy dùng prisma migrate deploy.');
+  }
+
+  const selectedProductNames = new Set([
+    'Phin Đen Đá', 'Phin Sữa Đá', 'Bạc Xỉu',
+    'Americano', 'Caramel Macchiato', 'Trà Thanh Đào',
+  ]);
+  const selectedToppingNames = new Set(['Kem Sữa Mặn', 'Trân Châu Trắng', 'Thạch Cà Phê']);
+
+  // ── Bước 1: Tạo User mẫu để test Payment ──
   console.log('👤 Đang tạo Users mẫu...');
   const testUser = await prisma.user.create({
     data: {
@@ -481,7 +235,7 @@ async function main() {
   // ── Bước 2: Tạo Toppings ──
   console.log('🍡 Đang tạo Toppings...');
   const toppings = await Promise.all(
-    TOPPINGS.map((t) =>
+    TOPPINGS.filter((t) => selectedToppingNames.has(t.name)).map((t) =>
       prisma.topping.create({ data: t }),
     ),
   );
@@ -492,7 +246,7 @@ async function main() {
   let productCount = 0;
   let priceCount = 0;
 
-  for (const p of PRODUCTS) {
+  for (const p of PRODUCTS.filter((entry) => selectedProductNames.has(entry.name))) {
     const product = await prisma.product.create({
       data: {
         name: p.name,
@@ -520,6 +274,7 @@ async function main() {
 
   // Lấy sản phẩm đầu tiên để gắn vào order item
   const firstProduct = await prisma.product.findFirst({
+    where: { name: 'Phin Sữa Đá' },
     include: { prices: true },
   });
 
@@ -533,6 +288,8 @@ async function main() {
         items: {
           create: firstProduct ? [{
             productId: firstProduct.id,
+            productName: firstProduct.name,
+            productImageUrl: firstProduct.imageUrl,
             size: 'M',
             toppings: [],
             qty: 1,
@@ -550,7 +307,9 @@ async function main() {
         items: {
           create: firstProduct ? [{
             productId: firstProduct.id,
-            size: 'L',
+            productName: firstProduct.name,
+            productImageUrl: firstProduct.imageUrl,
+            size: 'M',
             toppings: [],
             qty: 2,
             lineTotal: 78000,

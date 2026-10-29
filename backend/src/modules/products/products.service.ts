@@ -82,7 +82,7 @@ export class ProductsService {
       take: limit,
     });
 
-    const ids = sales.map((s) => s.productId);
+    const ids = sales.map((s) => s.productId).filter((id): id is string => id !== null);
 
     const topProducts =
       ids.length > 0

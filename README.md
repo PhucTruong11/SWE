@@ -175,7 +175,7 @@ npx prisma migrate deploy
 npm run catalog:bootstrap
 ~~~
 
-Nếu DB đã có baseline, bỏ lệnh `resolve`. Seed hiện xóa dữ liệu cũ trước khi tạo menu, topping, user thử, đơn và voucher mẫu, nên **không chạy `db seed` trên DB cần giữ dữ liệu**. `catalog:bootstrap` tạo nguyên liệu/công thức và chỉ bật bán 6 món, 3 topping, không xóa đơn hoặc reset tồn cũ. Giỏ và checkout hiện kiểm tra nguyên liệu; tạo đơn giữ kho 2 phút, thanh toán thành công mới trừ tồn thực. `inventory:demo-stock` chỉ dành cho DB demo local: nó nạp lượng mẫu vào nguyên liệu đang có tồn bằng 0, không ghi đè số lượng khác 0. Có thể bỏ lệnh này nếu sẽ nhập tồn thực tế ở bước admin tiếp theo. Định lượng mẫu nằm trong [plan nguyên liệu](INVENTORY_RECIPE_PLAN.md).
+Nếu DB đã có baseline, bỏ lệnh `resolve`. Seed chỉ chạy trên DB trống và tạo đúng 6 món, 3 topping; **không chạy `db seed` trên DB đang dùng**. Migration `20261029000100_prune_legacy_catalog` xóa các món/topping cũ sau khi lưu tên và ảnh món vào lịch sử đơn, nên sao lưu DB trước khi áp. `catalog:bootstrap` tạo nguyên liệu/công thức và bật bán 6 món, 3 topping, không xóa đơn hoặc reset tồn cũ. Giỏ và checkout hiện kiểm tra nguyên liệu; tạo đơn giữ kho 2 phút, thanh toán thành công mới trừ tồn thực. `inventory:demo-stock` chỉ dành cho DB demo local: nó nạp lượng mẫu vào nguyên liệu đang có tồn bằng 0, không ghi đè số lượng khác 0. Có thể bỏ lệnh này nếu sẽ nhập tồn thực tế ở bước admin tiếp theo. Định lượng mẫu nằm trong [plan nguyên liệu](INVENTORY_RECIPE_PLAN.md).
 
 User test@brewlite.com trong seed có password hash placeholder, không phải tài khoản demo có mật khẩu đăng nhập hợp lệ. Để kiểm tra đăng nhập, đăng ký và xác minh một tài khoản riêng qua giao diện.
 
@@ -260,7 +260,7 @@ docker compose @brewCompose up -d --wait
 docker compose @brewCompose ps
 ~~~
 
-`catalog:bootstrap` chỉ cần chạy **một lần** sau khi áp migration nguyên liệu vào DB chưa có danh mục mới. Chạy lại sẽ bật lại đúng 6 món/3 topping mẫu, dù không đặt lại tồn hoặc công thức đã có. **Chỉ dùng** `inventory:demo-stock` cho DB demo cần nạp mẫu ở nguyên liệu đang bằng 0. Nếu `migrate status` cho thấy DB cũ có bảng nhưng chưa có lịch sử migration, dừng tại đó và làm theo nhánh “DB cũ” ở [hướng dẫn Docker](docker/README.md); không tự chạy seed hay resolve trên DB chưa xác minh. Sau khi khởi động, đăng nhập ADMIN và mở `/admin/ingredients`, `/admin/recipes`; các nút lưu vẫn chờ API ghi của thành viên phụ trách.
+`catalog:bootstrap` chỉ cần chạy **một lần** sau khi áp migration nguyên liệu vào DB chưa có danh mục mới. Chạy lại sẽ bật lại đúng 6 món/3 topping mẫu, dù không đặt lại tồn hoặc công thức đã có. **Chỉ dùng** `inventory:demo-stock` cho DB demo cần nạp mẫu ở nguyên liệu đang bằng 0. Nếu `migrate status` cho thấy DB cũ có bảng nhưng chưa có lịch sử migration, dừng tại đó và làm theo nhánh “DB cũ” ở [hướng dẫn Docker](docker/README.md); không tự chạy seed hay resolve trên DB chưa xác minh. Sau khi khởi động, đăng nhập ADMIN và mở `/admin/ingredients`, `/admin/recipes`; giao diện đã gọi API ghi, nhưng backend hiện mới có GET nên thao tác tạo/sửa/nhập kho/lưu công thức chưa hoạt động.
 
 Nếu đây là **lần đầu** DB của thành viên chuyển sang công thức nguyên liệu, chạy thêm sau `migrate deploy` (trước `up -d --wait`):
 

@@ -367,15 +367,18 @@ export class CheckoutService {
           // Đơn được tạo trước khi chuyển sang kho nguyên liệu vẫn dùng tồn kho sản phẩm cũ.
           const stockItems = new Map<string, (typeof lockedOrder.items)[number]>();
           for (const item of lockedOrder.items) {
+            if (!item.productId || !item.product) {
+              throw new ConflictException('Sản phẩm của đơn cũ không còn trong danh mục');
+            }
             const existing = stockItems.get(item.productId);
             stockItems.set(item.productId, existing ? { ...existing, qty: existing.qty + item.qty } : item);
           }
-          for (const item of [...stockItems.values()].sort((a, b) => a.productId.localeCompare(b.productId))) {
+          for (const item of [...stockItems.values()].sort((a, b) => a.productId!.localeCompare(b.productId!))) {
             const changed = await tx.product.updateMany({
-              where: { id: item.productId, stock: { gte: item.qty }, version: item.product.version },
+              where: { id: item.productId!, stock: { gte: item.qty }, version: item.product!.version },
               data: { stock: { decrement: item.qty }, version: { increment: 1 } },
             });
-            if (changed.count === 0) throw new ConflictException(`Sản phẩm "${item.product.name}" không còn đủ hàng`);
+            if (changed.count === 0) throw new ConflictException(`Sản phẩm "${item.product!.name}" không còn đủ hàng`);
           }
         } else {
           throw new ConflictException('Nguyên liệu giữ cho đơn hàng này không còn hiệu lực');

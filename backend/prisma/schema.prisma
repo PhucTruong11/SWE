@@ -224,7 +224,9 @@ model Order {
 model OrderItem {
   id        String      @id @default(uuid())
   orderId   String
-  productId String
+  productId String?
+  productName String
+  productImageUrl String?
   size      ProductSize @default(S)
   toppings  String[]    // Tên topping được lưu tại thời điểm đặt đơn.
   qty       Int         @default(1)
@@ -232,7 +234,7 @@ model OrderItem {
   recipeSnapshot Json?
 
   order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product Product @relation(fields: [productId], references: [id])
+  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
 
   @@map("order_items")
 }

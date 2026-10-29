@@ -87,7 +87,7 @@ export class OrdersService {
             throw new UnauthorizedException('Vui lòng đăng nhập để xem đơn hàng');
         }
 
-        return this.prisma.order.findMany({
+        const orders = await this.prisma.order.findMany({
             where: { userId },
             orderBy: { createdAt: 'desc' }, // Đơn mới nhất lên đầu
             include: {
@@ -96,6 +96,13 @@ export class OrdersService {
                 },
             },
         });
+        return orders.map((order) => ({
+            ...order,
+            items: order.items.map((item) => ({
+                ...item,
+                product: item.product ?? { name: item.productName, imageUrl: item.productImageUrl },
+            })),
+        }));
     }
 
     /** Lấy chi tiết đơn và thanh toán sau khi xác nhận đơn thuộc về tài khoản này. */
@@ -117,6 +124,12 @@ export class OrdersService {
             throw new NotFoundException(`Không tìm thấy đơn hàng #${id}`);
         }
 
-        return order;
+        return {
+            ...order,
+            items: order.items.map((item) => ({
+                ...item,
+                product: item.product ?? { name: item.productName, imageUrl: item.productImageUrl },
+            })),
+        };
     }
 }

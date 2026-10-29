@@ -67,4 +67,14 @@ describe('OrdersService ingredient reservation', () => {
       data: expect.objectContaining({ total: 68_000, discount: 10_000, promoCode: 'BREW10' }),
     }));
   });
+
+  it('giữ tên và ảnh món của đơn cũ khi sản phẩm đã bị xóa khỏi danh mục', async () => {
+    prisma.order.findUnique.mockResolvedValueOnce({
+      id: 'old-order',
+      items: [{ productId: null, product: null, productName: 'Món cũ', productImageUrl: '/old.jpg' }],
+      payments: [],
+    });
+    const result = await service.findOne('old-order', 'u1');
+    expect(result.items[0].product).toEqual({ name: 'Món cũ', imageUrl: '/old.jpg' });
+  });
 });

@@ -112,6 +112,8 @@ export class InventoryService {
         .map(([ingredientId, quantity]) => ({ ingredientId, quantity: quantity.toFixed(3) }));
       return {
         productId: item.productId,
+        productName: product.name,
+        productImageUrl: product.imageUrl,
         size: item.size,
         toppings: item.toppings ?? [],
         qty: item.qty,

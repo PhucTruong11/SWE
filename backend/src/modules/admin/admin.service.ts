@@ -1,11 +1,13 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
-import { OrderStatus, PointTransactionType, Prisma, ProductSize } from '@prisma/client';
+import { IngredientUnit, OrderStatus, PointTransactionType, Prisma, ProductSize, } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { assertTransition } from '../orders/orders-state.js';
 import { ListOrdersQueryDto } from './dto/list-orders-query.dto.js';
 import { UpdateStockDto } from './dto/update-stock.dto.js';
 import { CreatePromotionDto } from './dto/create-promotion.dto.js'
 import { InventoryService } from '../inventory/inventory.service.js';
+import { CreateIngredientDto, UpdateIngredientDto, RestockIngredientDto, } from './dto/ingredient.dto.js';
+import { SaveRecipeDto } from './dto/save-recipe.dto.js';
 
 // Các trạng thái đã thanh toán thành công (tính vào doanh thu)
 const REVENUE_STATUSES: OrderStatus[] = ['PAID', 'PREPARING', 'READY', 'COMPLETED'];
@@ -165,6 +167,388 @@ export class AdminService {
             }
 
             return tx.order.update({ where: { id }, data: { status: next } });
+        });
+    }
+
+    // Kiểm tra lượng nguyên liệu theo Decimal(14, 3).
+    private ingredientAmount(
+        value: number,
+        unit: IngredientUnit,
+        label: string,
+        allowZero = false,
+    ) {
+        const amount = new Prisma.Decimal(value);
+
+        if (
+            !amount.isFinite() ||
+            amount.lt(allowZero ? 0 : 0.001) ||
+            amount.decimalPlaces() > 3 ||
+            amount.gt('99999999999.999')
+        ) {
+            throw new BadRequestException(
+                `${label} phải là số ${allowZero ? 'không âm' : 'dương'}, tối đa 3 chữ số thập phân`,
+            );
+        }
+
+        if (unit === IngredientUnit.PIECE && !amount.isInteger()) {
+            throw new BadRequestException(`${label} tính bằng cái phải là số nguyên`);
+        }
+
+        return amount;
+    }
+
+    // Khóa dòng trước khi kiểm tra và cập nhật thông tin hoặc nhập kho.
+    private async lockIngredient(tx: Prisma.TransactionClient, id: string) {
+        await tx.$queryRaw`
+            SELECT "id" FROM "ingredients"
+            WHERE "id" = ${id}
+            FOR UPDATE
+        `;
+
+        const ingredient = await tx.ingredient.findUnique({ where: { id } });
+        if (!ingredient) {
+            throw new NotFoundException('Không tìm thấy nguyên liệu');
+        }
+
+        return ingredient;
+    }
+
+    async createIngredient(dto: CreateIngredientDto) {
+        if (dto.trackStock && dto.onHand == null) {
+            throw new BadRequestException('Nguyên liệu quản lý tồn phải có tồn ban đầu');
+        }
+
+        if (
+            !dto.trackStock &&
+            (dto.onHand != null || dto.lowStockThreshold != null)
+        ) {
+            throw new BadRequestException(
+                'Nguyên liệu không quản lý tồn phải để trống tồn và ngưỡng cảnh báo',
+            );
+        }
+
+        const onHand = dto.trackStock
+            ? this.ingredientAmount(dto.onHand!, dto.unit, 'Tồn ban đầu', true)
+            : null;
+
+        const packageQuantity = dto.packageQuantity == null
+            ? null
+            : this.ingredientAmount(dto.packageQuantity, dto.unit, 'Quy cách nhập');
+
+        const lowStockThreshold = dto.lowStockThreshold == null
+            ? null
+            : this.ingredientAmount(
+                dto.lowStockThreshold, dto.unit, 'Ngưỡng cảnh báo', true,
+            );
+
+        try {
+            return await this.prisma.ingredient.create({
+                data: {
+                    code: dto.code,
+                    name: dto.name,
+                    unit: dto.unit,
+                    trackStock: dto.trackStock,
+                    onHand,
+                    reserved: dto.trackStock ? new Prisma.Decimal(0) : null,
+                    packageQuantity,
+                    lowStockThreshold,
+                    isActive: dto.isActive ?? true,
+                },
+            });
+        } catch (error) {
+            if (
+                error instanceof Prisma.PrismaClientKnownRequestError &&
+                error.code === 'P2002'
+            ) {
+                throw new ConflictException('Mã nguyên liệu đã tồn tại');
+            }
+            throw error;
+        }
+    }
+
+    async updateIngredient(id: string, dto: UpdateIngredientDto) {
+        return this.prisma.$transaction(async (tx) => {
+            const ingredient = await this.lockIngredient(tx, id);
+
+            if (ingredient.version !== dto.version) {
+                throw new ConflictException(
+                    'Nguyên liệu vừa thay đổi. Vui lòng chọn lại nguyên liệu trước khi sửa',
+                );
+            }
+
+            const data: Prisma.IngredientUpdateInput = {
+                version: { increment: 1 },
+            };
+
+            if (dto.name !== undefined) data.name = dto.name;
+            if (dto.isActive !== undefined) data.isActive = dto.isActive;
+
+            if (dto.packageQuantity !== undefined) {
+                data.packageQuantity = dto.packageQuantity === null
+                    ? null
+                    : this.ingredientAmount(
+                        dto.packageQuantity, ingredient.unit, 'Quy cách nhập',
+                    );
+            }
+
+            if (dto.lowStockThreshold !== undefined) {
+                if (!ingredient.trackStock && dto.lowStockThreshold !== null) {
+                    throw new BadRequestException(
+                        'Nguyên liệu không quản lý tồn không có ngưỡng cảnh báo',
+                    );
+                }
+
+                data.lowStockThreshold = dto.lowStockThreshold === null
+                    ? null
+                    : this.ingredientAmount(
+                        dto.lowStockThreshold,
+                        ingredient.unit,
+                        'Ngưỡng cảnh báo',
+                        true,
+                    );
+            }
+
+            return tx.ingredient.update({ where: { id }, data });
+        });
+    }
+
+    async restockIngredient(id: string, dto: RestockIngredientDto) {
+        return this.prisma.$transaction(async (tx) => {
+            const ingredient = await this.lockIngredient(tx, id);
+
+            if (!ingredient.trackStock) {
+                throw new BadRequestException('Nguyên liệu này không quản lý tồn kho');
+            }
+
+            if (ingredient.onHand === null || ingredient.reserved === null) {
+                throw new ConflictException('Dữ liệu tồn kho nguyên liệu không hợp lệ');
+            }
+
+            const quantity = this.ingredientAmount(
+                dto.quantity, ingredient.unit, 'Số lượng nhập',
+            );
+
+            if (ingredient.onHand.add(quantity).gt('99999999999.999')) {
+                throw new BadRequestException('Tồn sau nhập vượt giới hạn lưu trữ');
+            }
+
+            // quantity đã là g, ml hoặc cái, không nhân packageQuantity lần nữa.
+            return tx.ingredient.update({
+                where: { id },
+                data: {
+                    onHand: { increment: quantity },
+                    version: { increment: 1 },
+                },
+            });
+        });
+    }
+
+    // Chuẩn hóa thứ tự và số thập phân để so sánh công thức gốc.
+    private recipeSignature(
+        lines: { ingredientId: string; quantity: number | Prisma.Decimal }[],
+    ) {
+        return lines
+            .map((line) =>
+                `${line.ingredientId}:${new Prisma.Decimal(line.quantity).toFixed(3)}`)
+            .sort()
+            .join('|');
+    }
+
+    async saveProductRecipe(productId: string, size: ProductSize, dto: SaveRecipeDto) {
+        return this.saveRecipe({ productId, size }, dto);
+    }
+
+    async saveToppingRecipe(toppingId: string, dto: SaveRecipeDto) {
+        return this.saveRecipe({ toppingId }, dto);
+    }
+
+    private async saveRecipe(
+        target: { productId: string; size: ProductSize } | { toppingId: string },
+        dto: SaveRecipeDto,
+    ) {
+        const ids = dto.ingredients.map((line) => line.ingredientId);
+
+        if (new Set(ids).size !== ids.length) {
+            throw new BadRequestException('Một nguyên liệu chỉ được xuất hiện một lần');
+        }
+
+        return this.prisma.$transaction(async (tx) => {
+            // Khóa đối tượng sở hữu công thức, kể cả khi chưa có dòng công thức.
+            if ('productId' in target) {
+                await tx.$queryRaw`
+                    SELECT "id" FROM "products"
+                    WHERE "id" = ${target.productId}
+                    FOR UPDATE
+                `;
+
+                const product = await tx.product.findUnique({
+                    where: { id: target.productId },
+                    include: { prices: true },
+                });
+
+                if (!product) {
+                    throw new NotFoundException('Không tìm thấy sản phẩm');
+                }
+
+                if (!product.prices.some((price) => price.size === target.size)) {
+                    throw new BadRequestException('Sản phẩm không có size được chọn');
+                }
+            } else {
+                await tx.$queryRaw`
+                    SELECT "id" FROM "toppings"
+                    WHERE "id" = ${target.toppingId}
+                    FOR UPDATE
+                `;
+
+                const topping = await tx.topping.findUnique({
+                    where: { id: target.toppingId },
+                });
+
+                if (!topping) {
+                    throw new NotFoundException('Không tìm thấy topping');
+                }
+            }
+
+            const where: Prisma.RecipeWhereInput = target;
+            const current = await tx.recipe.findMany({
+                where,
+                select: { ingredientId: true, quantity: true },
+            });
+
+            if (
+                this.recipeSignature(current) !==
+                this.recipeSignature(dto.expectedIngredients)
+            ) {
+                throw new ConflictException(
+                    'Công thức đã được người khác thay đổi. Hãy bỏ bản sửa và tải lại',
+                );
+            }
+
+            // Giữ trạng thái nguyên liệu ổn định trong lúc kiểm tra và lưu.
+            await tx.$queryRaw`
+                SELECT "id" FROM "ingredients"
+                WHERE "id" IN (${Prisma.join(ids)})
+                ORDER BY "id"
+                FOR SHARE
+            `;
+
+            const ingredients = await tx.ingredient.findMany({
+                where: { id: { in: ids } },
+            });
+
+            if (ingredients.length !== ids.length) {
+                throw new BadRequestException('Có nguyên liệu không tồn tại');
+            }
+
+            const byId = new Map(
+                ingredients.map((ingredient) => [ingredient.id, ingredient]),
+            );
+
+            const rows = dto.ingredients.map((line) => {
+                const ingredient = byId.get(line.ingredientId)!;
+
+                if (!ingredient.isActive) {
+                    throw new BadRequestException(
+                        `Nguyên liệu "${ingredient.name}" đang ngừng sử dụng`,
+                    );
+                }
+
+                return {
+                    ...target,
+                    ingredientId: line.ingredientId,
+                    quantity: this.ingredientAmount(
+                        line.quantity, ingredient.unit, `Định lượng ${ingredient.name}`,
+                    ),
+                };
+            });
+
+            if ('productId' in target) {
+                const byCode = new Map(
+                    ingredients.map((ingredient) => [ingredient.code, ingredient]),
+                );
+
+                for (const code of ['WATER', 'ICE', 'STRAW', `CUP_${target.size}`]) {
+                    if (!byCode.has(code)) {
+                        throw new BadRequestException(`Công thức thiếu nguyên liệu ${code}`);
+                    }
+                }
+
+                for (const ingredient of ingredients) {
+                    if (
+                        ingredient.code.startsWith('CUP_') &&
+                        ingredient.code !== `CUP_${target.size}`
+                    ) {
+                        throw new BadRequestException('Công thức chứa ly không đúng size');
+                    }
+
+                    if (
+                        ingredient.code === 'STRAW' ||
+                        ingredient.code === `CUP_${target.size}`
+                    ) {
+                        const row = rows.find(
+                            (entry) => entry.ingredientId === ingredient.id,
+                        )!;
+
+                        if (
+                            ingredient.unit !== IngredientUnit.PIECE ||
+                            !row.quantity.equals(1)
+                        ) {
+                            throw new BadRequestException(
+                                'Mỗi ly đồ uống phải dùng một ly vật lý và một ống hút',
+                            );
+                        }
+                    }
+                }
+
+                // Các size dùng cùng nguyên liệu pha chế, ngoại trừ loại ly.
+                const composition = ingredients
+                    .filter((ingredient) => !ingredient.code.startsWith('CUP_'))
+                    .map((ingredient) => ingredient.id)
+                    .sort()
+                    .join('|');
+
+                const otherRecipes = await tx.recipe.findMany({
+                    where: {
+                        productId: target.productId,
+                        size: { not: target.size },
+                    },
+                    include: { ingredient: true },
+                });
+
+                for (const size of Object.values(ProductSize)) {
+                    const entries = otherRecipes.filter((entry) => entry.size === size);
+                    if (!entries.length) continue;
+
+                    const otherComposition = entries
+                        .filter((entry) => !entry.ingredient.code.startsWith('CUP_'))
+                        .map((entry) => entry.ingredientId)
+                        .sort()
+                        .join('|');
+
+                    if (composition !== otherComposition) {
+                        throw new BadRequestException(
+                            `Thành phần pha chế phải giống size ${size}; chỉ thay đổi định lượng và ly đúng size`,
+                        );
+                    }
+                }
+            }
+
+            // Xóa và tạo lại cùng transaction, lỗi thì giữ nguyên công thức cũ.
+            await tx.recipe.deleteMany({ where });
+            await tx.recipe.createMany({ data: rows });
+
+            if ('productId' in target) {
+                await tx.product.update({
+                    where: { id: target.productId },
+                    data: { version: { increment: 1 } },
+                });
+            }
+
+            return tx.recipe.findMany({
+                where,
+                select: { ingredientId: true, quantity: true },
+                orderBy: { ingredient: { name: 'asc' } },
+            });
         });
     }
 

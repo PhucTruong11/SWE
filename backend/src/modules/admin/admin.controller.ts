@@ -1,5 +1,5 @@
 import {
-    BadRequestException, Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards,
+    BadRequestException, Body, Controller, Get, Param, ParseEnumPipe, ParseUUIDPipe, Patch, Post, Put, Query, UseGuards,
 } from '@nestjs/common';
 import { ProductSize } from '@prisma/client';
 import { AdminService } from './admin.service.js';
@@ -9,6 +9,8 @@ import { UpdateStockDto } from './dto/update-stock.dto.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { CreatePromotionDto } from './dto/create-promotion.dto.js';
 import { RolesGuard } from '../auth/guards/roles.guard.js';
+import { CreateIngredientDto, UpdateIngredientDto, RestockIngredientDto, } from './dto/ingredient.dto.js';
+import { SaveRecipeDto } from './dto/save-recipe.dto.js';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -66,6 +68,51 @@ export class AdminController {
             return { data: await this.adminService.listProductRecipe(productId, size as ProductSize) };
         }
         throw new BadRequestException('Chọn productId cùng size S/M/L hoặc chỉ chọn toppingId');
+    }
+
+    // POST /api/admin/ingredients
+    @Post('ingredients')
+    async createIngredient(@Body() dto: CreateIngredientDto) {
+        return { data: await this.adminService.createIngredient(dto) };
+    }
+
+    // PATCH /api/admin/ingredients/:id
+    @Patch('ingredients/:id')
+    async updateIngredient(
+        @Param('id', ParseUUIDPipe) id: string,
+        @Body() dto: UpdateIngredientDto,
+    ) {
+        return { data: await this.adminService.updateIngredient(id, dto) };
+    }
+
+    // POST /api/admin/ingredients/:id/restock
+    @Post('ingredients/:id/restock')
+    async restockIngredient(
+        @Param('id', ParseUUIDPipe) id: string,
+        @Body() dto: RestockIngredientDto,
+    ) {
+        return { data: await this.adminService.restockIngredient(id, dto) };
+    }
+
+    // PUT /api/admin/recipes/products/:id/:size
+    @Put('recipes/products/:id/:size')
+    async saveProductRecipe(
+        @Param('id', ParseUUIDPipe) id: string,
+        @Param('size', new ParseEnumPipe(ProductSize)) size: ProductSize,
+        @Body() dto: SaveRecipeDto,
+    ) {
+        return {
+            data: await this.adminService.saveProductRecipe(id, size, dto),
+        };
+    }
+
+    // PUT /api/admin/recipes/toppings/:id
+    @Put('recipes/toppings/:id')
+    async saveToppingRecipe(
+        @Param('id', ParseUUIDPipe) id: string,
+        @Body() dto: SaveRecipeDto,
+    ) {
+        return { data: await this.adminService.saveToppingRecipe(id, dto) };
     }
 
     // PATCH /api/admin/products/:id/stock

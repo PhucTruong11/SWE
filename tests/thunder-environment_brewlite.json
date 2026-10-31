@@ -1,7 +1,7 @@
 {
   "client": "Thunder Client",
   "environmentName": "BrewLite Local",
-  "dateExported": "2026-10-23T12:00:00.000Z",
+  "dateExported": "2026-10-29T00:00:00Z",
   "version": "1.1",
   "variables": [
     {
@@ -9,11 +9,27 @@
       "value": "http://localhost:3001/api"
     },
     {
+      "name": "adminEmail",
+      "value": "admin@brewlite.com"
+    },
+    {
+      "name": "adminPassword",
+      "value": "@Admin123"
+    },
+    {
       "name": "token",
       "value": ""
     },
     {
       "name": "productId",
+      "value": ""
+    },
+    {
+      "name": "teaProductId",
+      "value": ""
+    },
+    {
+      "name": "toppingId",
       "value": ""
     },
     {
